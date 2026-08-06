@@ -1,0 +1,32 @@
+<idea-plugin>
+    <id>io.chromatabs</id>
+    <name>Chromatabs</name>
+    <vendor>Andrzej</vendor>
+
+    <description><![CDATA[
+        Chrome-style colour groups for IntelliJ editor tabs.
+        <br/><br/>
+        <b>Phase 0 build.</b> This version only proves that tab tinting renders in your IDE,
+        theme and platform version. It does not yet do anything useful.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Confirmed EP: com.intellij.editorTabColorProvider -->
+        <editorTabColorProvider implementation="io.chromatabs.phase0.Phase0ColorProvider"/>
+
+        <notificationGroup id="Chromatabs" displayType="STICKY_BALLOON"/>
+    </extensions>
+
+    <actions>
+        <!-- EditorTabPopupMenu is the editor-tab right-click menu.
+             Confirmed: the platform's own LangActions.xml registers into this group. -->
+        <action id="Chromatabs.RepaintApiProbe"
+                class="io.chromatabs.phase0.RepaintApiProbeAction"
+                text="Chromatabs: Probe Tab Repaint API"
+                description="Lists candidate repaint APIs on FileEditorManagerEx for this platform version">
+            <add-to-group group-id="EditorTabPopupMenu" anchor="first"/>
+        </action>
+    </actions>
+</idea-plugin>
