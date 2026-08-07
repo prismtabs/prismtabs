@@ -2,11 +2,13 @@
 
 Chrome-style colour groups for IntelliJ editor tabs.
 
-**Status: Phase 0 complete — passed.** This build does nothing useful on purpose. Its only job was
-to answer one question before any real code is written: *does a colour returned from
-`EditorTabColorProvider` actually get painted on a tab in your IDE, your theme, your version?*
-It does. See [Phase 0 result](#phase-0-result-passed) for the three non-obvious things required to
-get there, and the one unsolved problem Phase 1 inherits.
+**Status: Phase 1 in progress.** Real persistence and colouring now exist: `TabGroupService`
+holds group definitions and file assignments, persists them to `.idea/tabGroups.xml`, and
+`TabGroupColorProvider` reads its cache on the EDT. Two hard-coded actions ("Assign Red" /
+"Assign Blue" / "Clear Group") on the tab right-click menu exercise the whole path until the
+Chrome-style swatch popup lands in Phase 2. See [Phase 1 result](#phase-1-result) for the repaint
+decision this phase had to make, and [Phase 0 result](#phase-0-result-passed) for the groundwork
+it builds on.
 
 ---
 
@@ -107,6 +109,48 @@ Theme used for testing: expUI_dark (New UI, dark), IC-242.20224.300
 
 ---
 
+## Phase 1 result
+
+Model, persistence and a real colour provider now exist (`TabGroup`, `TabGroupState`,
+`TabGroupService`, `TabGroupColorProvider`), plus three throwaway actions ("Assign Red" /
+"Assign Blue" / "Clear Group") on the tab right-click menu to exercise the path end-to-end.
+Assignments are keyed by `VirtualFile.url` and persist to `.idea/tabGroups.xml` via
+`@Storage("tabGroups.xml")`, so a rename or move silently drops the assignment — accepted per the
+plan, deferred to Phase 5's `VirtualFileListener` remap.
+
+**Acceptance: passed**, verified manually in `runIde` (`IC-242.20224.300`, `expUI_dark`) —
+a tab assigned Red via the right-click menu was still red after a full IDE restart, and Clear
+Group also worked. No `io.chromatabs` errors or exceptions appeared in `idea.log`.
+
+### The repaint decision
+
+Phase 0 left one question open: how does Phase 1 call `FileEditorManagerImpl.queueUpdateFile`,
+which sits on the impl class rather than the public `FileEditorManagerEx` interface? Reflection
+was the plan's default fallback. Instead, `io.chromatabs.service.TabRepaint` uses a **compile-time
+cast**, not reflection:
+
+```kotlin
+(FileEditorManagerEx.getInstanceEx(project) as? FileEditorManagerImpl)?.queueUpdateFile(file)
+```
+
+Reasoning: `build.gradle.kts` already runs `pluginVerifier()` against the full supported IDE
+matrix (`pluginVerification { ides { recommended() } }`), and the verifier resolves ordinary
+method calls — including calls onto non-interface impl classes — against every listed IDE. A
+reflective call is invisible to that check: a renamed or removed method would only surface as a
+silent runtime no-op on whichever IDE version broke it. A direct call is visible to the verifier
+and fails the build the moment a target platform stops shipping the method, which is strictly
+earlier and louder than reflection would ever catch it. The `as?` (rather than a hard cast) means
+that on any IDE where `FileEditorManagerEx.getInstanceEx` returns something other than
+`FileEditorManagerImpl` — headless test fixtures, or a future platform that slips past the
+verifier matrix — the repaint request degrades to a silent no-op instead of a `ClassCastException`.
+
+Verified by `javap` on 2024.2: both `queueUpdateFile(VirtualFile)` and `updateFileColor
+(VirtualFile)` are `public` (not `internal`/package-private) on `FileEditorManagerImpl`, and
+neither carries an `@ApiStatus.Internal`-style annotation, so this is a normal (if fragile)
+impl-class dependency, not a hack around access control.
+
+---
+
 ## Constraints that are not going away
 
 Read these before designing anything. They are platform limits, not TODOs.
@@ -124,7 +168,8 @@ Read these before designing anything. They are platform limits, not TODOs.
    [that section](#measured-constraint-unselected-tabs-render-tints-at-50-strength).
 5. **There is no stable API to repaint a tab after a colour change.** The only call that moves the
    tab background is `FileEditorManagerImpl.queueUpdateFile`, which is on the impl class, not the
-   `FileEditorManagerEx` interface. See [Phase 0 finding 3](#3-repaint-queueupdatefile-not-updatefilecolor--and-no-stable-api-exists).
+   `FileEditorManagerEx` interface. See [Phase 0 finding 3](#3-repaint-queueupdatefile-not-updatefilecolor--and-no-stable-api-exists)
+   and [the Phase 1 decision](#the-repaint-decision) on how it's called without reflection.
 
 ## Compatibility policy
 
@@ -139,13 +184,19 @@ The name lives in `gradle.properties` (`pluginName`, `pluginGroup`) plus the `<i
 `src/main/resources/META-INF/plugin.xml` and the `io.chromatabs` package path. Note that
 "Tab Organizer" is already taken on the JetBrains Marketplace.
 
-## What gets deleted in Phase 1
+## What Phase 1 deleted
 
-Everything in `io.chromatabs.phase0`. It is scaffolding for the gate above, nothing more.
-
-Two things must survive the deletion, because they are findings rather than scaffolding:
+`io.chromatabs.phase0` is gone — it was scaffolding for the Phase 0 gate above, nothing more.
+Two things survived the deletion, carried into `io.chromatabs.provider.TabGroupColorProvider`,
+because they are findings rather than scaffolding:
 
 - `order="first"` on the `editorTabColorProvider` registration in `plugin.xml`;
-- `DumbAware` on whatever class replaces `Phase0ColorProvider`.
+- `DumbAware` on the provider class.
+
+## What Phase 2 will delete
+
+`io.chromatabs.action.AssignTabGroupAction` (the hard-coded Red/Blue/Clear actions) is Phase 1
+scaffolding in the same sense — it exists only to exercise `TabGroupService` before the real
+swatch popup exists, and goes away once `TabGroupPopup` replaces it.
 
 Drop either one and the plugin fails quietly — no error, just files that never get their colour.
