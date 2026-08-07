@@ -13,8 +13,19 @@
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <!-- Confirmed EP: com.intellij.editorTabColorProvider -->
-        <editorTabColorProvider implementation="io.chromatabs.phase0.Phase0ColorProvider"/>
+        <!-- Confirmed EP: com.intellij.editorTabColorProvider
+
+             order="first" is REQUIRED, not cosmetic. EditorTabPresentationUtil.getEditorTabBackgroundColor
+             iterates this EP in registration order and returns the FIRST non-null colour. The platform's
+             own EditorTabColorProviderImpl delegates to FileColorManager.getFileColor(), and IntelliJ
+             ships default File Colors scopes (notably "Tests" and "Non-Project Files"). Without
+             order="first", every file matching one of those scopes gets the platform's colour and this
+             provider is never consulted at all.
+
+             This encodes a policy decision: an explicit Chromatabs group assignment beats a File Colors
+             scope match. That matches Chrome, where the colour the user pinned to a tab is the colour
+             they get. -->
+        <editorTabColorProvider implementation="io.chromatabs.phase0.Phase0ColorProvider" order="first"/>
 
         <notificationGroup id="Chromatabs" displayType="STICKY_BALLOON"/>
     </extensions>
