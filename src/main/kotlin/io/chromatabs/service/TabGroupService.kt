@@ -76,6 +76,25 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
         recomputeCache()
     }
 
+    /**
+     * Phase 4a's "collapse = close-and-remember". [openFileUrls] is the ordered list of files that
+     * were open, and belonged to this group, at the moment of collapse — gathered by the caller
+     * (see [io.chromatabs.service.TabGroupCollapse]) since [TabGroupService] has no
+     * `FileEditorManager` access. A no-op if the group doesn't exist.
+     */
+    fun collapse(groupId: String, openFileUrls: List<String>) {
+        val group = groups[groupId] ?: return
+        groups = groups + (groupId to group.copy(collapsed = true, collapsedFileUrls = openFileUrls))
+        recomputeCache()
+    }
+
+    /** Clears [TabGroup.collapsed] and [TabGroup.collapsedFileUrls]. A no-op if the group doesn't exist. */
+    fun expand(groupId: String) {
+        val group = groups[groupId] ?: return
+        groups = groups + (groupId to group.copy(collapsed = false, collapsedFileUrls = emptyList()))
+        recomputeCache()
+    }
+
     fun activeGroupId(): String? = activeGroupId
 
     fun activeGroup(): TabGroup? = activeGroupId?.let { groups[it] }
@@ -98,6 +117,7 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
                 lightRgb = group.lightRgb
                 darkRgb = group.darkRgb
                 collapsed = group.collapsed
+                collapsedFileUrls = group.collapsedFileUrls.toMutableList()
                 order = group.order
             }
         }.toMutableList()
@@ -106,7 +126,15 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
 
     override fun loadState(state: TabGroupState) {
         groups = state.groups.associate { entry ->
-            entry.id to TabGroup(entry.id, entry.name, entry.lightRgb, entry.darkRgb, entry.collapsed, entry.order)
+            entry.id to TabGroup(
+                entry.id,
+                entry.name,
+                entry.lightRgb,
+                entry.darkRgb,
+                entry.collapsed,
+                entry.collapsedFileUrls.toList(),
+                entry.order,
+            )
         }
         assignments = state.assignments.toMap()
         recomputeCache()

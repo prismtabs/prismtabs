@@ -16,6 +16,7 @@ import com.intellij.ui.JBColor
 import io.chromatabs.model.PresetColor
 import io.chromatabs.model.TabGroup
 import io.chromatabs.model.TabGroupPalette
+import io.chromatabs.service.TabGroupNotifier
 import io.chromatabs.service.TabGroupService
 import io.chromatabs.service.TabRepaint
 import java.awt.Color
@@ -85,6 +86,7 @@ private class RootStep(
             Entry.RemoveFromGroup -> {
                 service.clear(file.url)
                 TabRepaint.request(project, file)
+                TabGroupNotifier.notifyChanged(project)
                 PopupStep.FINAL_CHOICE
             }
         }
@@ -117,6 +119,7 @@ private class AddToGroupStep(
     override fun onChosen(selectedValue: TabGroup, finalChoice: Boolean): PopupStep<*>? {
         service.assign(file.url, selectedValue)
         TabRepaint.request(project, file)
+        TabGroupNotifier.notifyChanged(project)
         return PopupStep.FINAL_CHOICE
     }
 }
@@ -222,8 +225,12 @@ private class GroupActionsStep(
     override fun getFinalRunnable(): Runnable? = finalRunnable
 }
 
-/** "Recolour…"'s step: applies immediately and repaints every member — no name prompt needed. */
-private class RecolorStep(
+/**
+ * "Recolour…"'s step: applies immediately and repaints every member — no name prompt needed.
+ * `internal`, not `private`: also opened directly (not just nested off [GroupActionsStep]) by the
+ * Tab Groups tool window's own "Recolour…" toolbar action, rather than duplicating this.
+ */
+internal class RecolorStep(
     private val project: Project,
     private val group: TabGroup,
     private val service: TabGroupService,
@@ -237,14 +244,17 @@ private class RecolorStep(
     override fun onChosen(selectedValue: PresetColor, finalChoice: Boolean): PopupStep<*>? {
         service.recolor(group.id, selectedValue.light.rgb and 0xFFFFFF, selectedValue.dark.rgb and 0xFFFFFF)
         repaintFiles(project, service.membersOf(group.id))
+        TabGroupNotifier.notifyChanged(project)
         return PopupStep.FINAL_CHOICE
     }
 }
 
-private fun promptForRenameAndApply(project: Project, group: TabGroup, service: TabGroupService) {
+/** `internal`, not `private`: reused directly by the tool window's own "Rename…" action. */
+internal fun promptForRenameAndApply(project: Project, group: TabGroup, service: TabGroupService) {
     val dialog = RenameGroupDialog(project, group.name)
     if (!dialog.showAndGet()) return
     service.rename(group.id, dialog.newName())
+    TabGroupNotifier.notifyChanged(project)
 }
 
 /**
@@ -253,8 +263,10 @@ private fun promptForRenameAndApply(project: Project, group: TabGroup, service: 
  * naming rule ("actions should be as concrete as the platform's own equivalents" — see the
  * Project view's own file-delete confirmation) and its guidance that an irreversible default
  * action needs an unambiguous label, not a bare affirmative.
+ *
+ * `internal`, not `private`: reused directly by the tool window's own "Delete Group" action.
  */
-private fun confirmAndDelete(project: Project, group: TabGroup, service: TabGroupService) {
+internal fun confirmAndDelete(project: Project, group: TabGroup, service: TabGroupService) {
     val confirmed = MessageDialogBuilder.yesNo("Delete Tab Group", "Delete \"${group.name}\"? Its files will be unassigned.")
         .yesText("Delete")
         .noText("Cancel")
@@ -265,6 +277,7 @@ private fun confirmAndDelete(project: Project, group: TabGroup, service: TabGrou
     val members = service.membersOf(group.id)
     service.delete(group.id)
     repaintFiles(project, members)
+    TabGroupNotifier.notifyChanged(project)
 }
 
 /** Resolves each file URL back to a [VirtualFile] and requests a repaint. Callers capture the
@@ -286,6 +299,7 @@ private fun quickAssign(project: Project, file: VirtualFile, service: TabGroupSe
     )
     service.assign(file.url, group)
     TabRepaint.request(project, file)
+    TabGroupNotifier.notifyChanged(project)
 }
 
 private fun promptForNameAndCreate(
@@ -316,4 +330,5 @@ private fun promptForNameAndCreate(
     )
     service.assign(file.url, group)
     TabRepaint.request(project, file)
+    TabGroupNotifier.notifyChanged(project)
 }

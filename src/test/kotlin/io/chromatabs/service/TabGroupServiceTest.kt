@@ -164,4 +164,59 @@ class TabGroupServiceTest {
         service.setActiveGroup(null)
         assertNull(service.activeGroup())
     }
+
+    @Test
+    fun `collapsing a group records it as collapsed with the given open files`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+        service.assign("file:///B.kt", red)
+
+        service.collapse("red", listOf("file:///A.kt", "file:///B.kt"))
+
+        val group = service.groupFor("file:///A.kt")
+        assertEquals(true, group?.collapsed)
+        assertEquals(listOf("file:///A.kt", "file:///B.kt"), group?.collapsedFileUrls)
+    }
+
+    @Test
+    fun `expanding a collapsed group clears collapsed and its recorded files`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+        service.collapse("red", listOf("file:///A.kt"))
+
+        service.expand("red")
+
+        val group = service.groupFor("file:///A.kt")
+        assertEquals(false, group?.collapsed)
+        assertEquals(emptyList<String>(), group?.collapsedFileUrls)
+    }
+
+    @Test
+    fun `collapsing an unknown group is a no-op`() {
+        val service = TabGroupService()
+        service.collapse("no-such-group", listOf("file:///A.kt"))
+        assertEquals(emptyList<String>(), service.groups())
+    }
+
+    @Test
+    fun `expanding an unknown group is a no-op`() {
+        val service = TabGroupService()
+        service.expand("no-such-group")
+        assertEquals(emptyList<String>(), service.groups())
+    }
+
+    @Test
+    fun `collapsed state and recorded files round-trip through getState and loadState`() {
+        val original = TabGroupService()
+        original.assign("file:///A.kt", red)
+        original.assign("file:///B.kt", red)
+        original.collapse("red", listOf("file:///A.kt", "file:///B.kt"))
+
+        val restored = TabGroupService()
+        restored.loadState(original.state)
+
+        val group = restored.groupFor("file:///A.kt")
+        assertEquals(true, group?.collapsed)
+        assertEquals(listOf("file:///A.kt", "file:///B.kt"), group?.collapsedFileUrls)
+    }
 }
