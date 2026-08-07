@@ -77,4 +77,91 @@ class TabGroupServiceTest {
 
         assertEquals(red, service.groupFor("file:///A.kt"))
     }
+
+    @Test
+    fun `renaming a group updates it for every member`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+        service.assign("file:///B.kt", red)
+
+        service.rename("red", "Errors")
+
+        assertEquals("Errors", service.groupFor("file:///A.kt")?.name)
+        assertEquals("Errors", service.groupFor("file:///B.kt")?.name)
+    }
+
+    @Test
+    fun `renaming an unknown group is a no-op`() {
+        val service = TabGroupService()
+        service.rename("no-such-group", "Errors")
+        assertEquals(emptyList<String>(), service.groups())
+    }
+
+    @Test
+    fun `recolouring a group updates it for every member`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+        service.assign("file:///B.kt", red)
+
+        service.recolor("red", lightRgb = 0x000000, darkRgb = 0x111111)
+
+        assertEquals(0x000000, service.groupFor("file:///A.kt")?.lightRgb)
+        assertEquals(0x111111, service.groupFor("file:///B.kt")?.darkRgb)
+    }
+
+    @Test
+    fun `deleting a group unassigns every member and clears the group itself`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+        service.assign("file:///B.kt", red)
+        service.assign("file:///C.kt", blue)
+
+        service.delete("red")
+
+        assertNull(service.groupFor("file:///A.kt"))
+        assertNull(service.groupFor("file:///B.kt"))
+        assertEquals(blue, service.groupFor("file:///C.kt"))
+        assertEquals(listOf(blue), service.groups())
+    }
+
+    @Test
+    fun `deleting the active group clears the active group too`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+        service.setActiveGroup("red")
+
+        service.delete("red")
+
+        assertNull(service.activeGroupId())
+        assertNull(service.activeGroup())
+    }
+
+    @Test
+    fun `membersOf lists every file assigned to a group`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+        service.assign("file:///B.kt", blue)
+        service.assign("file:///C.kt", red)
+
+        assertEquals(setOf("file:///A.kt", "file:///C.kt"), service.membersOf("red").toSet())
+    }
+
+    @Test
+    fun `no group is active by default`() {
+        val service = TabGroupService()
+        assertNull(service.activeGroupId())
+        assertNull(service.activeGroup())
+    }
+
+    @Test
+    fun `setting the active group surfaces it, clearing it surfaces null`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+
+        service.setActiveGroup("red")
+        assertEquals(red, service.activeGroup())
+
+        service.setActiveGroup(null)
+        assertNull(service.activeGroup())
+    }
 }

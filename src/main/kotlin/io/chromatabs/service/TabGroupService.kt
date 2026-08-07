@@ -19,6 +19,13 @@ import io.chromatabs.model.TabGroupState
  * when an assignment actually changes. It deliberately caches the [TabGroup] itself, not a
  * resolved `Color` — resolving `lightRgb`/`darkRgb` into a theme-aware colour is the read
  * boundary's job (see [TabGroup]'s doc), not this service's.
+ *
+ * [activeGroupId] is Phase 3's "sticky group": [io.chromatabs.listener.TabGroupFileListener] reads
+ * it to decide which group a newly opened, unassigned file should join. It is deliberately **not**
+ * part of [TabGroupState] and does not survive an IDE restart — unlike an assignment, "sticky" is a
+ * session-scoped recording toggle, not data, and silently resuming it after a restart the user has
+ * forgotten about would auto-colour files they never asked to group. Read on the EDT alongside
+ * [groupFor], so it gets the same `@Volatile` treatment.
  */
 @Service(Service.Level.PROJECT)
 @State(name = "TabGroupState", storages = [Storage("tabGroups.xml")])
@@ -30,9 +37,14 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
     @Volatile
     private var colorCache: Map<String, TabGroup> = emptyMap()
 
+    @Volatile
+    private var activeGroupId: String? = null
+
     fun groupFor(fileUrl: String): TabGroup? = colorCache[fileUrl]
 
     fun groups(): List<TabGroup> = groups.values.sortedBy { it.order }
+
+    fun membersOf(groupId: String): List<String> = assignments.filterValues { it == groupId }.keys.toList()
 
     fun assign(fileUrl: String, group: TabGroup) {
         groups = groups + (group.id to group)
@@ -43,6 +55,33 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
     fun clear(fileUrl: String) {
         assignments = assignments - fileUrl
         recomputeCache()
+    }
+
+    fun rename(groupId: String, name: String) {
+        val group = groups[groupId] ?: return
+        groups = groups + (groupId to group.copy(name = name))
+        recomputeCache()
+    }
+
+    fun recolor(groupId: String, lightRgb: Int, darkRgb: Int) {
+        val group = groups[groupId] ?: return
+        groups = groups + (groupId to group.copy(lightRgb = lightRgb, darkRgb = darkRgb))
+        recomputeCache()
+    }
+
+    fun delete(groupId: String) {
+        groups = groups - groupId
+        assignments = assignments.filterValues { it != groupId }
+        if (activeGroupId == groupId) activeGroupId = null
+        recomputeCache()
+    }
+
+    fun activeGroupId(): String? = activeGroupId
+
+    fun activeGroup(): TabGroup? = activeGroupId?.let { groups[it] }
+
+    fun setActiveGroup(groupId: String?) {
+        activeGroupId = groupId
     }
 
     private fun recomputeCache() {

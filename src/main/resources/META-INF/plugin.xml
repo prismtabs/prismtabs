@@ -6,8 +6,10 @@
     <description><![CDATA[
         Chrome-style colour groups for IntelliJ editor tabs.
         <br/><br/>
-        <b>Phase 2 build.</b> Right-click a tab for the colour swatch popup: 8 preset colours,
-        add to an existing group, or create a new named one. Assignments persist across restarts.
+        <b>Phase 3 build.</b> Right-click a tab for the colour swatch popup: 8 preset colours, add
+        to an existing group, or create a new named one. "Manage Groups…" lets you rename, recolour,
+        delete, or mark a group active — files opened while a group is active join it automatically.
+        Assignments persist across restarts.
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
@@ -27,6 +29,13 @@
              they get. -->
         <editorTabColorProvider implementation="io.chromatabs.provider.TabGroupColorProvider" order="first"/>
     </extensions>
+
+    <!-- Phase 3's "sticky active group" inheritance: dynamic-plugin-safe registration (no
+         <component>, no manual MessageBusConnection.subscribe in a startup activity). -->
+    <projectListeners>
+        <listener class="io.chromatabs.listener.TabGroupFileListener"
+                  topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
+    </projectListeners>
 
     <actions>
         <!-- EditorTabPopupMenu is the editor-tab right-click menu; the platform's own
