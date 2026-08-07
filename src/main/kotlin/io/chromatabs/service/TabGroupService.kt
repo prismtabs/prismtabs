@@ -6,7 +6,6 @@ import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import io.chromatabs.model.TabGroup
 import io.chromatabs.model.TabGroupState
-import java.awt.Color
 
 /**
  * Owns tab-group assignments for a project: group id -> [TabGroup], file URL -> group id.
@@ -15,9 +14,11 @@ import java.awt.Color
  * file therefore silently drops its assignment — accepted for Phase 1, see README. Remapping on
  * rename via a VirtualFileListener is deferred to Phase 5.
  *
- * [colorFor] is read by TabGroupColorProvider on the EDT during tab painting, often. It must stay
+ * [groupFor] is read by TabGroupColorProvider on the EDT during tab painting, often. It must stay
  * a single map lookup: no locks, no I/O. [colorCache] is recomputed wholesale and swapped only
- * when an assignment actually changes.
+ * when an assignment actually changes. It deliberately caches the [TabGroup] itself, not a
+ * resolved `Color` — resolving `lightRgb`/`darkRgb` into a theme-aware colour is the read
+ * boundary's job (see [TabGroup]'s doc), not this service's.
  */
 @Service(Service.Level.PROJECT)
 @State(name = "TabGroupState", storages = [Storage("tabGroups.xml")])
@@ -27,9 +28,11 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
     private var assignments: Map<String, String> = emptyMap()
 
     @Volatile
-    private var colorCache: Map<String, Color> = emptyMap()
+    private var colorCache: Map<String, TabGroup> = emptyMap()
 
-    fun colorFor(fileUrl: String): Color? = colorCache[fileUrl]
+    fun groupFor(fileUrl: String): TabGroup? = colorCache[fileUrl]
+
+    fun groups(): List<TabGroup> = groups.values.sortedBy { it.order }
 
     fun assign(fileUrl: String, group: TabGroup) {
         groups = groups + (group.id to group)
@@ -44,7 +47,7 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
 
     private fun recomputeCache() {
         colorCache = assignments.mapNotNull { (fileUrl, groupId) ->
-            groups[groupId]?.let { group -> fileUrl to Color(group.colorRgb) }
+            groups[groupId]?.let { group -> fileUrl to group }
         }.toMap()
     }
 
@@ -53,7 +56,8 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
             TabGroupState.GroupEntry().apply {
                 id = group.id
                 name = group.name
-                colorRgb = group.colorRgb
+                lightRgb = group.lightRgb
+                darkRgb = group.darkRgb
                 collapsed = group.collapsed
                 order = group.order
             }
@@ -63,7 +67,7 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
 
     override fun loadState(state: TabGroupState) {
         groups = state.groups.associate { entry ->
-            entry.id to TabGroup(entry.id, entry.name, entry.colorRgb, entry.collapsed, entry.order)
+            entry.id to TabGroup(entry.id, entry.name, entry.lightRgb, entry.darkRgb, entry.collapsed, entry.order)
         }
         assignments = state.assignments.toMap()
         recomputeCache()

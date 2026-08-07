@@ -20,7 +20,8 @@ class TabGroupState {
     class GroupEntry {
         var id: String = ""
         var name: String = ""
-        var colorRgb: Int = 0
+        var lightRgb: Int = 0
+        var darkRgb: Int = 0
         var collapsed: Boolean = false
         var order: Int = 0
     }

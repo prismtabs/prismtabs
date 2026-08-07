@@ -2,13 +2,16 @@
 
 Chrome-style colour groups for IntelliJ editor tabs.
 
-**Status: Phase 1 in progress.** Real persistence and colouring now exist: `TabGroupService`
-holds group definitions and file assignments, persists them to `.idea/tabGroups.xml`, and
-`TabGroupColorProvider` reads its cache on the EDT. Two hard-coded actions ("Assign Red" /
-"Assign Blue" / "Clear Group") on the tab right-click menu exercise the whole path until the
-Chrome-style swatch popup lands in Phase 2. See [Phase 1 result](#phase-1-result) for the repaint
-decision this phase had to make, and [Phase 0 result](#phase-0-result-passed) for the groundwork
-it builds on.
+**Status: Phase 2 done.** Right-clicking a tab now opens the real Chrome-style swatch popup —
+8 preset colours, "Add to Group…", "New Group…", "Remove from Group" — instead of Phase 1's
+hard-coded Red/Blue/Clear actions. All three flows are covered end-to-end by real UI tests
+(`./gradlew uiTest`, see [UI testing](#ui-testing)) driving an actual sandbox IDE, not just
+`./gradlew test`'s plain-JUnit coverage. See [Phase 2 result](#phase-2-result) for the popup's
+structure and the light/dark colour-model change it required. [Phase 1 result](#phase-1-result)
+has the repaint decision this builds on, and [Phase 0 result](#phase-0-result-passed) the
+groundwork under both.
+**Still genuinely unverified by a human:** light-theme legibility of the palette — see
+[Palette](#palette).
 
 ---
 
@@ -28,6 +31,9 @@ locally installed Gradle, or let IntelliJ regenerate it.
 ./gradlew test      # fast, no IDE needed
 ./gradlew runIde    # launches a sandbox IDE with the plugin installed
 ```
+
+See [UI testing](#ui-testing) for `./gradlew uiTest` — the `remote-robot` suite that drives
+`TabGroupPopup` end-to-end in a real sandbox IDE.
 
 ## Phase 0 result: PASSED
 
@@ -94,7 +100,8 @@ this blend, not in isolation — a colour that looks right on the selected tab i
 ### Still to check
 
 - [ ] **Light theme legibility.** Only dark (`expUI_dark`) has been verified. Tab *text* colour is
-      not ours to control, so tints must work with whatever foreground the theme picks.
+      not ours to control, so tints must work with whatever foreground the theme picks. This
+      covers `TabGroupPalette`'s light-theme half too — see [Palette](#palette).
 - [ ] **Newest platform.** The repaint findings above are from 2024.2 only. Re-run the probe on the
       newest supported IDE and confirm `queueUpdateFile` still exists with the same behaviour, then
       record it here.
@@ -151,6 +158,128 @@ impl-class dependency, not a hack around access control.
 
 ---
 
+## Phase 2 result
+
+The real swatch popup (`io.chromatabs.ui.TabGroupPopup`) replaces Phase 1's hard-coded Red/Blue/
+Clear actions. Right-clicking a tab now shows: 8 Chrome-style preset dots, a separator, "Add to
+Group…" (nested — lists existing groups, each with its own dot), "New Group…" (nested — pick a
+colour, then name it), and "Remove from Group" (only when the tab is currently assigned). All of
+it is one `AssignTabGroupAction` on `EditorTabPopupMenu`, since the tree is data-driven and can't
+be expressed as a static `plugin.xml` `<group>`.
+
+**Acceptance: passed**, verified by three `remote-robot` UI tests (`./gradlew uiTest` — see
+[UI testing](#ui-testing)) driving a real sandbox IDE end-to-end: a preset click assigns the
+shared colour group, "New Group…" prompts for a name and assigns the named group, and "Remove
+from Group" clears an assignment — all confirmed by reading back `TabGroupService` state through
+the running plugin, not by guessing at Swing internals. `./gradlew test` (the plain-JUnit suite,
+including `TabGroupServiceTest` updated for the `lightRgb`/`darkRgb` split below) also passes.
+Not covered by either suite, and still open: light-theme legibility of the palette — see
+[Palette](#palette).
+
+### The light/dark colour-model change
+
+Phase 1's `TabGroup.colorRgb` was one flat `Int` — fine for two hard-coded scaffold colours, not
+fine for a real 8-colour palette that has to stay legible in both themes. `TabGroup` now carries
+`lightRgb`/`darkRgb` instead (persisted as both in `.idea/tabGroups.xml`).
+
+The obvious alternative — store a `JBColor` directly — was rejected: `JBColor`'s theme detection
+(`JBColor.isBright()`) reads a lazily-initialised static that expects a running IDE application,
+and `TabGroupService` is deliberately plain-JUnit-tested with no platform bootstrap (see §7 of the
+plan). Constructing or comparing a `JBColor` inside that test suite risks a headless failure the
+moment the lazy is touched.
+
+So the split is: `TabGroup` and `TabGroupService` stay `JBColor`-free and fully testable — the
+cache (`TabGroupService.colorCache`) now holds the `TabGroup` itself rather than a resolved
+`Color`. Only `TabGroupColorProvider.getEditorTabColor`, which the platform only ever calls from a
+live IDE, builds `JBColor(Color(lightRgb), Color(darkRgb))`. This is also why theme switches
+retint already-assigned tabs on the next repaint without any cache-invalidation code: `JBColor`
+re-resolves against the current LAF every time something reads it, and nothing here holds onto a
+resolved value across a repaint.
+
+The same reasoning applies to `ColorSwatchIcon`: it is handed a `JBColor(light, dark)` and paints
+whichever variant is active, safe for the same reason — icons only ever paint inside a live IDE.
+
+### Palette
+
+`TabGroupPalette` (`io.chromatabs.model`) is the 8 Chrome hues — grey, blue, red, yellow, green,
+pink, purple, cyan — each a `light`/`dark` `java.awt.Color` pair. Both variants continue Phase 0's
+measured constraint: chosen deep/saturated enough to still read after `EditorTabs`' ~50%-alpha
+blend on unselected tabs, following the same brightness the Phase 1 scaffold proved out for red
+and blue (dark variants literally reuse those two exact values). **Only the dark-theme half of
+this is verified** — light-theme legibility of the full 8-colour set is still an open item, same
+as the pre-existing "Still to check" list under Phase 0.
+
+### Two design choices not spelled out in the plan
+
+The plan describes the popup's shape but leaves two behaviours to fill in:
+
+- **Clicking a top-level preset dot** doesn't prompt for a name — it assigns (creating on first
+  use) a shared, colour-named group (`id = "preset-<colour>"`, e.g. "Blue"), so repeated quick
+  clicks across files converge on one group per colour instead of spawning duplicates. This is the
+  fast path; "New Group…" is the deliberate, named path.
+- **"New Group…"'s name prompt** (`Messages.showInputDialog`) runs from the colour-pick step's
+  `getFinalRunnable()`, not inline in `onChosen()` — deferred until the popup has actually closed,
+  so the modal dialog doesn't race the popup's close animation. Cancelling the name prompt aborts
+  the whole flow; no group is created.
+
+## UI testing
+
+`TabGroupPopup` is covered end-to-end by [`remote-robot`](https://github.com/JetBrains/intellij-ui-test-robot)
+tests (`src/uiTest/`), not just eyeballed in `runIde`. They live in their own Gradle source set —
+slow, need a live IDE — kept out of the fast `./gradlew test` path entirely.
+
+```bash
+./gradlew runIdeForUiTests &   # boots a sandbox IDE with a robot-server listening on :8082
+./gradlew uiTest               # runs TabGroupPopupUiTest against it (needs the IDE already up)
+```
+
+`runIdeForUiTests` opens `src/uiTest/resources/fixture-project` — a throwaway one-file directory,
+not this plugin's own project — on startup, so there is always exactly one editor tab to
+right-click; the tests never have to disambiguate between tabs by filename.
+
+### Why `remote-robot`, not IDE Starter + Driver
+
+JetBrains' current official direction for IDE integration tests is Starter + Driver, and IntelliJ
+Platform Gradle Plugin 2.x is built around it (`testIdeUi` maps to `TestFrameworkType.Starter`).
+It was evaluated and rejected for this plugin specifically: its UI-component layer is documented
+as experimental, and no example anywhere shows right-clicking an arbitrary component to open its
+context menu — every documented pattern opens a popup *via* a named action (`invokeAction(...)`),
+which `EditorTabPopupMenu` isn't. `remote-robot` is the older tool, but `ComponentFixture
+.rightClick()` followed by finding the resulting menu is exactly its best-documented, most
+battle-tested pattern. See the git history around this decision for the fuller comparison.
+
+### What it actually took to get working (four real findings, not guesses)
+
+Every one of these was hit as a live test failure and fixed by re-running against the actual
+sandbox IDE — none were predicted in advance:
+
+1. **The client JVM needs `--add-opens java.base/java.lang=ALL-UNNAMED`.** `remote-robot`'s Gson
+   response parsing reflects into `Throwable#detailMessage`; JDK 17+'s strong encapsulation blocks
+   that silently otherwise (`InaccessibleObjectException`, wrapped twice by Gson and Retrofit into
+   an opaque `IllegalArgumentException`). Set in the `uiTest` task's `jvmArgs`.
+2. **The tab's concrete Swing class is `EditorTabLabel`, not `TabLabel`.** `TabLabel`
+   (`com.intellij.ui.tabs.impl`) is the base class; the file editor subsystem's actual runtime tab
+   component is `com.intellij.openapi.fileEditor.impl.EditorTabLabel`, and `remote-robot`'s xpath
+   `@class` matches the concrete class, not a superclass. Found by dumping the live component
+   hierarchy (`curl http://127.0.0.1:8082`), not by `javap` alone — `javap` only confirmed the
+   superclass existed and was right-click-able, not which subclass actually renders.
+3. **Rhino's `Packages.x.y.Z` doesn't reliably become a `java.lang.Class<T>` argument.** The popup
+   scripts call into `TabGroupService` via `project.getService(...)`, an overloaded Java method
+   expecting `Class<T>`. Passing a dot-navigated `Packages.io.chromatabs...` reference failed
+   overload resolution live ("Can't find method ...getService(object)"). `java.lang.Class.forName(name,
+   true, classLoader)` — a real `Class` object, not a Rhino wrapper — is what actually works. That,
+   in turn, needs the *right* classloader: `Class.forName(name)` alone resolves against the
+   robot-server-plugin's own classloader, which can't see Chromatabs's classes — IntelliJ gives
+   every plugin its own `PluginClassLoader`. `PluginManagerCore.getPlugin(PluginId.getId
+   ("io.chromatabs")).getPluginClassLoader()` is what's actually needed.
+4. **`callJs` can't return a bare JS `null`.** `Fixture.callJs<T : Serializable>` requires the
+   *result itself* to carry Serializable type info; a script whose last expression is `null` fails
+   server-side ("Script must return 'Serializable' but 'null' has type 'null'") before it ever
+   reaches the client's generic type parameter. `IdeaFrame.groupNameFor` returns `''` for
+   "unassigned" and translates it to Kotlin `null` on the client side instead — safe because a real
+   [`TabGroup`](#the-lightdark-colour-model-change) name is never blank
+   (`InputValidator` in `TabGroupPopup.promptForNameAndCreate`).
+
 ## Constraints that are not going away
 
 Read these before designing anything. They are platform limits, not TODOs.
@@ -193,10 +322,14 @@ because they are findings rather than scaffolding:
 - `order="first"` on the `editorTabColorProvider` registration in `plugin.xml`;
 - `DumbAware` on the provider class.
 
-## What Phase 2 will delete
+## What Phase 2 deleted
 
-`io.chromatabs.action.AssignTabGroupAction` (the hard-coded Red/Blue/Clear actions) is Phase 1
-scaffolding in the same sense — it exists only to exercise `TabGroupService` before the real
-swatch popup exists, and goes away once `TabGroupPopup` replaces it.
+Phase 1's hard-coded Red/Blue/Clear actions (`AssignRedTabGroupAction`, `AssignBlueTabGroupAction`,
+`ClearTabGroupAction`) are gone, replaced by the single `io.chromatabs.action.AssignTabGroupAction`
+that opens `TabGroupPopup`. `TabGroup.colorRgb` is also gone — see
+[the light/dark colour-model change](#the-lightdark-colour-model-change) for why it became
+`lightRgb`/`darkRgb`, which is a breaking change to `.idea/tabGroups.xml`'s schema; any
+Phase-1-era sandbox state won't load and must be re-assigned.
 
-Drop either one and the plugin fails quietly — no error, just files that never get their colour.
+Drop `order="first"` or `DumbAware` from Phase 1 and the plugin fails quietly — no error, just
+files that never get their colour.

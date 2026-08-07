@@ -6,8 +6,8 @@
     <description><![CDATA[
         Chrome-style colour groups for IntelliJ editor tabs.
         <br/><br/>
-        <b>Phase 1 build.</b> Assignments persist across restarts. The colour swatch popup
-        lands in Phase 2 — for now, two hard-coded colours on the tab right-click menu.
+        <b>Phase 2 build.</b> Right-click a tab for the colour swatch popup: 8 preset colours,
+        add to an existing group, or create a new named one. Assignments persist across restarts.
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
@@ -29,17 +29,13 @@
     </extensions>
 
     <actions>
-        <!-- PHASE 1 SCAFFOLDING: hard-coded red/blue/clear, replaced by the Chrome-style swatch
-             popup in Phase 2. EditorTabPopupMenu is the editor-tab right-click menu; the platform's
-             own LangActions.xml registers into this group too. -->
-        <group id="Chromatabs.AssignGroup" text="Chromatabs" popup="true">
-            <action id="Chromatabs.AssignRed" class="io.chromatabs.action.AssignRedTabGroupAction"
-                    text="Assign Red" description="Assign this tab to the (Phase 1 scaffold) Red group"/>
-            <action id="Chromatabs.AssignBlue" class="io.chromatabs.action.AssignBlueTabGroupAction"
-                    text="Assign Blue" description="Assign this tab to the (Phase 1 scaffold) Blue group"/>
-            <action id="Chromatabs.Clear" class="io.chromatabs.action.ClearTabGroupAction"
-                    text="Clear Group" description="Remove this tab's group assignment"/>
+        <!-- EditorTabPopupMenu is the editor-tab right-click menu; the platform's own
+             LangActions.xml registers into this group too, hence anchor="first". The action opens
+             TabGroupPopup itself (JBPopupFactory), rather than being a plugin.xml <group>, because
+             the popup's tree is dynamic (existing groups, current-assignment state). -->
+        <action id="Chromatabs.AssignTabGroup" class="io.chromatabs.action.AssignTabGroupAction"
+                text="Tab Group…" description="Assign this tab's colour group">
             <add-to-group group-id="EditorTabPopupMenu" anchor="first"/>
-        </group>
+        </action>
     </actions>
 </idea-plugin>
