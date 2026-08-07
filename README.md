@@ -2,14 +2,16 @@
 
 Chrome-style colour groups for IntelliJ editor tabs.
 
-**Status: Phase 2 done.** Right-clicking a tab now opens the real Chrome-style swatch popup —
-8 preset colours, "Add to Group…", "New Group…", "Remove from Group" — instead of Phase 1's
-hard-coded Red/Blue/Clear actions. All three flows are covered end-to-end by real UI tests
+**Status: Phase 3 done.** "Manage Groups…" (new, on the swatch popup) lets you rename a group,
+recolour it, mark it the *active* group, or delete it. While a group is active, every file opened
+for the first time joins it automatically — Chrome has no real equivalent of this, see
+[Phase 3 result](#phase-3-result) for why "active group" is the deliberate substitute. All four
+flows, plus the active-group inheritance itself, are covered end-to-end by real UI tests
 (`./gradlew uiTest`, see [UI testing](#ui-testing)) driving an actual sandbox IDE, not just
-`./gradlew test`'s plain-JUnit coverage. See [Phase 2 result](#phase-2-result) for the popup's
-structure and the light/dark colour-model change it required. [Phase 1 result](#phase-1-result)
-has the repaint decision this builds on, and [Phase 0 result](#phase-0-result-passed) the
-groundwork under both.
+`./gradlew test`'s plain-JUnit coverage. [Phase 2 result](#phase-2-result) has the swatch popup's
+base structure and the light/dark colour-model change; [Phase 1 result](#phase-1-result) has the
+repaint decision both build on; [Phase 0 result](#phase-0-result-passed) is the groundwork under
+all three.
 **Still genuinely unverified by a human:** light-theme legibility of the palette — see
 [Palette](#palette).
 
@@ -221,6 +223,70 @@ The plan describes the popup's shape but leaves two behaviours to fill in:
   `getFinalRunnable()`, not inline in `onChosen()` — deferred until the popup has actually closed,
   so the modal dialog doesn't race the popup's close animation. Cancelling the name prompt aborts
   the whole flow; no group is created.
+
+## Phase 3 result
+
+`TabGroupService` gained group CRUD (`rename`, `recolor`, `delete`, `membersOf`) and an
+`activeGroupId`/`activeGroup`/`setActiveGroup` trio. `io.chromatabs.listener.TabGroupFileListener`
+(registered via `<projectListeners>`, no `<component>`) reads `activeGroup()` on `fileOpened` and
+assigns any not-yet-grouped file to it. The swatch popup gained "Manage Groups…" (only shown once
+at least one group exists): pick a group, then Rename…/Recolour…/Mark as Active Group (or Clear
+Active Group)/Delete Group. Rename is `io.chromatabs.ui.RenameGroupDialog`, a small Kotlin UI DSL
+v2 dialog (`panel { row("Name:") { cell(nameField) } }`) per the plan — the one place in the tree
+that needs free text rather than a list choice. Recolour reuses the nested-list-step pattern
+already established by "New Group…", applying immediately and repainting every member via
+`VirtualFileManager.findFileByUrl`.
+
+**Acceptance: passed**, verified live in `runIdeForUiTests` (`IC-242.20224.300`) by a new
+`remote-robot` UI test matching the plan's stated criterion verbatim: create a group in blue, mark
+it active, open three files and see all three inherit the colour, rename the group, recolour it to
+purple, and see every member (including the two files opened via inheritance, not the popup) follow
+both changes. `./gradlew test` and all four `./gradlew uiTest` tests pass.
+
+### Why "active group" isn't persisted
+
+The plan's Phase 3 section asks for "one group can be marked active, and newly opened files
+auto-join the active group until it's deactivated." `TabGroupService.activeGroupId` is deliberately
+**not** part of `TabGroupState` and does not survive an IDE restart. An assignment is data the user
+explicitly made; "active" is closer to a recording toggle — a session-scoped mode, not a fact about
+a file. Silently resuming it after a restart the user has likely forgotten about would auto-colour
+files they never asked to group, with no visible cause. The active group is instead surfaced
+in-popup: `ManageGroupsStep` and `AddToGroupStep` both suffix the active group's label with
+"(active)".
+
+### Checked against the JetBrains UI Guidelines before writing the popup tree
+
+Two concrete rules from `plugins.jetbrains.com/docs/intellij/punctuation.html` were checked against
+every new menu entry, not just assumed:
+
+- **Ellipsis only when the action needs further input.** "Rename…" and "Recolour…" both open a
+  further step requiring a choice, so both get one; "Mark as Active Group", "Clear Active Group",
+  and "Delete Group" complete immediately (a confirmation dialog doesn't count — IntelliJ's own
+  file-delete confirmation follows the same rule), so none of the three do.
+- **A destructive default action needs a concrete label, not a bare affirmative.** Delete Group's
+  confirmation uses `MessageDialogBuilder.yesNo(...).yesText("Delete").noText("Cancel")` rather than
+  `Messages.showYesNoDialog`'s generic "Yes"/"No", matching how the Project view's own delete
+  confirmation reads.
+
+### Two UI-testing findings, both real, neither predicted
+
+1. **The tab's file name lives in `@accessiblename`, not `@text`.** Phase 2's single-tab fixture
+   never needed to disambiguate tabs, so its xpath (`//div[@class='EditorTabLabel']`) matched
+   whatever was there. The active-group test opens three tabs at once and needs to click a specific
+   one; the first attempt guessed `@text='$path']` by analogy with `actionMenuItem`'s xpath and
+   failed outright (`WaitForConditionTimeoutException` on every test, including the untouched
+   Phase 2 ones — the guess broke the shared helper). Dumping the live tree
+   (`curl http://127.0.0.1:8082`) showed the actual attribute is `accessiblename`.
+2. **`remote-robot` drives a real `java.awt.Robot` at real screen coordinates on whatever has
+   `DISPLAY`.** This machine's sandbox IDE renders on the live desktop (`:0`), not an isolated
+   virtual display. A foreground terminal window sitting on top of the sandbox IDE silently
+   swallowed every right-click — tests failed with the exact same timeout as finding #1, which
+   looked identical from the stack trace alone. Diagnosed by pulling a screenshot from the
+   robot-server itself (`GET /screenshot`, a JSON array of signed bytes — decode with
+   `bytes((b & 0xFF) for b in data['bytes'])` — not a raw PNG response) rather than guessing from
+   symptoms. **If `uiTest` fails with `WaitForConditionTimeoutException` right at the tab
+   right-click and nothing about the popup tree changed, check window stacking before suspecting
+   the code.**
 
 ## UI testing
 

@@ -79,4 +79,27 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
         """,
         true,
     ).ifEmpty { null }
+
+    /** The [io.chromatabs.model.TabGroup.lightRgb] `path` is assigned to, or `null`. Same
+     * sentinel trick as [groupNameFor] — `-1` stands in for "unassigned" since an actual
+     * `lightRgb` is always masked to 24 bits ([io.chromatabs.model.TabGroupPalette]'s presets),
+     * so it can never collide with a real value. */
+    fun groupLightRgbFor(path: String): Int = callJs<Int>(
+        """
+        importPackage(com.intellij.openapi.wm.impl)
+        importPackage(com.intellij.openapi.vfs)
+
+        const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+        const project = frameHelper.getProject()
+        const file = LocalFileSystem.getInstance().findFileByPath(project.getBasePath() + '/$path')
+
+        importPackage(com.intellij.ide.plugins)
+        importPackage(com.intellij.openapi.extensions)
+        const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.chromatabs')).getPluginClassLoader()
+        const service = project.getService(java.lang.Class.forName('io.chromatabs.service.TabGroupService', true, pluginLoader))
+        const group = service.groupFor(file.getUrl())
+        group != null ? group.getLightRgb() : -1
+        """,
+        true,
+    )
 }
