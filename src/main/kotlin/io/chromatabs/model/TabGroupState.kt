@@ -23,6 +23,9 @@ class TabGroupState {
         var lightRgb: Int = 0
         var darkRgb: Int = 0
         var collapsed: Boolean = false
+
+        @XCollection
+        var collapsedFileUrls: MutableList<String> = mutableListOf()
         var order: Int = 0
     }
 }

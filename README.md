@@ -2,16 +2,17 @@
 
 Chrome-style colour groups for IntelliJ editor tabs.
 
-**Status: Phase 3 done.** "Manage Groups…" (new, on the swatch popup) lets you rename a group,
-recolour it, mark it the *active* group, or delete it. While a group is active, every file opened
-for the first time joins it automatically — Chrome has no real equivalent of this, see
-[Phase 3 result](#phase-3-result) for why "active group" is the deliberate substitute. All four
-flows, plus the active-group inheritance itself, are covered end-to-end by real UI tests
-(`./gradlew uiTest`, see [UI testing](#ui-testing)) driving an actual sandbox IDE, not just
-`./gradlew test`'s plain-JUnit coverage. [Phase 2 result](#phase-2-result) has the swatch popup's
-base structure and the light/dark colour-model change; [Phase 1 result](#phase-1-result) has the
-repaint decision both build on; [Phase 0 result](#phase-0-result-passed) is the groundwork under
-all three.
+**Status: Phase 4 done.** A **Tab Groups tool window** (right-hand stripe) now lists every group
+with its colour dot, member count and collapsed state, and can rename, recolour, delete, or
+**collapse/expand** a group. Collapse is "close and remember" — IntelliJ has no collapsible in-strip
+chip and no API to build one, so collapsing closes the group's open tabs and records them, and
+expanding reopens them in order; see [Phase 4 result](#phase-4-result). Everything is covered
+end-to-end by real UI tests (`./gradlew uiTest`, see [UI testing](#ui-testing)) driving an actual
+sandbox IDE, not just `./gradlew test`'s plain-JUnit coverage.
+[Phase 3 result](#phase-3-result) has group management and the active-group inheritance rule;
+[Phase 2 result](#phase-2-result) has the swatch popup's base structure and the light/dark
+colour-model change; [Phase 1 result](#phase-1-result) has the repaint decision they build on;
+[Phase 0 result](#phase-0-result-passed) is the groundwork under all of it.
 **Still genuinely unverified by a human:** light-theme legibility of the palette — see
 [Palette](#palette).
 
@@ -288,15 +289,89 @@ every new menu entry, not just assumed:
    right-click and nothing about the popup tree changed, check window stacking before suspecting
    the code.**
 
+## Phase 4 result
+
+Two mechanisms, as the plan's Phase 4 section asks for, both built on the same collapsed state now
+carried on `TabGroup` (`collapsed: Boolean`, `collapsedFileUrls: List<String>` — the second one new
+this phase, persisted through `TabGroupState.GroupEntry` the same way everything else is).
+
+**4a — collapse = close-and-remember.** `io.chromatabs.service.TabGroupCollapse` is a small
+IDE-side object next to `TabRepaint`, for the same reason: `FileEditorManager` access only makes
+sense from a live IDE, and `TabGroupService` stays plain-JUnit testable. `collapse()` reads
+`FileEditorManager.getOpenFiles()`, keeps only the files belonging to the target group, records
+that list on the group via `TabGroupService.collapse`, then closes each one
+(`FileEditorManager.closeFile`). `expand()` reads the recorded list back off the (pre-mutation)
+group and reopens each via `openFile(file, focusEditor = false)`, in the same order. Unlike
+`TabRepaint`'s `queueUpdateFile` finding from Phase 0, both `closeFile(VirtualFile)` and
+`openFile(VirtualFile, boolean)` are declared on the public `FileEditorManager` interface itself
+(verified via `javap` on 2024.2) — no impl-class cast needed here.
+
+**4b — the "Tab Groups" tool window.** `io.chromatabs.ui.TabGroupsToolWindow` (a `ToolWindowFactory`
++ `DumbAware`, registered `anchor="right"`) is the plan's stated substitute for Chrome's in-strip
+chip: a `JBList<TabGroup>` showing each group's swatch, name, member count and — new this phase — a
+"collapsed" suffix, with a toolbar (and matching context menu) for Collapse/Expand, Rename…,
+Recolour…, and Delete Group. Rename, Recolour and Delete don't duplicate `TabGroupPopup`'s logic —
+`promptForRenameAndApply`, `confirmAndDelete` and `RecolorStep` were widened from `private` to
+`internal` and are invoked directly from here.
+
+### Keeping the tool window in sync: a small message-bus topic, not polling
+
+The tool window has to reflect changes made from *outside* it — a group created via the swatch
+popup while the tool window is already open, say. `TabGroupService` stays free of platform
+dependencies (see its doc comment), so it doesn't publish anything itself; a new
+`io.chromatabs.service.TabGroupsChangedListener` / `TabGroupNotifier` pair follows the same split
+`TabRepaint` already established, and every mutating call site in `TabGroupPopup` and
+`TabGroupCollapse` calls `TabGroupNotifier.notifyChanged(project)` right after mutating the service.
+The tool window subscribes once, in its panel's `init`, via
+`project.messageBus.connect(toolWindow.disposable)`.
+
+**Acceptance: passed**, verified live in `runIdeForUiTests` (`IC-242.20224.300`) by a new
+`remote-robot` UI test matching the plan's stated criterion verbatim: collapse a group and see its
+tabs disappear from the strip while it stays listed (now marked collapsed) in the tool window;
+expand it and see the tabs return in their recorded order. `./gradlew test` and all five
+`./gradlew uiTest` tests pass, repeatably (run three times in a row with no failures).
+
+### Three more UI-testing findings, all real, none predicted
+
+Phase 3 already found two (see above); Phase 4 found three more, all in the shared UI-test harness
+rather than in `TabGroupsToolWindow` itself — the popup and its existing tests turned out to be
+sitting closer to several real races than their prior green runs suggested:
+
+1. **A `hasSubstep` row's child list opens on *selection*, not on click.** `ManageGroupsStep` →
+   `GroupActionsStep` is `hasSubstep`; IntelliJ's `ListPopup` opens the child window as soon as the
+   parent row is selected, so by the time a test's second `click()` lands, the child is usually
+   already open — and the click **closes it again**. This was there since Phase 3 but only started
+   failing tests once Phase 4's changes shifted timing enough to expose it. Confirmed by dumping
+   every open `MyList`'s text around the interaction (see `Popup.kt`'s `clickPopupSubstepItem`
+   doc): right after opening "Manage Groups…" the tree already read
+   `[…] ;; [1]=DumpGroup ;; [2]=Rename…|Recolour…|…`, and clicking the `DumpGroup` row made `[2]`
+   disappear. Fix: **hover** (`RemoteText.moveMouse()`) to select the row instead of clicking it,
+   then click the child. `Popup.kt`'s `clickPopupSubstepItem` is the reusable version;
+   `clickPopupItem` also gained a text-based wait (rather than "any `MyList` exists") for the same
+   underlying race one level up.
+2. **`FileEditorManagerListener.fileOpened` does not fire for a file that's already open.** A test
+   that inherits a previous test's open tabs sees no active-group inheritance at all, because the
+   listener the whole mechanism depends on never runs. `IdeaFrame.resetTabGroups()` (deletes every
+   group and clears the active one, so runs don't accumulate duplicate-named groups either — the
+   fixture project's `.idea/tabGroups.xml` isn't reset between separate `uiTest` invocations) now
+   also closes every editor via `IdeaFrame.closeAllEditors()`, for exactly this reason.
+3. **The tool window narrows the tab strip while it's open.** With "Tab Groups" showing, editor
+   tabs can clip enough that a `rightClick()` at the tab's *stale* on-screen position misses
+   entirely. The tool window test hides it again in a `finally`, and — belt and braces, since
+   `remote-robot` clicks are real OS-level clicks that can race a still-settling layout regardless —
+   `Popup.kt`'s `openTabGroupPopupOn` retries the whole right-click-then-find-menu gesture rather
+   than failing on the first miss.
+
 ## UI testing
 
-`TabGroupPopup` is covered end-to-end by [`remote-robot`](https://github.com/JetBrains/intellij-ui-test-robot)
-tests (`src/uiTest/`), not just eyeballed in `runIde`. They live in their own Gradle source set —
-slow, need a live IDE — kept out of the fast `./gradlew test` path entirely.
+`TabGroupPopup` and the Tab Groups tool window are covered end-to-end by
+[`remote-robot`](https://github.com/JetBrains/intellij-ui-test-robot) tests (`src/uiTest/`), not
+just eyeballed in `runIde`. They live in their own Gradle source set — slow, need a live IDE — kept
+out of the fast `./gradlew test` path entirely.
 
 ```bash
 ./gradlew runIdeForUiTests &   # boots a sandbox IDE with a robot-server listening on :8082
-./gradlew uiTest               # runs TabGroupPopupUiTest against it (needs the IDE already up)
+./gradlew uiTest               # runs every uiTest class against it (needs the IDE already up)
 ```
 
 `runIdeForUiTests` opens `src/uiTest/resources/fixture-project` — a throwaway one-file directory,
