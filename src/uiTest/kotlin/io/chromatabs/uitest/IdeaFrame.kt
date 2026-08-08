@@ -209,6 +209,103 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     ).split(',').filter { it.isNotEmpty() }
 
     /**
+     * Clears any [io.chromatabs.service.TabGroupPaletteService] customisation. Same reasoning as
+     * [resetTabGroups]: overrides persist to `chromatabsPalette.xml`, and the service is
+     * application-level — not scoped to the fixture project — so without this a customisation made
+     * by one test leaks into every test that runs after it, in the same run or a later one.
+     */
+    fun resetTabGroupPalette() {
+        runJs(
+            """
+            importClass(com.intellij.openapi.application.ApplicationManager)
+            importPackage(com.intellij.ide.plugins)
+            importPackage(com.intellij.openapi.extensions)
+
+            const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.chromatabs')).getPluginClassLoader()
+            const service = ApplicationManager.getApplication().getService(
+                java.lang.Class.forName('io.chromatabs.service.TabGroupPaletteService', true, pluginLoader)
+            )
+            service.resetToDefaults()
+            """,
+            true,
+        )
+    }
+
+    /**
+     * Drives [io.chromatabs.ui.TabGroupPaletteConfigurable] the way the Settings framework does —
+     * `createComponent()` then `reset()` — through direct Swing/reflection calls inside the running
+     * IDE process, rather than mouse-driven navigation of the Settings tree and a native colour
+     * chooser, neither of which `remote-robot` can drive reliably. This still exercises the real
+     * binding machinery: `Cell.bind`/`bindText` read the live component on every `isModified`/
+     * `apply` call regardless of how its value was changed, so setting `JBTextField.text` directly
+     * is not a shortcut around that wiring, it is the same read path a real keystroke would hit.
+     *
+     * Returns each checkpoint as `"label:value"`, pipe-joined — `callJs` requires a `Serializable`
+     * result, so a single joined `String` stands in for what would otherwise be several round trips.
+     */
+    fun exercisePaletteConfigurable(): List<String> = callJs<String>(
+        """
+        importClass(com.intellij.openapi.application.ApplicationManager)
+        importPackage(com.intellij.ide.plugins)
+        importPackage(com.intellij.openapi.extensions)
+
+        const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.chromatabs')).getPluginClassLoader()
+        const paletteServiceClass = java.lang.Class.forName('io.chromatabs.service.TabGroupPaletteService', true, pluginLoader)
+        const paletteService = ApplicationManager.getApplication().getService(paletteServiceClass)
+        const configurableClass = java.lang.Class.forName('io.chromatabs.ui.TabGroupPaletteConfigurable', true, pluginLoader)
+        const textFieldClass = java.lang.Class.forName('com.intellij.ui.components.JBTextField', true, pluginLoader)
+        const linkClass = java.lang.Class.forName('com.intellij.ui.components.ActionLink', true, pluginLoader)
+
+        function collect(component, cls, out) {
+            if (cls.isInstance(component)) out.push(component)
+            if (component.getComponentCount) {
+                const n = component.getComponentCount()
+                for (let i = 0; i < n; i++) collect(component.getComponent(i), cls, out)
+            }
+        }
+
+        const results = []
+        const task = new Runnable({
+            run: function() {
+                const ctor = configurableClass.getDeclaredConstructor()
+                ctor.setAccessible(true)
+                const configurable = ctor.newInstance()
+                const root = configurable.createComponent()
+                configurable.reset()
+
+                const textFields = []
+                collect(root, textFieldClass, textFields)
+                const links = []
+                collect(root, linkClass, links)
+
+                const greyField = textFields[0]
+                results.push('initialLabel:' + greyField.getText())
+
+                greyField.setText('MyGrey')
+                results.push('modifiedBeforeApply:' + configurable.isModified())
+
+                configurable.apply()
+                results.push('modifiedAfterApply:' + configurable.isModified())
+                results.push('serviceLabelAfterApply:' + paletteService.presets().get(0).getLabel())
+
+                links[0].doClick()
+                results.push('labelAfterRestoreDefaults:' + greyField.getText())
+                results.push('modifiedAfterRestoreDefaults:' + configurable.isModified())
+
+                configurable.apply()
+                results.push('serviceLabelAfterRestoreApply:' + paletteService.presets().get(0).getLabel())
+
+                configurable.disposeUIResources()
+            }
+        })
+        ApplicationManager.getApplication().invokeAndWait(task)
+
+        results.join('|')
+        """,
+        true,
+    ).split('|')
+
+    /**
      * Collapses or expands `groupName` through `TabGroupCollapse` — the same entry point the tool
      * window's own toggle action calls, invoked on the EDT via `invokeAndWait` because it opens and
      * closes editors. Driving the mechanism directly rather than clicking the tool window's toolbar

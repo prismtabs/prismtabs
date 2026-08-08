@@ -215,6 +215,39 @@ and blue (dark variants literally reuse those two exact values). **Only the dark
 this is verified** — light-theme legibility of the full 8-colour set is still an open item, same
 as the pre-existing "Still to check" list under Phase 0.
 
+### Editing the palette (Phase 5)
+
+`TabGroupPalette.PRESETS` stays a fixed, plain-JUnit-testable constant — nothing above changes.
+What became user-editable is a layer on top: `TabGroupPaletteService` (application-level `@Service`,
+`chromatabsPalette.xml`) holds only the presets that differ from the built-in default, keyed by
+preset id, and `presets()` lays them over `TabGroupPalette.PRESETS` to produce the effective 8. A
+slot nobody has touched keeps tracking the default if that default ever changes, and setting a
+preset back to its default value silently drops the override — there is no separate "is this
+customised" flag to keep in sync.
+
+It's application-level, not project-level: the palette is closer to an editor colour scheme (an IDE
+preference) than to project data like the group assignments in `tabGroups.xml`. The settings page,
+`TabGroupPaletteConfigurable` (`applicationConfigurable`, under Tools), is Kotlin UI DSL v2's
+`BoundSearchableConfigurable`, one row per preset — an editable name field plus a `ColorPanel` each
+for light and dark — bound via `Cell.bind`/`bindText` so `DialogPanel` handles per-field
+modified/apply/reset itself. That machinery alone can't see the page's own "Restore Defaults" link
+coming, though: the link rewrites the whole edit buffer at once and pushes it straight back into
+already-in-sync components, which every field's own live-vs-bound comparison reads as unchanged.
+`TabGroupPaletteConfigurable` keeps a separate `original`/`edited` baseline and overrides
+`isModified`/`apply`/`reset` to account for that case — see the class's doc comment.
+
+`TabGroupPopup`'s three preset lists (`RootStep`'s quick-assign row, "New Group…", "Recolour…") all
+read `effectivePresets()` — a small file-scoped helper calling `TabGroupPaletteService.presets()` —
+instead of `TabGroupPalette.PRESETS` directly, so a customised name/colour shows up immediately,
+with no signature changes needed anywhere the palette used to be threaded through.
+
+Verified live in `runIdeForUiTests`: `TabGroupPaletteConfigurableUiTest` drives the real
+`createComponent()` → `reset()` → edit → `isModified()` → `apply()` → "Restore Defaults" → `apply()`
+sequence through direct Swing/reflection calls inside the running IDE process, rather than mouse-
+driven Settings-tree navigation and a native colour chooser — see `IdeaFrame.exercisePaletteConfigurable`'s
+doc for why. `./gradlew test` covers `TabGroupPaletteService`'s override/diff/round-trip logic
+separately, the same plain-JUnit split the rest of the service layer uses.
+
 ### Two design choices not spelled out in the plan
 
 The plan describes the popup's shape but leaves two behaviours to fill in:
