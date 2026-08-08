@@ -193,9 +193,14 @@ tinting is invisible (§2.4).
 
 ### Phase 5 — Hardening and release
 
-- `<idea-plugin>` must be dynamic-plugin-safe: services + listeners only, **no** `<component>` entries.
-  Run with `-Didea.is.internal=true` and use *Analyze Plugin Dynamic Loading*.
-- Plugin Verifier across the 2024.2 → 2026.2 matrix in GitHub Actions.
+- ~~`<idea-plugin>` must be dynamic-plugin-safe: services + listeners only, **no** `<component>`
+  entries. Run with `-Didea.is.internal=true` and use *Analyze Plugin Dynamic Loading*.~~ Done — no
+  `<component>` entries exist, and `DynamicPlugins.checkCanUnloadWithoutRestart` plus a live
+  unload/reload round trip both confirm it in `runIdeForUiTests`. See the README's
+  [Phase 5 result](../README.md#phase-5-result).
+- ~~Plugin Verifier across the 2024.2 → 2026.2 matrix in GitHub Actions.~~ Done — the `verify-plugin`
+  job in `.github/workflows/build.yml` runs `./gradlew verifyPlugin`, which targets
+  `IntelliJPlatformType.IntellijIdea` (open-ended, not capped at 2026.2) per `build.gradle.kts`.
 - ~~Settings page (`Configurable`) for editing the preset palette.~~ Done — an application-level
   `applicationConfigurable` (parentId `tools`), `TabGroupPaletteConfigurable` (Kotlin UI DSL v2,
   `BoundSearchableConfigurable`), backed by `TabGroupPaletteService`. See `TabGroupPopup`'s
