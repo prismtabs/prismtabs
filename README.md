@@ -144,7 +144,7 @@ cast**, not reflection:
 ```
 
 Reasoning: `build.gradle.kts` already runs `pluginVerifier()` against the full supported IDE
-matrix (`pluginVerification { ides { recommended() } }`), and the verifier resolves ordinary
+matrix (`pluginVerification { ides { select { types = ... } } }`), and the verifier resolves ordinary
 method calls — including calls onto non-interface impl classes — against every listed IDE. A
 reflective call is invisible to that check: a renamed or removed method would only surface as a
 silent runtime no-op on whichever IDE version broke it. A direct call is visible to the verifier
