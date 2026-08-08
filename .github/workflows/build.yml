@@ -16,5 +16,4 @@ jobs:
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew build
-      # Enable once Phase 1 lands. Slow, so keep it off the hot path.
-      # - run: ./gradlew verifyPlugin
+      - run: ./gradlew verifyPlugin

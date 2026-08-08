@@ -1,4 +1,5 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
@@ -94,6 +95,19 @@ intellijPlatform {
             // Extend this list as new platform versions ship.
             recommended()
         }
+
+        // Default failure levels are COMPATIBILITY_PROBLEMS, INTERNAL_API_USAGES and
+        // OVERRIDE_ONLY_API_USAGES. Drop INTERNAL_API_USAGES: TabRepaint deliberately calls
+        // FileEditorManagerImpl.queueUpdateFile (see README "The repaint decision") because no
+        // stable public API exists for a tab-colour repaint. That call is inherently
+        // @ApiStatus.Internal and always trips this category — failing the build on it would
+        // make `verifyPlugin` permanently red for a risk already accepted on purpose. What
+        // still fails the build is COMPATIBILITY_PROBLEMS, which is what actually catches the
+        // scenario the README cares about: queueUpdateFile disappearing on a future IDE.
+        failureLevel = listOf(
+            VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
+            VerifyPluginTask.FailureLevel.OVERRIDE_ONLY_API_USAGES,
+        )
     }
 }
 
