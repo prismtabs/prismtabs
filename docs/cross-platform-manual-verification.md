@@ -35,8 +35,9 @@ calls) — so most of the risk is platform *chrome*, not plugin logic:
 - **Settings entry point.** macOS opens Preferences via ⌘, (Cmd+Comma) instead of a Settings menu
   item — confirm **Chromatabs** is still reachable there under **Tools**, not just via the menu.
 - **Theme legibility**, independent of OS but worth re-checking per machine since font smoothing
-  changes how a tint reads: README's Phase 0 result flagged light-theme legibility as still
-  unverified by a human — this is as good a moment as any to close that out on each OS.
+  changes how a tint reads. README's Phase 0 result now has both themes measured on Linux
+  (`IC-242.20224.300`) — this pass is about confirming the same holds on each OS's own font
+  rendering, not establishing it for the first time.
 
 ## Checklist
 
