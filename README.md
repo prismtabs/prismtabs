@@ -13,8 +13,8 @@ sandbox IDE, not just `./gradlew test`'s plain-JUnit coverage.
 [Phase 2 result](#phase-2-result) has the swatch popup's base structure and the light/dark
 colour-model change; [Phase 1 result](#phase-1-result) has the repaint decision they build on;
 [Phase 0 result](#phase-0-result-passed) is the groundwork under all of it.
-**Still genuinely unverified by a human:** light-theme legibility of the palette — see
-[Palette](#palette).
+The three items Phase 0 left open — light-theme legibility, the newest-platform repaint check, and
+the Islands-theme bug — are now closed; see [Checked: all three open items](#checked-all-three-open-items-closed-2026-08-09).
 
 ---
 
@@ -100,22 +100,64 @@ Phase 0 the original pastel tints appeared completely absent for exactly this re
 became obvious once replaced with saturated colours. The Phase 2 palette must be chosen against
 this blend, not in isolation — a colour that looks right on the selected tab is not evidence.
 
-### Still to check
+### Checked: all three open items, closed 2026-08-09
 
-- [ ] **Light theme legibility.** Only dark (`expUI_dark`) has been verified. Tab *text* colour is
-      not ours to control, so tints must work with whatever foreground the theme picks. This
-      covers `TabGroupPalette`'s light-theme half too — see [Palette](#palette).
-- [ ] **Newest platform.** The repaint findings above are from 2024.2 only. Re-run the probe on the
-      newest supported IDE and confirm `queueUpdateFile` still exists with the same behaviour, then
-      record it here.
-- [ ] **Islands theme (2025.3+).** Known open bugs where selected-tab background colour has no
-      effect (IJPL-237068). Untested here.
+All three were verified against a *running* IDE, not read off documentation. See
+[Verification on 2026.2](#verification-on-20262) for the newest-platform and Islands work, and
+[Palette](#palette) for the light-theme measurements.
+
+- [x] **Light theme legibility.** Verified in `runIde` on `IC-242.20224.300` under the **Light**
+      theme. Every one of the 8 presets is legible on both selected and unselected tabs, with a
+      wide margin — full numbers in [Palette](#palette).
+- [x] **Newest platform.** Re-verified on **IntelliJ IDEA 2026.2 (`IU-262.8665.258`)**, the newest
+      release at the time of writing. `queueUpdateFile` still exists, is still `public`, and still
+      reaches the tab background by the same route. Chromatabs also loads and runs on it unmodified.
+- [x] **Islands theme (2025.3+).** **IJPL-237068 does not reproduce on 2026.2.** Islands has its own
+      tab painter, and it honours a custom tab colour on selected tabs.
 
 ```
 Repaint API on 2024.2:  FileEditorManagerImpl.queueUpdateFile(VirtualFile)  [impl class, not the EX interface]
-Repaint API on latest:  ______________________________
-Theme used for testing: expUI_dark (New UI, dark), IC-242.20224.300
+Repaint API on 2026.2:  FileEditorManagerImpl.queueUpdateFile(VirtualFile)  [unchanged — same class, same signature]
+Themes verified:        expUI_dark + Light (IC-242.20224.300)
+                        Islands Dark + Islands Light (IU-262.8665.258)
 ```
+
+### Verification on 2026.2
+
+**Downloading 2026.2:** the IntelliJ Platform Gradle Plugin (2.18.1) no longer serves
+`intellijIdeaCommunity()` for builds 253+ — Community stopped being republished as a separate
+artifact from 2025.3 onward. `intellijIdea("2026.2")` (the unified type, product code `IU`) is what
+resolves it; this doesn't change anything about `build.gradle.kts`, which already verifies against
+`IntelliJPlatformType.IntellijIdea` for exactly this reason (see the comment above
+`pluginVerification`).
+
+**Repaint chain, confirmed unchanged by `javap` on 2026.2, not just "still compiles":**
+`FileEditorManagerImpl.queueUpdateFile` is `public final`, still delegates to the same
+`fileUpdateChannel` field, which still resolves to `EditorsSplitters.updateFileBackgroundColorAsync`
+→ `updateFileBackgroundColor` → `TabInfo.setTabColor`. The colour it reads is still
+`EditorTabPresentationUtil.getEditorTabBackgroundColor`'s first non-null result over
+`EditorTabColorProvider.EP_NAME`, filtered through `lazyDumbAwareExtensions` — the exact chain
+Phase 0 established on 2024.2, byte-for-byte the same shape three major versions later.
+
+**Chromatabs itself was run on 2026.2**, not just probed by javap: the built plugin
+(`chromatabs-0.8.0-SNAPSHOT.zip`) was installed into a standalone 2026.2 sandbox alongside
+`robot-server-plugin`, and `PluginManagerCore.getPlugin("io.chromatabs")` reported it loaded and
+`enabled=true` with zero `SEVERE` log entries for the whole session — no manifest incompatibility,
+no missing class, no plugin-verifier surprise the build-time check didn't already predict.
+
+**Islands, checked by two independent methods, both agreeing:** first, calling
+`IslandsTabPainter.getEditorTabComposedBgColor` directly with `selected=true, active=true` returned
+the requested colour at full strength, not the frame's default background — i.e. the method that
+IJPL-237068 says drops the colour was, on this build, not dropping it. Second (belt and braces,
+since a unit-level call can't rule out something further up the paint pipeline discarding the
+result), three tabs were actually assigned colours through the real plugin UI path and the running
+sandbox was screenshotted: on **Islands Dark**, the selected (green) tab measured `#607169` against
+an empty-strip background of `#191A1C` — a clearly-visible tint, not the theme's plain
+background. The two unselected tabs (blue, red) tinted too, at a slightly lower blend, matching the
+selected/unselected split documented above for the classic painter. Islands Light showed the same
+pattern the other direction (composed colour lighter than the plain background, distinctly not
+equal to it). IJPL-237068 was filed against an earlier Islands build; whatever it described has
+since been fixed upstream — nothing in Chromatabs needed to change for this.
 
 ---
 
@@ -179,7 +221,7 @@ shared colour group, "New Group…" prompts for a name and assigns the named gro
 from Group" clears an assignment — all confirmed by reading back `TabGroupService` state through
 the running plugin, not by guessing at Swing internals. `./gradlew test` (the plain-JUnit suite,
 including `TabGroupServiceTest` updated for the `lightRgb`/`darkRgb` split below) also passes.
-Not covered by either suite, and still open: light-theme legibility of the palette — see
+Not covered by either suite: light-theme legibility of the palette, since verified separately — see
 [Palette](#palette).
 
 ### The light/dark colour-model change
@@ -211,9 +253,32 @@ whichever variant is active, safe for the same reason — icons only ever paint 
 pink, purple, cyan — each a `light`/`dark` `java.awt.Color` pair. Both variants continue Phase 0's
 measured constraint: chosen deep/saturated enough to still read after `EditorTabs`' ~50%-alpha
 blend on unselected tabs, following the same brightness the Phase 1 scaffold proved out for red
-and blue (dark variants literally reuse those two exact values). **Only the dark-theme half of
-this is verified** — light-theme legibility of the full 8-colour set is still an open item, same
-as the pre-existing "Still to check" list under Phase 0.
+and blue (dark variants literally reuse those two exact values).
+
+**Both halves are now verified.** The dark half was confirmed live in Phase 0. The light half was
+checked the same way, in `runIde` under the **Light** theme (`IC-242.20224.300`): each preset was
+assigned to a real tab and the platform's own `JBEditorTabPainter.getCustomBackground` was called
+directly (not re-implemented) to read back what actually paints. Light theme blends the unselected
+alpha toward `#FFFFFF80` — pure white — rather than dark theme's near-black `#1E1F2280`, so a pastel
+chosen for a white background risks the *opposite* failure Phase 0 found: not too muted against a
+dark background, but washed out against a light one. Measured, worst case first:
+
+| preset | selected (vs. white bg) | unselected (vs. white bg) | closest to another preset, unselected |
+|---|---|---|---|
+| grey | contrast 15.3:1 | contrast 17.9:1 | vs. purple, ΔE 43 |
+| yellow | contrast 16.5:1 | contrast 18.5:1 | vs. red, ΔE 55 |
+| blue | contrast 12.7:1 | contrast 16.5:1 | vs. cyan, ΔE 29 (closest pair overall) |
+| cyan | contrast 14.7:1 | contrast 17.5:1 | vs. blue, ΔE 29 |
+| purple | contrast 11.5:1 | contrast 15.8:1 | vs. grey, ΔE 43 |
+| pink | contrast 11.5:1 | contrast 15.6:1 | vs. red, ΔE 29 |
+| green | contrast 13.4:1 | contrast 16.8:1 | vs. cyan, ΔE 50 |
+| red | contrast 11.5:1 | contrast 15.6:1 | vs. pink, ΔE 29 |
+
+Every figure clears WCAG's 3:1 UI-component threshold by a wide margin — text contrast against
+black tab-label text is 11.5:1 at the tightest, well past the 4.5:1 text threshold too. The closest
+pair (blue/cyan, unselected) is still clearly distinguishable in the actual screenshot taken during
+this pass. No palette values changed as a result — the light half already worked, it just hadn't
+been checked against the running platform painter before.
 
 ### Editing the palette (Phase 5)
 
