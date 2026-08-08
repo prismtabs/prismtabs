@@ -125,8 +125,11 @@ Model, persistence and a real colour provider now exist (`TabGroup`, `TabGroupSt
 `TabGroupService`, `TabGroupColorProvider`), plus three throwaway actions ("Assign Red" /
 "Assign Blue" / "Clear Group") on the tab right-click menu to exercise the path end-to-end.
 Assignments are keyed by `VirtualFile.url` and persist to `.idea/tabGroups.xml` via
-`@Storage("tabGroups.xml")`, so a rename or move silently drops the assignment — accepted per the
-plan, deferred to Phase 5's `VirtualFileListener` remap.
+`@Storage("tabGroups.xml")`, so a rename or move would silently drop the assignment — accepted per
+the plan for Phase 1, then fixed ahead of the rest of Phase 5 by `TabGroupVfsListener`, a
+`BulkFileListener` that remaps assignments (and collapsed-file records) on rename or move,
+including every file nested under a renamed/moved directory. See its doc comment for why
+`BulkFileListener` and not the (deprecated) `VirtualFileListener` the plan originally named.
 
 **Acceptance: passed**, verified manually in `runIde` (`IC-242.20224.300`, `expUI_dark`) —
 a tab assigned Red via the right-click menu was still red after a full IDE restart, and Clear

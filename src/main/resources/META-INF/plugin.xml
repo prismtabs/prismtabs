@@ -43,6 +43,14 @@
     <projectListeners>
         <listener class="io.chromatabs.listener.TabGroupFileListener"
                   topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
+
+        <!-- Phase 5's rename/move remap (the Phase 1 TODO). VFS_CHANGES is an application-level
+             topic, but its TO_DIRECT_CHILDREN broadcast direction still reaches a project-level
+             subscriber here — confirmed in the platform bytecode, see TabGroupVfsListener's doc.
+             Same registration shape the platform's own bundled plugins use for this exact topic
+             (e.g. javaFX's FxmlPresenceListener). -->
+        <listener class="io.chromatabs.listener.TabGroupVfsListener"
+                  topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
     </projectListeners>
 
     <actions>
