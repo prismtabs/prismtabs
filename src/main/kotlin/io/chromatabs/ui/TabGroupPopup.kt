@@ -282,8 +282,10 @@ internal fun confirmAndDelete(project: Project, group: TabGroup, service: TabGro
 
 /** Resolves each file URL back to a [VirtualFile] and requests a repaint. Callers capture the
  * URL list themselves (rather than re-reading [TabGroupService.membersOf]) when the mutation
- * that just happened — e.g. [TabGroupService.delete] — already removed those assignments. */
-private fun repaintFiles(project: Project, fileUrls: Collection<String>) {
+ * that just happened — e.g. [TabGroupService.delete] — already removed those assignments.
+ * `internal`, not `private`: also called by [io.chromatabs.listener.TabGroupVfsListener] after a
+ * rename/move remap. */
+internal fun repaintFiles(project: Project, fileUrls: Collection<String>) {
     val vfm = VirtualFileManager.getInstance()
     fileUrls.forEach { url -> vfm.findFileByUrl(url)?.let { TabRepaint.request(project, it) } }
 }

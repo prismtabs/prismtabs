@@ -206,6 +206,83 @@ class TabGroupServiceTest {
     }
 
     @Test
+    fun `remapping a file's URL moves its assignment to the new URL`() {
+        val service = TabGroupService()
+        service.assign("file:///old/A.kt", red)
+
+        val remapped = service.remapUrl("file:///old/A.kt", "file:///new/A.kt")
+
+        assertEquals(listOf("file:///new/A.kt"), remapped)
+        assertNull(service.groupFor("file:///old/A.kt"))
+        assertEquals(red, service.groupFor("file:///new/A.kt"))
+    }
+
+    @Test
+    fun `remapping a directory URL moves every assignment nested under it`() {
+        val service = TabGroupService()
+        service.assign("file:///project/src/A.kt", red)
+        service.assign("file:///project/src/nested/B.kt", blue)
+        service.assign("file:///project/other/C.kt", blue)
+
+        val remapped = service.remapUrl("file:///project/src", "file:///project/renamed")
+
+        assertEquals(
+            setOf("file:///project/renamed/A.kt", "file:///project/renamed/nested/B.kt"),
+            remapped.toSet(),
+        )
+        assertNull(service.groupFor("file:///project/src/A.kt"))
+        assertNull(service.groupFor("file:///project/src/nested/B.kt"))
+        assertEquals(red, service.groupFor("file:///project/renamed/A.kt"))
+        assertEquals(blue, service.groupFor("file:///project/renamed/nested/B.kt"))
+        assertEquals(blue, service.groupFor("file:///project/other/C.kt"))
+    }
+
+    @Test
+    fun `remapping does not touch a URL that merely shares a prefix`() {
+        val service = TabGroupService()
+        service.assign("file:///project/FooBar.kt", red)
+
+        val remapped = service.remapUrl("file:///project/Foo", "file:///project/Renamed")
+
+        assertEquals(emptyList<String>(), remapped)
+        assertEquals(red, service.groupFor("file:///project/FooBar.kt"))
+    }
+
+    @Test
+    fun `remapping an unassigned URL is a no-op`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+
+        val remapped = service.remapUrl("file:///Unrelated.kt", "file:///StillUnrelated.kt")
+
+        assertEquals(emptyList<String>(), remapped)
+        assertEquals(red, service.groupFor("file:///A.kt"))
+    }
+
+    @Test
+    fun `remapping to the same URL is a no-op`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+
+        val remapped = service.remapUrl("file:///A.kt", "file:///A.kt")
+
+        assertEquals(emptyList<String>(), remapped)
+        assertEquals(red, service.groupFor("file:///A.kt"))
+    }
+
+    @Test
+    fun `remapping a collapsed group's file also updates its recorded collapsedFileUrls`() {
+        val service = TabGroupService()
+        service.assign("file:///old/A.kt", red)
+        service.collapse("red", listOf("file:///old/A.kt"))
+
+        service.remapUrl("file:///old/A.kt", "file:///new/A.kt")
+
+        val group = service.groupFor("file:///new/A.kt")
+        assertEquals(listOf("file:///new/A.kt"), group?.collapsedFileUrls)
+    }
+
+    @Test
     fun `collapsed state and recorded files round-trip through getState and loadState`() {
         val original = TabGroupService()
         original.assign("file:///A.kt", red)

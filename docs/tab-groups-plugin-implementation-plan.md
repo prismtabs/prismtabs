@@ -197,7 +197,9 @@ tinting is invisible (§2.4).
   Run with `-Didea.is.internal=true` and use *Analyze Plugin Dynamic Loading*.
 - Plugin Verifier across the 2024.2 → 2026.2 matrix in GitHub Actions.
 - Settings page (`Configurable`) for editing the preset palette.
-- `VirtualFileListener` to remap assignments on rename/move (the Phase 1 TODO).
+- ~~`VirtualFileListener` to remap assignments on rename/move (the Phase 1 TODO).~~ Done ahead of
+  the rest of Phase 5, via `BulkFileListener` on `VFS_CHANGES` (not the deprecated
+  `VirtualFileListener`) — see `TabGroupVfsListener` and `TabGroupService.remapUrl`.
 - README documenting the four constraints from §2 — set expectations before anyone files an issue asking
   for the chip.
 
@@ -210,7 +212,7 @@ tinting is invisible (§2.4).
 | Colours invisible under Islands / certain themes | Medium | Phase 0 gate; tool window + emoji-dot fallback |
 | Repaint API renamed between 2024.2 and 2026.2 | Medium | **[VERIFY]** in Phase 0, check the Incompatible Changes list, guard with reflection only if forced |
 | `getEditorTabColor` called so often it lags | Low | Pure map lookup, no locks on the read path |
-| File URL keys break on rename | High (eventually) | Known, deferred to Phase 5 |
+| File URL keys break on rename | High (eventually) | Fixed: `TabGroupVfsListener` remaps on rename/move |
 | JetBrains ships IJPL-59322 natively | Low near-term | The issue is 3+ years old and still open; watch it |
 
 ## 6. Fallback if tab tinting can't render

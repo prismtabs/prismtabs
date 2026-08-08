@@ -10,9 +10,9 @@ import io.chromatabs.model.TabGroupState
 /**
  * Owns tab-group assignments for a project: group id -> [TabGroup], file URL -> group id.
  *
- * Assignments are keyed by [com.intellij.openapi.vfs.VirtualFile.getUrl]. Renaming or moving a
- * file therefore silently drops its assignment — accepted for Phase 1, see README. Remapping on
- * rename via a VirtualFileListener is deferred to Phase 5.
+ * Assignments are keyed by [com.intellij.openapi.vfs.VirtualFile.getUrl], which changes on rename
+ * or move. [io.chromatabs.listener.TabGroupVfsListener] catches both and calls [remapUrl] so the
+ * assignment follows the file instead of being silently dropped — see [remapUrl]'s doc.
  *
  * [groupFor] is read by TabGroupColorProvider on the EDT during tab painting, often. It must stay
  * a single map lookup: no locks, no I/O. [colorCache] is recomputed wholesale and swapped only
@@ -93,6 +93,42 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
         val group = groups[groupId] ?: return
         groups = groups + (groupId to group.copy(collapsed = false, collapsedFileUrls = emptyList()))
         recomputeCache()
+    }
+
+    /**
+     * Remaps every assignment, and every group's [TabGroup.collapsedFileUrls], whose URL is
+     * [oldUrl] or lives under it as a directory, to [newUrl]. Called by
+     * [io.chromatabs.listener.TabGroupVfsListener] after a rename or move.
+     *
+     * The prefix match (`"$oldUrl/"`) matters as much as the exact match: a directory rename fires
+     * a single VFS event for the directory itself, not one per descendant, so every assignment
+     * nested under it has to be recognised as changed even though only its parent was reported.
+     *
+     * Returns the new URLs of every remapped assignment, so the caller — which owns
+     * `FileEditorManager`/`VirtualFile` lookups, unlike this platform-free service — knows which
+     * currently-open tabs need a repaint.
+     */
+    fun remapUrl(oldUrl: String, newUrl: String): List<String> {
+        if (oldUrl == newUrl) return emptyList()
+
+        val remappedUrls = mutableListOf<String>()
+        assignments = assignments.entries.associate { (url, groupId) ->
+            val mapped = remap(url, oldUrl, newUrl)
+            if (mapped != url) remappedUrls += mapped
+            mapped to groupId
+        }
+        groups = groups.mapValues { (_, group) ->
+            if (group.collapsedFileUrls.isEmpty()) group
+            else group.copy(collapsedFileUrls = group.collapsedFileUrls.map { remap(it, oldUrl, newUrl) })
+        }
+        if (remappedUrls.isNotEmpty()) recomputeCache()
+        return remappedUrls
+    }
+
+    private fun remap(url: String, oldUrl: String, newUrl: String): String = when {
+        url == oldUrl -> newUrl
+        url.startsWith("$oldUrl/") -> newUrl + url.substring(oldUrl.length)
+        else -> url
     }
 
     fun activeGroupId(): String? = activeGroupId
