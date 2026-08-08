@@ -425,7 +425,41 @@ which `EditorTabPopupMenu` isn't. `remote-robot` is the older tool, but `Compone
 .rightClick()` followed by finding the resulting menu is exactly its best-documented, most
 battle-tested pattern. See the git history around this decision for the fuller comparison.
 
-### What it actually took to get working (four real findings, not guesses)
+### These tests need an X11 display — they do not work under Wayland
+
+`remote-robot` drives a real `java.awt.Robot`. Under a **GNOME Wayland session** the sandbox IDE runs
+as an XWayland client and `java.awt.Robot` stops working in both directions, so the suite cannot pass
+no matter what the tests say:
+
+- **Input never arrives.** A `robot.rightClick(component)` returns cleanly and delivers *nothing*:
+  measured with a global `AWTEventListener` inside the running IDE, a right-click produced **0**
+  mouse events, while an event posted straight onto the queue produced 1. The IDE also never holds
+  focus during a run — `KeyboardFocusManager.getFocusedWindow()` reads `NONE` throughout — and
+  IntelliJ popups close without focus anyway.
+- **Screen capture blocks forever.** `Robot.createScreenCapture` cannot read the compositor's
+  framebuffer, so JDK 21 routes it to `sun.awt.screencast.ScreencastHelper` — the xdg-desktop-portal
+  ScreenCast (PipeWire) API — which waits on a portal grant that never comes. See finding 5 below
+  for why one such call used to kill an entire run.
+
+Check with `echo $XDG_SESSION_TYPE`. If it says `wayland`, either log in to a **GNOME on Xorg**
+session, or run the sandbox IDE on a dedicated X display (`Xvfb`) and point `runIdeForUiTests` at it:
+
+```bash
+sudo dnf install xorg-x11-server-Xvfb   # once; package name varies by distro
+Xvfb :99 -screen 0 1920x1080x24 &
+DISPLAY=:99 ./gradlew runIdeForUiTests &
+./gradlew uiTest   # the client talks HTTP to :8082, not X — no DISPLAY needed here
+```
+
+A dedicated display is the better answer regardless: the tests then cannot be disturbed by, and
+cannot disturb, whatever else is on the real desktop. Verified 2026-08-08 on this setup: all 5
+pre-existing tests plus the new [`TabGroupPaletteConfigurableUiTest`](#editing-the-palette-phase-5)
+pass (`clicking a preset dot…` 3.153s, `New Group…` 8.063s, `Remove from Group…` 6.274s, the Phase 3
+end-to-end test 22.083s, the Phase 4 collapse/expand test 9.582s) — `KeyboardFocusManager` reports the
+frame `active=true focused=true` throughout, and a `robot.rightClick` now measurably delivers 23 real
+`MouseEvent`s instead of Wayland's 0.
+
+### What it actually took to get working (six real findings, not guesses)
 
 Every one of these was hit as a live test failure and fixed by re-running against the actual
 sandbox IDE — none were predicted in advance:
@@ -456,6 +490,26 @@ sandbox IDE — none were predicted in advance:
    "unassigned" and translates it to Kotlin `null` on the client side instead — safe because a real
    [`TabGroup`](#the-lightdark-colour-model-change) name is never blank
    (`InputValidator` in `TabGroupPopup.promptForNameAndCreate`).
+5. **A blocking script kills the whole run, not just one test — robot-server has one worker thread.**
+   The failure screenshot used to call `java.awt.Robot.createScreenCapture`. Under Wayland that
+   blocks forever (see above), and `jstack` on the wedged sandbox IDE showed why that was fatal:
+   robot-server runs the request *inline on Ktor's single Netty event-loop thread*
+   (`eventLoopGroupProxy-4-1 @call-handler`, parked in `ScreencastHelper.getRGBPixelsImpl`). With
+   that thread blocked the server answers nothing else, so every later test died at okhttp's 60s
+   timeout inside `beforeTestExecution`'s `escape()` — one real failure presenting as a suite-wide
+   collapse of `SocketTimeoutException`s. A client-side timeout would not have helped; the IDE-side
+   thread stays wedged regardless. `RemoteRobotExtension` now *paints* the IDE's windows offscreen
+   instead, which needs no `Robot`, cannot block, and photographs the IDE rather than the desktop.
+6. **Rhino does not block-scope a `const` declared in a loop body — it binds it once.** Measured
+   against this runtime by indexing one `Window[]` both ways in a single loop: inline indexing gave
+   `SharedOwnerFrame, IdeFrameImpl, MyDialog, HeavyWeightWindow`, while `const w = arr[i]` gave
+   `SharedOwnerFrame` **four times** — the first element, forever. (`var` is rebound correctly;
+   declaring the same `const` name in two loops even fails outright with "redeclaration of const".)
+   This silently broke `RemoteRobotExtension`'s de-iconify/raise block, whose `const f = frames[i]`
+   was always Swing's hidden `SharedOwnerFrame`, so the `IdeFrameImpl` test never matched and the
+   frame was never actually raised. **Use `var`, or index inline, inside these scripts' loops** —
+   and note that the failure mode is a wrong value, not an error. `log` is also already defined in
+   robot-server's scope; declaring it throws "redeclaration of var log".
 
 ## Constraints that are not going away
 
