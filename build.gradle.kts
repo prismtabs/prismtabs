@@ -92,7 +92,11 @@ intellijPlatform {
 
     pluginVerification {
         ides {
-            // Extend this list as new platform versions ship.
+            // Resolves dynamically against every RELEASE/EAP/RC build between
+            // pluginSinceBuild (gradle.properties) and untilBuild (deliberately unset above) —
+            // confirmed via `./gradlew printProductsReleases`. Not a fixed list: nothing here
+            // needs editing as JetBrains ships new majors (e.g. 2025.3, 2026.x), they appear on
+            // their own the moment the release feed knows about them.
             recommended()
         }
 
