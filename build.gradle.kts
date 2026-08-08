@@ -94,10 +94,31 @@ intellijPlatform {
         ides {
             // Resolves dynamically against every RELEASE/EAP/RC build between
             // pluginSinceBuild (gradle.properties) and untilBuild (deliberately unset above) —
-            // confirmed via `./gradlew printProductsReleases`. Not a fixed list: nothing here
-            // needs editing as JetBrains ships new majors (e.g. 2025.3, 2026.x), they appear on
-            // their own the moment the release feed knows about them.
+            // confirmed via `./gradlew printProductsReleases`. Not a fixed list, but it is
+            // currently capped at 2025.2, and NOT because 2025.3+ is unreleased: JetBrains
+            // stopped publishing IntelliJ IDEA Community separately from 2025.3 (build 253), so
+            // IPGP's IntelliJPlatformType.validateVersion() rejects every IC release at or above
+            // it, and the listing parser swallows that in a runCatching{}.getOrNull(). Lifting
+            // the cap means migrating off intellijIdeaCommunity() to the unified intellijIdea()
+            // — a separate decision, deliberately not bundled in here.
             recommended()
+
+            // Optional local IDE, additive to recommended() above. This is what covers the
+            // versions recommended() cannot reach (2025.3+, 2026.x) until that migration
+            // happens. Verifying against an Ultimate install is fine and strictly wider
+            // coverage: IU is a superset of IC, and a plugin compiled against Community runs on
+            // both. Paid-plugin licensing is per-plugin on the Marketplace and independent of
+            // IDE edition, so this is NOT a reason to switch the compile baseline to Ultimate —
+            // doing that would shrink the supported audience, not grow it.
+            //
+            // Kept out of version control as a path: set localIdePath in
+            // ~/.gradle/gradle.properties (machine-local), or pass -PlocalIdePath=... . Absent,
+            // this is skipped, so CI — which has no such install — is unaffected.
+            providers.gradleProperty("localIdePath").orNull
+                ?.takeIf { it.isNotBlank() }
+                ?.let { file(it) }
+                ?.takeIf { it.isDirectory }
+                ?.let { local(it) }
         }
 
         // Default failure levels are COMPATIBILITY_PROBLEMS, INTERNAL_API_USAGES and
