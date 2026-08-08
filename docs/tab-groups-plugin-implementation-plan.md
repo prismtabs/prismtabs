@@ -196,7 +196,11 @@ tinting is invisible (§2.4).
 - `<idea-plugin>` must be dynamic-plugin-safe: services + listeners only, **no** `<component>` entries.
   Run with `-Didea.is.internal=true` and use *Analyze Plugin Dynamic Loading*.
 - Plugin Verifier across the 2024.2 → 2026.2 matrix in GitHub Actions.
-- Settings page (`Configurable`) for editing the preset palette.
+- ~~Settings page (`Configurable`) for editing the preset palette.~~ Done — an application-level
+  `applicationConfigurable` (parentId `tools`), `TabGroupPaletteConfigurable` (Kotlin UI DSL v2,
+  `BoundSearchableConfigurable`), backed by `TabGroupPaletteService`. See `TabGroupPopup`'s
+  `effectivePresets()` for how the popup now reads the customised palette instead of the hard-coded
+  `TabGroupPalette.PRESETS` constant, and the README's Palette section for the design.
 - ~~`VirtualFileListener` to remap assignments on rename/move (the Phase 1 TODO).~~ Done ahead of
   the rest of Phase 5, via `BulkFileListener` on `VFS_CHANGES` (not the deprecated
   `VirtualFileListener`) — see `TabGroupVfsListener` and `TabGroupService.remapUrl`.

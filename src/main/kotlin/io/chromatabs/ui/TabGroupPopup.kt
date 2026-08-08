@@ -15,8 +15,8 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.ui.JBColor
 import io.chromatabs.model.PresetColor
 import io.chromatabs.model.TabGroup
-import io.chromatabs.model.TabGroupPalette
 import io.chromatabs.service.TabGroupNotifier
+import io.chromatabs.service.TabGroupPaletteService
 import io.chromatabs.service.TabGroupService
 import io.chromatabs.service.TabRepaint
 import java.awt.Color
@@ -36,6 +36,14 @@ internal object TabGroupPopup {
         JBPopupFactory.getInstance().createListPopup(step).showInBestPositionFor(dataContext)
     }
 }
+
+/**
+ * The effective palette: [io.chromatabs.model.TabGroupPalette.PRESETS] with any customisation from
+ * [TabGroupPaletteConfigurable] laid over it. `TabGroupPaletteService` is application-level, so this
+ * is fetched ambiently rather than threaded through every step's constructor — same footing as
+ * `VirtualFileManager.getInstance()` in [repaintFiles] below.
+ */
+private fun effectivePresets(): List<PresetColor> = service<TabGroupPaletteService>().presets()
 
 private sealed class Entry {
     class Preset(val preset: PresetColor) : Entry()
@@ -94,7 +102,7 @@ private class RootStep(
     private companion object {
         fun buildEntries(service: TabGroupService, file: VirtualFile): List<Entry> {
             val entries = mutableListOf<Entry>()
-            entries += TabGroupPalette.PRESETS.map { Entry.Preset(it) }
+            entries += effectivePresets().map { Entry.Preset(it) }
             entries += Entry.AddToGroup
             entries += Entry.NewGroup
             if (service.groups().isNotEmpty()) entries += Entry.ManageGroups
@@ -133,7 +141,7 @@ private class NewGroupColorStep(
     private val project: Project,
     private val file: VirtualFile,
     private val service: TabGroupService,
-) : BaseListPopupStep<PresetColor>("New Group", TabGroupPalette.PRESETS) {
+) : BaseListPopupStep<PresetColor>("New Group", effectivePresets()) {
 
     private var finalRunnable: Runnable? = null
 
@@ -234,7 +242,7 @@ internal class RecolorStep(
     private val project: Project,
     private val group: TabGroup,
     private val service: TabGroupService,
-) : BaseListPopupStep<PresetColor>("Recolour ${group.name}", TabGroupPalette.PRESETS) {
+) : BaseListPopupStep<PresetColor>("Recolour ${group.name}", effectivePresets()) {
 
     override fun getTextFor(value: PresetColor): String = value.label
 
