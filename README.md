@@ -2,19 +2,23 @@
 
 Chrome-style colour groups for IntelliJ editor tabs.
 
-**Status: Phase 4 done.** A **Tab Groups tool window** (right-hand stripe) now lists every group
-with its colour dot, member count and collapsed state, and can rename, recolour, delete, or
-**collapse/expand** a group. Collapse is "close and remember" — IntelliJ has no collapsible in-strip
-chip and no API to build one, so collapsing closes the group's open tabs and records them, and
-expanding reopens them in order; see [Phase 4 result](#phase-4-result). Everything is covered
-end-to-end by real UI tests (`./gradlew uiTest`, see [UI testing](#ui-testing)) driving an actual
-sandbox IDE, not just `./gradlew test`'s plain-JUnit coverage.
+**Status: Phase 5 (hardening) in progress.** Features are complete through Phase 4: a **Tab Groups
+tool window** (right-hand stripe) lists every group with its colour dot, member count and collapsed
+state, and can rename, recolour, delete, or **collapse/expand** a group. Collapse is "close and
+remember" — IntelliJ has no collapsible in-strip chip and no API to build one, so collapsing closes
+the group's open tabs and records them, and expanding reopens them in order; see
+[Phase 4 result](#phase-4-result). Everything is covered end-to-end by real UI tests
+(`./gradlew uiTest`, see [UI testing](#ui-testing)) driving an actual sandbox IDE, not just
+`./gradlew test`'s plain-JUnit coverage.
 [Phase 3 result](#phase-3-result) has group management and the active-group inheritance rule;
 [Phase 2 result](#phase-2-result) has the swatch popup's base structure and the light/dark
 colour-model change; [Phase 1 result](#phase-1-result) has the repaint decision they build on;
 [Phase 0 result](#phase-0-result-passed) is the groundwork under all of it.
 The three items Phase 0 left open — light-theme legibility, the newest-platform repaint check, and
 the Islands-theme bug — are now closed; see [Checked: all three open items](#checked-all-three-open-items-closed-2026-08-09).
+[Phase 5 result](#phase-5-result) has what's left of hardening: dynamic-plugin-loading is now
+verified live, alongside the Plugin Verifier CI matrix and palette settings that shipped earlier.
+Not yet started: JetBrains Marketplace paid-plugin publishing prep.
 
 ---
 
@@ -462,6 +466,44 @@ sitting closer to several real races than their prior green runs suggested:
    `remote-robot` clicks are real OS-level clicks that can race a still-settling layout regardless —
    `Popup.kt`'s `openTabGroupPopupOn` retries the whole right-click-then-find-menu gesture rather
    than failing on the first miss.
+
+## Phase 5 result
+
+Most of Phase 5's checklist ("Hardening and release" in the plan) shipped incrementally alongside
+earlier phases rather than as one block at the end, and was written up where it landed: the palette
+settings page and `TabGroupPaletteService` are in [Phase 2 result](#phase-2-result), the
+rename/move remap (`TabGroupVfsListener`) ahead of schedule is in [Phase 1 result](#phase-1-result),
+the Plugin Verifier matrix (2024.2 → whatever's current, via `IntelliJPlatformType.IntellijIdea`
+in `build.gradle.kts`) runs as a dedicated `verify-plugin` job in CI, and the
+[Constraints that are not going away](#constraints-that-are-not-going-away) section below is that
+checklist item directly. This section closes the one piece that hadn't been checked anywhere yet:
+**dynamic plugin loading.**
+
+`plugin.xml` has no `<component>` entries — only `<projectListeners>`, `<applicationConfigurable>`
+and one action — which is what dynamic-plugin-safety requires structurally. That was true by
+construction, not verified until now. Checked live in `runIdeForUiTests`
+(`IC-242.20224.300`), two ways:
+
+1. `DynamicPlugins.checkCanUnloadWithoutRestart(descriptor)` — the same static check behind the
+   IDE's own *Analyze Plugin Dynamic Loading* internal action — returned `null`, meaning it found
+   nothing structurally blocking a restart-free unload.
+2. The stronger test: actually calling `DynamicPlugins.unloadPlugin` followed by
+   `DynamicPlugins.loadPlugin` on the live descriptor, then re-exercising the plugin afterwards.
+   `idea.log` shows a clean round trip — `Successfully unloaded plugin io.chromatabs (classloader
+   unload checked=true)` followed by `Plugin io.chromatabs loaded without restart in 124 ms`, no
+   exception attributed to `io.chromatabs` anywhere in the log for either the unload or the reload.
+   Three tabs were then assigned colours through the ordinary plugin UI path and screenshotted,
+   confirming the reloaded classes are the ones actually running the feature, not just that
+   `isEnabled()` reports `true`.
+
+One nuance worth recording honestly: the log for this run also has 9 `SEVERE` entries from
+`#c.i.u.SlowOperations`, each reading "Plugin to blame: Robot server version: 0.11.23" — this is
+the platform's assertion that a slow call happened on the EDT, and every one of them blames the
+`remote-robot` harness driving `unloadPlugin`/`loadPlugin` synchronously via `invokeAndWait`, not
+Chromatabs. `io.chromatabs` is never named as the blamed plugin anywhere in the log. A real user
+triggering an unload through the IDE's own Plugins page goes through the asynchronous
+`unloadPluginWithProgress` path this test bypassed for determinism, so this artefact is specific to
+how the check was driven, not evidence of a problem in the plugin being checked.
 
 ## UI testing
 
