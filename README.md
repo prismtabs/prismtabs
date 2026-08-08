@@ -414,6 +414,11 @@ out of the fast `./gradlew test` path entirely.
 not this plugin's own project — on startup, so there is always exactly one editor tab to
 right-click; the tests never have to disambiguate between tabs by filename.
 
+**This automated suite runs on Linux only** — see "These tests need an X11 display" below. Neither
+it nor `./gradlew build`'s plain-JUnit `test` suite (which CI does run on macOS and Windows) proves
+the plugin renders or behaves correctly on those platforms; for that, see
+[`docs/cross-platform-manual-verification.md`](docs/cross-platform-manual-verification.md).
+
 ### Why `remote-robot`, not IDE Starter + Driver
 
 JetBrains' current official direction for IDE integration tests is Starter + Driver, and IntelliJ
