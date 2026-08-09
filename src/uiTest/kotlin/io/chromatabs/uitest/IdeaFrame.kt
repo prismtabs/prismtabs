@@ -351,6 +351,147 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
             true,
         )
     }
+
+    /**
+     * The actual on-screen pixel colour at the centre of the tab for [path], read via
+     * `Robot.getPixelColor` — ground truth for "what does a real user's eye see," with no platform
+     * code between the check and the display. Deliberately not a `TabGroupService`/colour-provider
+     * lookup: those only prove the *model* and *computation* are correct, not that a repaint ever
+     * actually reached the screen — the exact "convincing false negative" shape README Phase 0
+     * already documented for `updateFileColor` looking like it worked when it hadn't. A screenshot
+     * comparison isn't enough either, confirmed live: the deep, saturated preset colours (chosen to
+     * survive the unselected-tab blend) are subtle enough that a rendered screenshot thumbnail can
+     * look untinted by eye even when the pixels are correct — this reads the hardware pixel directly
+     * instead of trusting a human (or model) glancing at an image.
+     */
+    fun pixelColorAtTabCenter(path: String): String = callJs<String>(
+        """
+        importClass(com.intellij.openapi.fileEditor.impl.EditorTabLabel)
+
+        function findTabLabel(comp) {
+            if (comp instanceof EditorTabLabel) {
+                var ctx = comp.getAccessibleContext()
+                var name = ctx != null ? ctx.getAccessibleName() : null
+                if (name == '$path') return comp
+            }
+            if (comp.getComponentCount) {
+                var n = comp.getComponentCount()
+                for (var i = 0; i < n; i++) {
+                    var found = findTabLabel(comp.getComponent(i))
+                    if (found != null) return found
+                }
+            }
+            return null
+        }
+
+        var tabLabel = findTabLabel(component)
+        var result = ''
+        if (tabLabel != null && tabLabel.isShowing()) {
+            var at = tabLabel.getLocationOnScreen()
+            var w = tabLabel.getWidth()
+            var h = tabLabel.getHeight()
+            var px = at.x + Math.floor(w / 4)
+            var py = at.y + Math.floor(h / 2)
+            var awtRobot = new java.awt.Robot()
+            var color = awtRobot.getPixelColor(px, py)
+            result = color.toString() + ' at (' + px + ',' + py + ')'
+        }
+        result
+        """,
+        true,
+    ).ifEmpty { "null (tab not found or not showing)" }
+
+    /**
+     * Forces every open project's and the application's persistent state to disk right now, via
+     * `StoreUtil.saveDocumentsAndProjectsAndApp` (confirmed `public static final` by `javap` on
+     * `app-client.jar`, 2024.2) — the same call IntelliJ's own normal shutdown path uses. Needed
+     * because a *forced* process kill (simulating a restart for the manual verification pass,
+     * since there's no in-process "click Restart IDE" for `remote-robot` to drive) skips the normal
+     * shutdown sequence entirely: confirmed live that `TabGroupState`'s `@Storage`-backed save is
+     * debounced, not synchronous per-mutation, so a bare `Stop-Process -Force` right after a flurry
+     * of assignments can lose everything since the last periodic flush. A real user closing the IDE
+     * normally would trigger this same save automatically; simulating that restart with a forced
+     * kill needs to trigger it explicitly first.
+     */
+    fun forceSaveSettings() {
+        runJs(
+            """
+            importClass(com.intellij.configurationStore.StoreUtil)
+            importClass(com.intellij.openapi.application.ApplicationManager)
+
+            const task = new Runnable({
+                run: function() { StoreUtil.saveDocumentsAndProjectsAndApp(true) }
+            })
+            ApplicationManager.getApplication().invokeAndWait(task)
+            """,
+            true,
+        )
+    }
+
+    /** Clicks (selects) the tab for [path], as opposed to [io.chromatabs.uitest.openTabGroupPopupOn]'s
+     * right-click — used by the manual verification pass to compare a preset's selected-vs-unselected
+     * tint, matching README's Phase 0 "unselected tabs render tints at ~50% strength" finding. */
+    fun selectTab(path: String) {
+        find<ComponentFixture>(
+            byXpath("//div[@class='EditorTabLabel' and @accessiblename='$path']"),
+            Duration.ofSeconds(20),
+        ).click()
+    }
+
+    /** Look-and-feel name, dark/light, screen DPI and resolution — recorded by the manual
+     * verification pass alongside its screenshots, since the cross-platform checklist asks for
+     * exactly this to be logged per pass. [com.intellij.ui.JBColor.isBright] is the same
+     * lazily-initialised static [io.chromatabs.provider.TabGroupColorProvider] itself relies on to
+     * pick light vs dark, not a reimplementation of theme detection. */
+    fun environmentInfo(): List<String> = callJs<String>(
+        """
+        importClass(java.awt.Toolkit)
+        importClass(com.intellij.ide.ui.LafManager)
+        importClass(com.intellij.ui.JBColor)
+
+        const laf = LafManager.getInstance().getCurrentLookAndFeel()
+        const dpi = Toolkit.getDefaultToolkit().getScreenResolution()
+        const size = Toolkit.getDefaultToolkit().getScreenSize()
+        const parts = []
+        parts.push('laf:' + laf.getName())
+        parts.push('dark:' + !JBColor.isBright())
+        parts.push('dpi:' + dpi)
+        parts.push('screen:' + size.width + 'x' + size.height)
+        parts.join('|')
+        """,
+        true,
+    ).split('|')
+
+    /**
+     * Opens Settings straight to [io.chromatabs.ui.TabGroupPaletteConfigurable] via
+     * `ShowSettingsUtil`, the same entry point the Settings/Preferences menu item resolves to —
+     * bypassing manual tree navigation, which `remote-robot`'s UI-component layer handles poorly
+     * (see README "Why remote-robot, not IDE Starter + Driver"). Fired via `invokeLater`, not
+     * `invokeAndWait`: `showSettingsDialog` is itself modal, and blocking robot-server's single
+     * worker thread on a call that only returns once the dialog closes would wedge the whole server
+     * (see [RemoteRobotExtension]'s doc comment on exactly this failure mode).
+     */
+    fun openChromatabsSettings() {
+        runJs(
+            """
+            importClass(com.intellij.openapi.options.ShowSettingsUtil)
+            importClass(com.intellij.openapi.application.ApplicationManager)
+            importPackage(com.intellij.ide.plugins)
+            importPackage(com.intellij.openapi.extensions)
+            importPackage(com.intellij.openapi.wm.impl)
+
+            const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+            const project = frameHelper.getProject()
+            const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.chromatabs')).getPluginClassLoader()
+            const configurableClass = java.lang.Class.forName('io.chromatabs.ui.TabGroupPaletteConfigurable', true, pluginLoader)
+            const task = new Runnable({
+                run: function() { ShowSettingsUtil.getInstance().showSettingsDialog(project, configurableClass) }
+            })
+            ApplicationManager.getApplication().invokeLater(task)
+            """,
+            true,
+        )
+    }
 }
 
 /**

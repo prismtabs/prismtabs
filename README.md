@@ -20,8 +20,9 @@ the Islands-theme bug — are now closed; see [Checked: all three open items](#c
 verified live, alongside the Plugin Verifier CI matrix and palette settings that shipped earlier.
 [Marketplace publishing prep](#marketplace-publishing-prep) has the paid-plugin groundwork laid so
 far — vendor metadata, plugin icon, and a tested licence-verification module — and the deliberately
-short list of what's still left before the actual upload, including a still-open manual
-[cross-platform verification pass](docs/cross-platform-manual-verification.md) on macOS and Windows.
+short list of what's still left before the actual upload, including the
+[cross-platform verification pass](docs/cross-platform-manual-verification.md): Windows is now
+signed off (2026-08-09), macOS is still open.
 
 ---
 
@@ -556,7 +557,7 @@ away once that tag exists.
 **What's left, roughly in order:**
 
 1. Finish the [cross-platform manual verification pass](docs/cross-platform-manual-verification.md)
-   (macOS and Windows sign-off log is still empty).
+   — Windows passed 2026-08-09; the macOS sign-off log entry is still empty.
 2. Pick the real release date, bump `pluginVersion` off `-SNAPSHOT` (currently `0.8.2-SNAPSHOT`) to
    the first paid release's version, add `<product-descriptor code="PCHROMATABS"
    release-date="YYYYMMDD" release-version="10"/>` to `plugin.xml`, and wire the one `if` in
