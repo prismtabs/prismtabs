@@ -1,4 +1,4 @@
-# Chromatabs
+# PrismTabs
 
 Read `docs/tab-groups-plugin-implementation-plan.md` before making design decisions. Items marked
 **[VERIFY]** must be checked against the platform bytecode (recipe below) before writing code against

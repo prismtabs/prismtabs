@@ -1,7 +1,7 @@
 <idea-plugin>
-    <id>io.chromatabs</id>
-    <name>Chromatabs</name>
-    <vendor email="yendrrek@protonmail.com" url="https://github.com/yendrrek/chromatabs">Andrzej Piontek</vendor>
+    <id>io.prismtabs</id>
+    <name>PrismTabs</name>
+    <vendor email="yendrrek@protonmail.com" url="https://github.com/yendrrek/prismtabs">Andrzej Piontek</vendor>
 
     <description><![CDATA[
         Chrome-style colour groups for IntelliJ editor tabs.
@@ -13,7 +13,7 @@
         The "Tab Groups" tool window lists every group with its colour and member count, and can
         collapse a group (closing its tabs, remembering them) or expand it again. Assignments and
         collapsed state persist across restarts. The preset palette itself is editable under
-        <b>Settings | Tools | Chromatabs</b>.
+        <b>Settings | Tools | PrismTabs</b>.
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
@@ -28,29 +28,29 @@
              order="first", every file matching one of those scopes gets the platform's colour and this
              provider is never consulted at all.
 
-             This encodes a policy decision: an explicit Chromatabs group assignment beats a File Colors
+             This encodes a policy decision: an explicit PrismTabs group assignment beats a File Colors
              scope match. That matches Chrome, where the colour the user pinned to a tab is the colour
              they get. -->
-        <editorTabColorProvider implementation="io.chromatabs.provider.TabGroupColorProvider" order="first"/>
+        <editorTabColorProvider implementation="io.prismtabs.provider.TabGroupColorProvider" order="first"/>
 
         <!-- Phase 4b: the stable home for everything the tab strip can't show (no in-strip group
              chip — see README §"Constraints that are not going away"). Also where collapse/expand
              ("close and remember", Phase 4a) is driven from. -->
         <toolWindow id="Tab Groups" anchor="right" icon="AllIcons.Toolwindows.ToolWindowPalette"
-                    factoryClass="io.chromatabs.ui.TabGroupsToolWindowFactory"/>
+                    factoryClass="io.prismtabs.ui.TabGroupsToolWindowFactory"/>
 
         <!-- Phase 5: editing the preset palette. Application-level (see TabGroupPaletteService's
              doc for why) — parentId="tools" is where lightweight plugins without a settings tree
              of their own conventionally land. -->
-        <applicationConfigurable parentId="tools" id="io.chromatabs.settings.palette"
-                                  displayName="Chromatabs"
-                                  instance="io.chromatabs.ui.TabGroupPaletteConfigurable"/>
+        <applicationConfigurable parentId="tools" id="io.prismtabs.settings.palette"
+                                  displayName="PrismTabs"
+                                  instance="io.prismtabs.ui.TabGroupPaletteConfigurable"/>
     </extensions>
 
     <!-- Phase 3's "sticky active group" inheritance: dynamic-plugin-safe registration (no
          <component>, no manual MessageBusConnection.subscribe in a startup activity). -->
     <projectListeners>
-        <listener class="io.chromatabs.listener.TabGroupFileListener"
+        <listener class="io.prismtabs.listener.TabGroupFileListener"
                   topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
 
         <!-- Phase 5's rename/move remap (the Phase 1 TODO). VFS_CHANGES is an application-level
@@ -58,7 +58,7 @@
              subscriber here — confirmed in the platform bytecode, see TabGroupVfsListener's doc.
              Same registration shape the platform's own bundled plugins use for this exact topic
              (e.g. javaFX's FxmlPresenceListener). -->
-        <listener class="io.chromatabs.listener.TabGroupVfsListener"
+        <listener class="io.prismtabs.listener.TabGroupVfsListener"
                   topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
     </projectListeners>
 
@@ -67,7 +67,7 @@
              LangActions.xml registers into this group too, hence anchor="first". The action opens
              TabGroupPopup itself (JBPopupFactory), rather than being a plugin.xml <group>, because
              the popup's tree is dynamic (existing groups, current-assignment state). -->
-        <action id="Chromatabs.AssignTabGroup" class="io.chromatabs.action.AssignTabGroupAction"
+        <action id="PrismTabs.AssignTabGroup" class="io.prismtabs.action.AssignTabGroupAction"
                 text="Tab Group…" description="Assign this tab's colour group">
             <add-to-group group-id="EditorTabPopupMenu" anchor="first"/>
         </action>

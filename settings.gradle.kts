@@ -1,4 +1,4 @@
-rootProject.name = "chromatabs"
+rootProject.name = "prismtabs"
 
 pluginManagement {
     repositories {
