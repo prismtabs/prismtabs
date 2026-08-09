@@ -1,4 +1,4 @@
-# Chromatabs
+# PrismTabs
 
 Chrome-style colour groups for IntelliJ editor tabs.
 
@@ -65,7 +65,7 @@ Without `order="first"`, every file matching one of those scopes gets the platfo
 provider is *never invoked at all*. This presented as "the `.md` file tints but the test file does
 not", which looks like a rule bug and is not one.
 
-This is also a policy decision, now encoded in `plugin.xml`: an explicit Chromatabs group assignment
+This is also a policy decision, now encoded in `plugin.xml`: an explicit PrismTabs group assignment
 beats a File Colors scope match, because that is what Chrome does.
 
 ### 2. The provider must implement `DumbAware`
@@ -119,7 +119,7 @@ All three were verified against a *running* IDE, not read off documentation. See
       wide margin — full numbers in [Palette](#palette).
 - [x] **Newest platform.** Re-verified on **IntelliJ IDEA 2026.2 (`IU-262.8665.258`)**, the newest
       release at the time of writing. `queueUpdateFile` still exists, is still `public`, and still
-      reaches the tab background by the same route. Chromatabs also loads and runs on it unmodified.
+      reaches the tab background by the same route. PrismTabs also loads and runs on it unmodified.
 - [x] **Islands theme (2025.3+).** **IJPL-237068 does not reproduce on 2026.2.** Islands has its own
       tab painter, and it honours a custom tab colour on selected tabs.
 
@@ -147,9 +147,9 @@ resolves it; this doesn't change anything about `build.gradle.kts`, which alread
 `EditorTabColorProvider.EP_NAME`, filtered through `lazyDumbAwareExtensions` — the exact chain
 Phase 0 established on 2024.2, byte-for-byte the same shape three major versions later.
 
-**Chromatabs itself was run on 2026.2**, not just probed by javap: the built plugin
-(`chromatabs-0.8.0-SNAPSHOT.zip`) was installed into a standalone 2026.2 sandbox alongside
-`robot-server-plugin`, and `PluginManagerCore.getPlugin("io.chromatabs")` reported it loaded and
+**PrismTabs itself was run on 2026.2**, not just probed by javap: the built plugin
+(`prismtabs-0.8.0-SNAPSHOT.zip`) was installed into a standalone 2026.2 sandbox alongside
+`robot-server-plugin`, and `PluginManagerCore.getPlugin("io.prismtabs")` reported it loaded and
 `enabled=true` with zero `SEVERE` log entries for the whole session — no manifest incompatibility,
 no missing class, no plugin-verifier surprise the build-time check didn't already predict.
 
@@ -165,7 +165,7 @@ background. The two unselected tabs (blue, red) tinted too, at a slightly lower 
 selected/unselected split documented above for the classic painter. Islands Light showed the same
 pattern the other direction (composed colour lighter than the plain background, distinctly not
 equal to it). IJPL-237068 was filed against an earlier Islands build; whatever it described has
-since been fixed upstream — nothing in Chromatabs needed to change for this.
+since been fixed upstream — nothing in PrismTabs needed to change for this.
 
 ---
 
@@ -183,13 +183,13 @@ including every file nested under a renamed/moved directory. See its doc comment
 
 **Acceptance: passed**, verified manually in `runIde` (`IC-242.20224.300`, `expUI_dark`) —
 a tab assigned Red via the right-click menu was still red after a full IDE restart, and Clear
-Group also worked. No `io.chromatabs` errors or exceptions appeared in `idea.log`.
+Group also worked. No `io.prismtabs` errors or exceptions appeared in `idea.log`.
 
 ### The repaint decision
 
 Phase 0 left one question open: how does Phase 1 call `FileEditorManagerImpl.queueUpdateFile`,
 which sits on the impl class rather than the public `FileEditorManagerEx` interface? Reflection
-was the plan's default fallback. Instead, `io.chromatabs.service.TabRepaint` uses a **compile-time
+was the plan's default fallback. Instead, `io.prismtabs.service.TabRepaint` uses a **compile-time
 cast**, not reflection:
 
 ```kotlin
@@ -216,7 +216,7 @@ impl-class dependency, not a hack around access control.
 
 ## Phase 2 result
 
-The real swatch popup (`io.chromatabs.ui.TabGroupPopup`) replaces Phase 1's hard-coded Red/Blue/
+The real swatch popup (`io.prismtabs.ui.TabGroupPopup`) replaces Phase 1's hard-coded Red/Blue/
 Clear actions. Right-clicking a tab now shows: 8 Chrome-style preset dots, a separator, "Add to
 Group…" (nested — lists existing groups, each with its own dot), "New Group…" (nested — pick a
 colour, then name it), and "Remove from Group" (only when the tab is currently assigned). All of
@@ -257,7 +257,7 @@ whichever variant is active, safe for the same reason — icons only ever paint 
 
 ### Palette
 
-`TabGroupPalette` (`io.chromatabs.model`) is the 8 Chrome hues — grey, blue, red, yellow, green,
+`TabGroupPalette` (`io.prismtabs.model`) is the 8 Chrome hues — grey, blue, red, yellow, green,
 pink, purple, cyan — each a `light`/`dark` `java.awt.Color` pair. Both variants continue Phase 0's
 measured constraint: chosen deep/saturated enough to still read after `EditorTabs`' ~50%-alpha
 blend on unselected tabs, following the same brightness the Phase 1 scaffold proved out for red
@@ -292,7 +292,7 @@ been checked against the running platform painter before.
 
 `TabGroupPalette.PRESETS` stays a fixed, plain-JUnit-testable constant — nothing above changes.
 What became user-editable is a layer on top: `TabGroupPaletteService` (application-level `@Service`,
-`chromatabsPalette.xml`) holds only the presets that differ from the built-in default, keyed by
+`prismtabsPalette.xml`) holds only the presets that differ from the built-in default, keyed by
 preset id, and `presets()` lays them over `TabGroupPalette.PRESETS` to produce the effective 8. A
 slot nobody has touched keeps tracking the default if that default ever changes, and setting a
 preset back to its default value silently drops the override — there is no separate "is this
@@ -337,11 +337,11 @@ The plan describes the popup's shape but leaves two behaviours to fill in:
 ## Phase 3 result
 
 `TabGroupService` gained group CRUD (`rename`, `recolor`, `delete`, `membersOf`) and an
-`activeGroupId`/`activeGroup`/`setActiveGroup` trio. `io.chromatabs.listener.TabGroupFileListener`
+`activeGroupId`/`activeGroup`/`setActiveGroup` trio. `io.prismtabs.listener.TabGroupFileListener`
 (registered via `<projectListeners>`, no `<component>`) reads `activeGroup()` on `fileOpened` and
 assigns any not-yet-grouped file to it. The swatch popup gained "Manage Groups…" (only shown once
 at least one group exists): pick a group, then Rename…/Recolour…/Mark as Active Group (or Clear
-Active Group)/Delete Group. Rename is `io.chromatabs.ui.RenameGroupDialog`, a small Kotlin UI DSL
+Active Group)/Delete Group. Rename is `io.prismtabs.ui.RenameGroupDialog`, a small Kotlin UI DSL
 v2 dialog (`panel { row("Name:") { cell(nameField) } }`) per the plan — the one place in the tree
 that needs free text rather than a list choice. Recolour reuses the nested-list-step pattern
 already established by "New Group…", applying immediately and repainting every member via
@@ -404,7 +404,7 @@ Two mechanisms, as the plan's Phase 4 section asks for, both built on the same c
 carried on `TabGroup` (`collapsed: Boolean`, `collapsedFileUrls: List<String>` — the second one new
 this phase, persisted through `TabGroupState.GroupEntry` the same way everything else is).
 
-**4a — collapse = close-and-remember.** `io.chromatabs.service.TabGroupCollapse` is a small
+**4a — collapse = close-and-remember.** `io.prismtabs.service.TabGroupCollapse` is a small
 IDE-side object next to `TabRepaint`, for the same reason: `FileEditorManager` access only makes
 sense from a live IDE, and `TabGroupService` stays plain-JUnit testable. `collapse()` reads
 `FileEditorManager.getOpenFiles()`, keeps only the files belonging to the target group, records
@@ -415,7 +415,7 @@ group and reopens each via `openFile(file, focusEditor = false)`, in the same or
 `openFile(VirtualFile, boolean)` are declared on the public `FileEditorManager` interface itself
 (verified via `javap` on 2024.2) — no impl-class cast needed here.
 
-**4b — the "Tab Groups" tool window.** `io.chromatabs.ui.TabGroupsToolWindow` (a `ToolWindowFactory`
+**4b — the "Tab Groups" tool window.** `io.prismtabs.ui.TabGroupsToolWindow` (a `ToolWindowFactory`
 + `DumbAware`, registered `anchor="right"`) is the plan's stated substitute for Chrome's in-strip
 chip: a `JBList<TabGroup>` showing each group's swatch, name, member count and — new this phase — a
 "collapsed" suffix, with a toolbar (and matching context menu) for Collapse/Expand, Rename…,
@@ -428,7 +428,7 @@ Recolour…, and Delete Group. Rename, Recolour and Delete don't duplicate `TabG
 The tool window has to reflect changes made from *outside* it — a group created via the swatch
 popup while the tool window is already open, say. `TabGroupService` stays free of platform
 dependencies (see its doc comment), so it doesn't publish anything itself; a new
-`io.chromatabs.service.TabGroupsChangedListener` / `TabGroupNotifier` pair follows the same split
+`io.prismtabs.service.TabGroupsChangedListener` / `TabGroupNotifier` pair follows the same split
 `TabRepaint` already established, and every mutating call site in `TabGroupPopup` and
 `TabGroupCollapse` calls `TabGroupNotifier.notifyChanged(project)` right after mutating the service.
 The tool window subscribes once, in its panel's `init`, via
@@ -493,9 +493,9 @@ construction, not verified until now. Checked live in `runIdeForUiTests`
    nothing structurally blocking a restart-free unload.
 2. The stronger test: actually calling `DynamicPlugins.unloadPlugin` followed by
    `DynamicPlugins.loadPlugin` on the live descriptor, then re-exercising the plugin afterwards.
-   `idea.log` shows a clean round trip — `Successfully unloaded plugin io.chromatabs (classloader
-   unload checked=true)` followed by `Plugin io.chromatabs loaded without restart in 124 ms`, no
-   exception attributed to `io.chromatabs` anywhere in the log for either the unload or the reload.
+   `idea.log` shows a clean round trip — `Successfully unloaded plugin io.prismtabs (classloader
+   unload checked=true)` followed by `Plugin io.prismtabs loaded without restart in 124 ms`, no
+   exception attributed to `io.prismtabs` anywhere in the log for either the unload or the reload.
    Three tabs were then assigned colours through the ordinary plugin UI path and screenshotted,
    confirming the reloaded classes are the ones actually running the feature, not just that
    `isEnabled()` reports `true`.
@@ -504,14 +504,14 @@ One nuance worth recording honestly: the log for this run also has 9 `SEVERE` en
 `#c.i.u.SlowOperations`, each reading "Plugin to blame: Robot server version: 0.11.23" — this is
 the platform's assertion that a slow call happened on the EDT, and every one of them blames the
 `remote-robot` harness driving `unloadPlugin`/`loadPlugin` synchronously via `invokeAndWait`, not
-Chromatabs. `io.chromatabs` is never named as the blamed plugin anywhere in the log. A real user
+PrismTabs. `io.prismtabs` is never named as the blamed plugin anywhere in the log. A real user
 triggering an unload through the IDE's own Plugins page goes through the asynchronous
 `unloadPluginWithProgress` path this test bypassed for determinism, so this artefact is specific to
 how the check was driven, not evidence of a problem in the plugin being checked.
 
 ## Marketplace publishing prep
 
-**Decision:** Chromatabs will be sold as a **Paid** plugin (no free tier) under a **Perpetual
+**Decision:** PrismTabs will be sold as a **Paid** plugin (no free tier) under a **Perpetual
 License** — a one-time purchase, lifetime updates, rather than a subscription. Reasoning: the
 plugin has no backend and no ongoing hosting cost, and the Plugin Verifier CI matrix (see
 [Compatibility policy](#compatibility-policy)) already keeps the "stay compatible with new IDE
@@ -530,7 +530,7 @@ Done so far, none of it published anywhere:
   (blue/red/green) from `TabGroupPalette`, light and dark pairs, in the same filled-circle-with-a
   -subtle-border style `ColorSwatchIcon` already uses for exactly the same legibility reason (pale
   presets need a border to stay visible on a light background).
-- **Licence verification module**, `io.chromatabs.license.ChromatabsLicense` /
+- **Licence verification module**, `io.prismtabs.license.PrismTabsLicense` /
   `LicenseSignatureVerification` — a faithful Kotlin port of JetBrains' own reference
   implementation ([`marketplace-makemecoffee-plugin`'s
   `CheckLicense.java`](https://github.com/JetBrains/marketplace-makemecoffee-plugin)), not a
@@ -550,7 +550,7 @@ which doesn't exist yet — writing today's date would just be a fabricated fact
 Adding the tag is also the thing that would make the IDE start treating `runIde`/`uiTest` as running
 an unlicensed paid plugin, which would block exactly the plugin functionality the pending
 [cross-platform manual verification pass](docs/cross-platform-manual-verification.md) needs to
-exercise. Wiring `ChromatabsLicense` into `AssignTabGroupAction` (the single entry point identified
+exercise. Wiring `PrismTabsLicense` into `AssignTabGroupAction` (the single entry point identified
 in [Phase 2 result](#phase-2-result), so the single gate) is one `if` before `TabGroupPopup.show(...)`
 away once that tag exists.
 
@@ -559,13 +559,13 @@ away once that tag exists.
 1. Finish the [cross-platform manual verification pass](docs/cross-platform-manual-verification.md)
    — Windows passed 2026-08-09; the macOS sign-off log entry is still empty.
 2. Pick the real release date, bump `pluginVersion` off `-SNAPSHOT` (currently `0.8.2-SNAPSHOT`) to
-   the first paid release's version, add `<product-descriptor code="PCHROMATABS"
+   the first paid release's version, add `<product-descriptor code="PPRISMTABS"
    release-date="YYYYMMDD" release-version="10"/>` to `plugin.xml`, and wire the one `if` in
    `AssignTabGroupAction` described above.
 3. Create the JetBrains Marketplace vendor profile, set it to **trader** status, and submit banking
    details (Sales Info tab) — external, account-level, only Andrzej can do this.
 4. Upload the plugin (first release, not an update), then in **Sales Info → Add to Marketplace**:
-   confirm/register product code `PCHROMATABS`, choose the **Perpetual License** scheme, set the
+   confirm/register product code `PPRISMTABS`, choose the **Perpetual License** scheme, set the
    price, leave the trial at its 30-day default unless there's a reason not to.
 5. Write the actual listing content — tagline, full description, ≥1200×760 screenshots, tags. Not
    started; `plugin.xml`'s `<description>` is a reasonable first draft of the prose but the
@@ -574,7 +574,7 @@ away once that tag exists.
 
 Not applicable here: the "inform your users in advance" notice
 ([`inform-your-users-in-advance.html`](https://plugins.jetbrains.com/docs/marketplace/inform-your-users-in-advance.html))
-only applies when an *already-published free plugin* switches to paid. Chromatabs has never been
+only applies when an *already-published free plugin* switches to paid. PrismTabs has never been
 published, so there are no existing free users to warn.
 
 ## UI testing
@@ -660,13 +660,13 @@ sandbox IDE — none were predicted in advance:
    superclass existed and was right-click-able, not which subclass actually renders.
 3. **Rhino's `Packages.x.y.Z` doesn't reliably become a `java.lang.Class<T>` argument.** The popup
    scripts call into `TabGroupService` via `project.getService(...)`, an overloaded Java method
-   expecting `Class<T>`. Passing a dot-navigated `Packages.io.chromatabs...` reference failed
+   expecting `Class<T>`. Passing a dot-navigated `Packages.io.prismtabs...` reference failed
    overload resolution live ("Can't find method ...getService(object)"). `java.lang.Class.forName(name,
    true, classLoader)` — a real `Class` object, not a Rhino wrapper — is what actually works. That,
    in turn, needs the *right* classloader: `Class.forName(name)` alone resolves against the
-   robot-server-plugin's own classloader, which can't see Chromatabs's classes — IntelliJ gives
+   robot-server-plugin's own classloader, which can't see PrismTabs's classes — IntelliJ gives
    every plugin its own `PluginClassLoader`. `PluginManagerCore.getPlugin(PluginId.getId
-   ("io.chromatabs")).getPluginClassLoader()` is what's actually needed.
+   ("io.prismtabs")).getPluginClassLoader()` is what's actually needed.
 4. **`callJs` can't return a bare JS `null`.** `Fixture.callJs<T : Serializable>` requires the
    *result itself* to carry Serializable type info; a script whose last expression is `null` fails
    server-side ("Script must return 'Serializable' but 'null' has type 'null'") before it ever
@@ -725,13 +725,13 @@ casually.
 ## Renaming
 
 The name lives in `gradle.properties` (`pluginName`, `pluginGroup`) plus the `<id>`/`<name>` in
-`src/main/resources/META-INF/plugin.xml` and the `io.chromatabs` package path. Note that
+`src/main/resources/META-INF/plugin.xml` and the `io.prismtabs` package path. Note that
 "Tab Organizer" is already taken on the JetBrains Marketplace.
 
 ## What Phase 1 deleted
 
-`io.chromatabs.phase0` is gone — it was scaffolding for the Phase 0 gate above, nothing more.
-Two things survived the deletion, carried into `io.chromatabs.provider.TabGroupColorProvider`,
+`io.prismtabs.phase0` is gone — it was scaffolding for the Phase 0 gate above, nothing more.
+Two things survived the deletion, carried into `io.prismtabs.provider.TabGroupColorProvider`,
 because they are findings rather than scaffolding:
 
 - `order="first"` on the `editorTabColorProvider` registration in `plugin.xml`;
@@ -740,7 +740,7 @@ because they are findings rather than scaffolding:
 ## What Phase 2 deleted
 
 Phase 1's hard-coded Red/Blue/Clear actions (`AssignRedTabGroupAction`, `AssignBlueTabGroupAction`,
-`ClearTabGroupAction`) are gone, replaced by the single `io.chromatabs.action.AssignTabGroupAction`
+`ClearTabGroupAction`) are gone, replaced by the single `io.prismtabs.action.AssignTabGroupAction`
 that opens `TabGroupPopup`. `TabGroup.colorRgb` is also gone — see
 [the light/dark colour-model change](#the-lightdark-colour-model-change) for why it became
 `lightRgb`/`darkRgb`, which is a breaking change to `.idea/tabGroups.xml`'s schema; any

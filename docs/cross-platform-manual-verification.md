@@ -33,7 +33,7 @@ calls) — so most of the risk is platform *chrome*, not plugin logic:
   The palette's colour dots (`ColorSwatchIcon`) and the tool window's icon are the things most
   likely to look soft or misaligned if this bites.
 - **Settings entry point.** macOS opens Preferences via ⌘, (Cmd+Comma) instead of a Settings menu
-  item — confirm **Chromatabs** is still reachable there under **Tools**, not just via the menu.
+  item — confirm **PrismTabs** is still reachable there under **Tools**, not just via the menu.
 - **Theme legibility**, independent of OS but worth re-checking per machine since font smoothing
   changes how a tint reads. README's Phase 0 result now has both themes measured on Linux
   (`IC-242.20224.300`) — this pass is about confirming the same holds on each OS's own font
@@ -59,7 +59,7 @@ already covered continuously by local development.
    collapsing closes member tabs and marks the row "collapsed"; expanding reopens them in their
    original order. Confirm the stripe icon and swatch icons aren't blurry at this OS's default
    scaling.
-7. **Settings | Tools | Chromatabs** — reachable both via the Settings/Preferences menu item and
+7. **Settings | Tools | PrismTabs** — reachable both via the Settings/Preferences menu item and
    (macOS only) via ⌘,. Rename a preset, **Apply**, then **Restore Defaults** and confirm the
    preset label actually reverts.
 8. **Restart persistence** — after steps 2–7, restart the sandbox IDE and confirm group
@@ -68,7 +68,7 @@ already covered continuously by local development.
 ## Windows pass: driven by remote-robot, not by hand
 
 The Windows entry below was produced by driving the sandbox IDE through `remote-robot` rather than a
-human clicking through it — `src/uiTest/kotlin/io/chromatabs/uitest/WindowsManualVerificationUiTest.kt`
+human clicking through it — `src/uiTest/kotlin/io/prismtabs/uitest/WindowsManualVerificationUiTest.kt`
 walks the checklist above end-to-end, reusing the same fixtures the permanent `uiTest` suite already
 relies on. It's split into two `@Test` methods run as separate invocations with an actual
 `runIdeForUiTests` process kill-and-relaunch in between, since checklist item 8 needs a real restart
@@ -124,12 +124,12 @@ Result:      PASS — all 8 checklist items confirmed. Swatch popup shows all 8 
              click); rename/recolour propagate to every member and active-group inheritance works;
              Remove from Group clears the tint; the Tab Groups tool window lists membership,
              collapse/expand works, and its icons and colour dots are crisp at 125% scaling; Settings
-             | Tools | Chromatabs is reachable, renders correctly, and Restore Defaults reverts a
+             | Tools | PrismTabs is reachable, renders correctly, and Restore Defaults reverts a
              renamed preset; group name/colour/membership all survived a real IDE restart (process
              killed and relaunched, with an explicit force-save first — see finding above). No
-             Chromatabs defects found. Screenshots: build/reports/manual/*.png. One environment-only
-             observation, not a Chromatabs issue: IntelliJ's bundled Gradle plugin logs a SEVERE
+             PrismTabs defects found. Screenshots: build/reports/manual/*.png. One environment-only
+             observation, not a PrismTabs issue: IntelliJ's bundled Gradle plugin logs a SEVERE
              GradleJvmSupportMatrix error on this machine because its default `java` on PATH is JDK
              25, which this IDE build's version parser can't handle — harmless, and unrelated to
-             io.chromatabs (confirmed absent from idea.log's Chromatabs-attributed entries).
+             io.prismtabs (confirmed absent from idea.log's PrismTabs-attributed entries).
 ```
