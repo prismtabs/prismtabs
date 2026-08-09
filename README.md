@@ -18,7 +18,10 @@ The three items Phase 0 left open — light-theme legibility, the newest-platfor
 the Islands-theme bug — are now closed; see [Checked: all three open items](#checked-all-three-open-items-closed-2026-08-09).
 [Phase 5 result](#phase-5-result) has what's left of hardening: dynamic-plugin-loading is now
 verified live, alongside the Plugin Verifier CI matrix and palette settings that shipped earlier.
-Not yet started: JetBrains Marketplace paid-plugin publishing prep.
+[Marketplace publishing prep](#marketplace-publishing-prep) has the paid-plugin groundwork laid so
+far — vendor metadata, plugin icon, and a tested licence-verification module — and the deliberately
+short list of what's still left before the actual upload, including a still-open manual
+[cross-platform verification pass](docs/cross-platform-manual-verification.md) on macOS and Windows.
 
 ---
 
@@ -504,6 +507,74 @@ Chromatabs. `io.chromatabs` is never named as the blamed plugin anywhere in the 
 triggering an unload through the IDE's own Plugins page goes through the asynchronous
 `unloadPluginWithProgress` path this test bypassed for determinism, so this artefact is specific to
 how the check was driven, not evidence of a problem in the plugin being checked.
+
+## Marketplace publishing prep
+
+**Decision:** Chromatabs will be sold as a **Paid** plugin (no free tier) under a **Perpetual
+License** — a one-time purchase, lifetime updates, rather than a subscription. Reasoning: the
+plugin has no backend and no ongoing hosting cost, and the Plugin Verifier CI matrix (see
+[Compatibility policy](#compatibility-policy)) already keeps the "stay compatible with new IDE
+releases" cost low, so there's no recurring cost a subscription would need to fund. A subscription
+(with or without fallback) makes more sense for products with continuous infrastructure spend or
+heavy feature churn — neither applies here. Trial period: JetBrains' 30-day default, set later in
+the Marketplace Sales Info tab, not in code.
+
+Done so far, none of it published anywhere:
+
+- **Vendor metadata.** `plugin.xml`'s `<vendor>` now carries a real email and URL
+  (`yendrrek@protonmail.com`, the GitHub repo) instead of the bare placeholder name — required for
+  the vendor's site/email to show on the Marketplace plugin page.
+- **Plugin icon.** `pluginIcon.svg` / `pluginIcon_dark.svg`, 40×40, reusing the plugin's own
+  established colour language rather than inventing a new one: three of the preset swatch colours
+  (blue/red/green) from `TabGroupPalette`, light and dark pairs, in the same filled-circle-with-a
+  -subtle-border style `ColorSwatchIcon` already uses for exactly the same legibility reason (pale
+  presets need a border to stay visible on a light background).
+- **Licence verification module**, `io.chromatabs.license.ChromatabsLicense` /
+  `LicenseSignatureVerification` — a faithful Kotlin port of JetBrains' own reference
+  implementation ([`marketplace-makemecoffee-plugin`'s
+  `CheckLicense.java`](https://github.com/JetBrains/marketplace-makemecoffee-plugin)), not a
+  reinvented version: `LicensingFacade.getConfirmationStamp(PRODUCT_CODE)` plus full
+  JetBrains-root-certificate signature verification for both licence-key and licence-server-ticket
+  stamps. `LicenseSignatureVerification` has no `LicensingFacade` dependency at all, so its
+  malformed-input reject paths are covered by plain JUnit 5
+  (`LicenseSignatureVerificationTest`) — same split as the plan's §7 testing policy. All
+  `[VERIFY]`-worthy platform calls it uses (`LicensingFacade`, `AnActionEvent.createFromDataContext`,
+  `ModalityState.nonModal()`) were checked against the 2024.2 jars the same way as everything else
+  in this codebase, not guessed.
+
+**Deliberately not done yet, and why:** the module above is written and tested but **not called
+from anywhere**, and `plugin.xml` has **no `<product-descriptor>`** tag. Both are held back for the
+same reason: `<product-descriptor release-date="">` has to be the actual date this version ships,
+which doesn't exist yet — writing today's date would just be a fabricated fact sitting in the repo.
+Adding the tag is also the thing that would make the IDE start treating `runIde`/`uiTest` as running
+an unlicensed paid plugin, which would block exactly the plugin functionality the pending
+[cross-platform manual verification pass](docs/cross-platform-manual-verification.md) needs to
+exercise. Wiring `ChromatabsLicense` into `AssignTabGroupAction` (the single entry point identified
+in [Phase 2 result](#phase-2-result), so the single gate) is one `if` before `TabGroupPopup.show(...)`
+away once that tag exists.
+
+**What's left, roughly in order:**
+
+1. Finish the [cross-platform manual verification pass](docs/cross-platform-manual-verification.md)
+   (macOS and Windows sign-off log is still empty).
+2. Pick the real release date, bump `pluginVersion` off `-SNAPSHOT` (currently `0.8.2-SNAPSHOT`) to
+   the first paid release's version, add `<product-descriptor code="PCHROMATABS"
+   release-date="YYYYMMDD" release-version="10"/>` to `plugin.xml`, and wire the one `if` in
+   `AssignTabGroupAction` described above.
+3. Create the JetBrains Marketplace vendor profile, set it to **trader** status, and submit banking
+   details (Sales Info tab) — external, account-level, only Andrzej can do this.
+4. Upload the plugin (first release, not an update), then in **Sales Info → Add to Marketplace**:
+   confirm/register product code `PCHROMATABS`, choose the **Perpetual License** scheme, set the
+   price, leave the trial at its 30-day default unless there's a reason not to.
+5. Write the actual listing content — tagline, full description, ≥1200×760 screenshots, tags. Not
+   started; `plugin.xml`'s `<description>` is a reasonable first draft of the prose but the
+   screenshots and tags still need doing.
+6. Submit for review (JetBrains' stated turnaround is about two business days).
+
+Not applicable here: the "inform your users in advance" notice
+([`inform-your-users-in-advance.html`](https://plugins.jetbrains.com/docs/marketplace/inform-your-users-in-advance.html))
+only applies when an *already-published free plugin* switches to paid. Chromatabs has never been
+published, so there are no existing free users to warn.
 
 ## UI testing
 

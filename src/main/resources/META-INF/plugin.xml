@@ -1,14 +1,15 @@
 <idea-plugin>
     <id>io.chromatabs</id>
     <name>Chromatabs</name>
-    <vendor>Andrzej</vendor>
+    <vendor email="yendrrek@protonmail.com" url="https://github.com/yendrrek/chromatabs">Andrzej Piontek</vendor>
 
     <description><![CDATA[
         Chrome-style colour groups for IntelliJ editor tabs.
         <br/><br/>
-        <b>Phase 5 build.</b> Right-click a tab for the colour swatch popup: 8 preset colours, add
-        to an existing group, or create a new named one. "Manage Groups…" lets you rename, recolour,
-        delete, or mark a group active — files opened while a group is active join it automatically.
+        Right-click a tab for the colour swatch popup: 8 preset colours, add to an existing group,
+        or create a new named one. "Manage Groups…" lets you rename, recolour, delete, or mark a
+        group active — files opened while a group is active join it automatically.
+        <br/><br/>
         The "Tab Groups" tool window lists every group with its colour and member count, and can
         collapse a group (closing its tabs, remembering them) or expand it again. Assignments and
         collapsed state persist across restarts. The preset palette itself is editable under
