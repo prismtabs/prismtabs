@@ -5,20 +5,37 @@ suite — on Linux, macOS, and Windows runners. That suite is pure JVM/Swing bus
 native or OS-specific code paths, so a green matrix there is good evidence the plugin's *logic*
 behaves identically everywhere.
 
-It proves nothing about *rendering or interaction*, and that's not a gap worth closing in CI: the
-`uiTest` suite drives a real `java.awt.Robot` against a real desktop session, and getting that
-reliably headless took real, OS-specific effort even on Linux (see README "These tests need an X11
-display" — Wayland silently drops all robot input). Reproducing that per-OS in CI (macOS needs
-Screen Recording/Accessibility TCC permissions granted to the runner; Windows needs a real
-interactive session, not a service account) is a disproportionate amount of infrastructure for what
-a five-minute manual pass on real hardware answers directly. Use this checklist for that pass
-instead — on real hardware or a VM, not CI.
+It proves nothing about *rendering or interaction* on its own, and the `uiTest` suite (a real
+`java.awt.Robot` driving a real desktop session) needed real, OS-specific effort to get reliable even
+on Linux (see README "These tests need an X11 display" — Wayland silently drops all robot input).
+Windows turned out solvable in CI: GitHub's hosted `windows-latest` runners provide a real
+interactive session, so `.github/workflows/ui-tests.yml` runs the automated `uiTest` suite there —
+manually triggered (`workflow_dispatch`), not on every push, since Windows runner minutes carry a 2x
+plan-minute multiplier and this is meant for occasional use, not continuous coverage.
 
-**Setup:** use `./gradlew runIde`, **not** `runIdeForUiTests` — the latter's flags
-(`-Dide.mac.file.chooser.native=false`, `-Dide.mac.message.dialogs.as.sheets=false`,
+macOS is not solvable **unattended, in CI** the same way: `remote-robot` needs Screen
+Recording/Accessibility TCC permission, and every current GitHub-hosted macOS image runs with SIP
+enabled and no supported way to grant that non-interactively (direct `TCC.db` writes are SIP-blocked;
+see the workflow file for the specific issues checked). That's a disproportionate amount of
+infrastructure to chase for something a human sitting at real hardware solves in one click.
+
+But "not in CI" isn't "not automated at all" — SIP only blocks the *scripted* route, not the normal
+one. On a real Mac (owned, borrowed, or a pay-by-the-minute rental like MacinCloud/MacStadium — cheap
+for a single short session, unlike CI's need for a persistent or repeatedly-provisioned machine),
+granting Screen Recording/Accessibility is a one-time interactive "Allow" click the first time
+`runIdeForUiTests` asks for it, exactly like a user installing any screen-recording app. After that,
+the automated `uiTest` suite runs identically to Linux and Windows — see "macOS: automated
+remote-robot suite on real hardware" below. Use the checklist in this doc for that pass, or for the
+manual walkthrough (see "Setup" just below) that exercises chrome the automated suite deliberately
+turns off. The **restart-persistence check (item 8) stays manual on every OS regardless** — it needs
+a human (or a driven walkthrough, see the Windows section below) to actually kill and relaunch the IDE
+process between steps, which nothing inside a single `uiTest` run can exercise.
+
+**Setup for the manual click-through pass:** use `./gradlew runIde`, **not** `runIdeForUiTests` — the
+latter's flags (`-Dide.mac.file.chooser.native=false`, `-Dide.mac.message.dialogs.as.sheets=false`,
 `-DjbScreenMenuBar.enabled=false`) exist specifically to disable native macOS behaviour that
-`remote-robot` can't drive. For a manual pass you want exactly the native behaviour a real user
-gets, so those must stay off.
+`remote-robot` can't drive. For a manual pass you want exactly the native behaviour a real user gets,
+so those must stay off. (For the automated suite, do the opposite — see below.)
 
 ## What's actually OS-sensitive here
 
@@ -65,6 +82,39 @@ already covered continuously by local development.
 8. **Restart persistence** — after steps 2–7, restart the sandbox IDE and confirm group
    assignments, names, colours, collapsed state, and any palette customisation all survived.
 
+## macOS: automated remote-robot suite on real hardware
+
+Unlike Windows, there's no CI workflow for this — it has to be run by hand on an actual Mac, once per
+release or when debugging a macOS-specific rendering issue. That's still far less manual effort than
+the full checklist above: it's the same asserted suite CI runs on Windows, not eyeballing.
+
+```bash
+./gradlew runIdeForUiTests &   # first run: macOS prompts for Screen Recording permission — click
+                                # Allow (System Settings → Privacy & Security → Screen Recording);
+                                # this and all future runs need no further prompts
+./gradlew uiTest \
+  --tests "io.prismtabs.uitest.TabGroupPaletteConfigurableUiTest" \
+  --tests "io.prismtabs.uitest.TabGroupPopupUiTest" \
+  --tests "io.prismtabs.uitest.TabGroupsToolWindowUiTest"
+```
+
+Same `--tests` list as `ui-tests.yml`, for the same reason: `WindowsManualVerificationUiTest` (see
+below) needs a human-driven IDE restart between its two methods and isn't written to run as a single
+`uiTest` invocation. It's named for Windows because that's the only OS it's been run against so far,
+but nothing in it is Windows-specific — porting it to drive this same checklist on macOS, restart step
+included, is a reasonable next step rather than something blocked by platform.
+
+If the Allow prompt never appears (some macOS versions only prompt the *first* time a process asks,
+and a previously-denied grant has to be reset manually): `tccutil reset ScreenCapture` from a
+Terminal, then re-run. This is the normal, supported TCC flow — nothing here touches `TCC.db`
+directly or needs SIP disabled, which is exactly what makes it work where the CI approach can't.
+
+This doesn't replace the manual checklist pass above: `runIdeForUiTests` deliberately disables native
+sheets, the native file chooser, and the screen menu bar so `remote-robot` can drive them, which means
+this run never exercises what a real user actually sees for those three things. Run both when doing a
+full pre-release pass; the automated suite alone is enough for routine "did I break rendering"
+debugging.
+
 ## Windows pass: driven by remote-robot, not by hand
 
 The Windows entry below was produced by driving the sandbox IDE through `remote-robot` rather than a
@@ -72,9 +122,10 @@ human clicking through it — `src/uiTest/kotlin/io/prismtabs/uitest/WindowsManu
 walks the checklist above end-to-end, reusing the same fixtures the permanent `uiTest` suite already
 relies on. It's split into two `@Test` methods run as separate invocations with an actual
 `runIdeForUiTests` process kill-and-relaunch in between, since checklist item 8 needs a real restart
-that nothing inside a single JVM run can exercise. It isn't part of the regular suite and doesn't run
-in CI — same "on real hardware or a VM, not CI" framing as the rest of this doc — but it's there to
-rerun for a future pass rather than starting from scratch.
+that nothing inside a single JVM run can exercise. Unlike the three regular `uiTest` classes, it's
+deliberately excluded from `ui-tests.yml`'s `--tests` list and doesn't run in CI — same "on real
+hardware or a VM, not CI" framing as the rest of this doc — but it's there to rerun for a future pass
+rather than starting from scratch.
 
 Two findings worth recording, both about *how* to check this pass rather than about the plugin:
 

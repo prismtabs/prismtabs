@@ -1,0 +1,69 @@
+name: UI Tests
+
+# Manual only, deliberately: driving java.awt.Robot needs a real interactive desktop, and Windows
+# runner minutes carry a 2x plan-minute multiplier — not something to spend on every push. Trigger
+# this by hand when debugging a platform-specific UI issue or before a release. See README "UI
+# testing" and docs/cross-platform-manual-verification.md for the fuller picture.
+on:
+  workflow_dispatch:
+
+jobs:
+  ui-tests:
+    # Windows only — macOS was evaluated and rejected: remote-robot needs Screen Recording/
+    # Accessibility TCC permission, and every current GitHub-hosted macOS image (14+) runs with SIP
+    # enabled and no supported way to pre-grant that non-interactively. Direct TCC.db writes are
+    # SIP-blocked; the one documented community workaround needed SIP disabled, true only for the
+    # now-retired macOS 13 image (actions/runner-images#9529, actions/runner-images#7792). macOS UI
+    # verification stays a manual pass on real hardware — see docs/cross-platform-manual-verification.md.
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Same pattern as local dev (README "UI testing"): a long-lived IDE process backgrounded in
+      # its own step, polled for readiness in the next one, then driven from the one after that.
+      - name: Start sandbox IDE (runIdeForUiTests)
+        run: ./gradlew runIdeForUiTests &
+        shell: bash
+
+      - name: Wait for robot-server on :8082
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:8082 > /dev/null; then
+              echo "robot-server is up"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "robot-server never came up after 10 minutes" >&2
+          exit 1
+        shell: bash
+
+      - name: Run UI tests
+        # WindowsManualVerificationUiTest is deliberately excluded: it's a hand-run checklist
+        # walkthrough whose two @Test methods need a human to kill and relaunch runIdeForUiTests in
+        # between (see its own doc comment and docs/cross-platform-manual-verification.md) — it was
+        # never written to survive unattended CI. Gradle's --tests has no exclude syntax, so this is
+        # an explicit include list instead: add any new automated uiTest class here, or it silently
+        # won't run in this workflow.
+        run: >
+          ./gradlew uiTest
+          --tests "io.prismtabs.uitest.TabGroupPaletteConfigurableUiTest"
+          --tests "io.prismtabs.uitest.TabGroupPopupUiTest"
+          --tests "io.prismtabs.uitest.TabGroupsToolWindowUiTest"
+        shell: bash
+
+      - name: Upload UI test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-test-reports-windows
+          path: |
+            build/reports/tests/uiTest
+            build/reports/manual
+          retention-days: 14
