@@ -15,6 +15,12 @@ jobs:
     # SIP-blocked; the one documented community workaround needed SIP disabled, true only for the
     # now-retired macOS 13 image (actions/runner-images#9529, actions/runner-images#7792). macOS UI
     # verification stays a manual pass on real hardware — see docs/cross-platform-manual-verification.md.
+    #
+    # Re-check date: this finding is image-specific, evaluated 2026-08-10 against macOS 14/15
+    # hosted runners. Before trusting it again, re-verify GitHub's hosted-macOS TCC/SIP posture
+    # hasn't changed — don't extend this matrix to macOS on the strength of a template example or a
+    # third-party writeup alone; confirm a real Screen Recording/Accessibility grant path exists
+    # non-interactively on the then-current image first.
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
