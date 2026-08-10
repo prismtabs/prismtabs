@@ -593,10 +593,17 @@ out of the fast `./gradlew test` path entirely.
 not this plugin's own project — on startup, so there is always exactly one editor tab to
 right-click; the tests never have to disambiguate between tabs by filename.
 
-**This automated suite runs on Linux only** — see "These tests need an X11 display" below. Neither
-it nor `./gradlew build`'s plain-JUnit `test` suite (which CI does run on macOS and Windows) proves
-the plugin renders or behaves correctly on those platforms; for that, see
-[`docs/cross-platform-manual-verification.md`](docs/cross-platform-manual-verification.md).
+**Locally this only runs on Linux** — see "These tests need an X11 display" below. In CI it also
+runs on Windows, via a manual-trigger-only workflow
+([`.github/workflows/ui-tests.yml`](.github/workflows/ui-tests.yml), `workflow_dispatch`, not run on
+every push — Windows runner minutes carry a 2x plan-minute multiplier) that boots
+`runIdeForUiTests` and drives it exactly as described above. macOS has no CI path: `remote-robot`
+needs Screen Recording/Accessibility TCC permission that cannot be granted non-interactively on
+GitHub's hosted macOS images (SIP blocks it — see the workflow file for the specifics). The same
+automated suite still runs there, just by hand on real hardware, since that TCC permission is a
+normal one-time "Allow" click outside CI; see
+[`docs/cross-platform-manual-verification.md`](docs/cross-platform-manual-verification.md) for both
+that and the fully manual checklist pass.
 
 ### Why `remote-robot`, not IDE Starter + Driver
 
