@@ -13,6 +13,7 @@ import com.intellij.openapi.ui.popup.util.BaseListPopupStep
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.ui.JBColor
+import io.prismtabs.license.PrismTabsLicense
 import io.prismtabs.model.PresetColor
 import io.prismtabs.model.TabGroup
 import io.prismtabs.service.TabGroupNotifier
@@ -221,7 +222,7 @@ private class GroupActionsStep(
             }
             GroupAction.Recolor -> RecolorStep(project, group, service)
             GroupAction.ToggleActive -> {
-                service.setActiveGroup(if (service.activeGroupId() == group.id) null else group.id)
+                toggleActiveGroup(group, service)
                 PopupStep.FINAL_CHOICE
             }
             GroupAction.Delete -> {
@@ -254,6 +255,31 @@ internal class RecolorStep(
         repaintFiles(project, service.membersOf(group.id))
         TabGroupNotifier.notifyChanged(project)
         return PopupStep.FINAL_CHOICE
+    }
+}
+
+/**
+ * Marks [group] as the active ("sticky") group, or clears it if it already is — the single choke
+ * point for Phase 3's inheritance toggle, mirroring `toggleCollapse` in
+ * [io.prismtabs.ui.TabGroupsToolWindowFactory]'s file.
+ *
+ * *Marking* is the paid auto-join feature (see the README's free/paid split); *clearing* is not — a
+ * lapsed subscriber must always be able to switch off a sticky group they set while subscribed,
+ * even though [io.prismtabs.listener.TabGroupFileListener] already ignores it.
+ *
+ * `internal`, not `private`: the paywall uiTest drives this directly, for the same reason
+ * [expandAllCollapsedGroups] is internal.
+ *
+ * No [TabGroupNotifier.notifyChanged] here, unlike every other mutating helper in this file — and
+ * that is deliberate, not an omission. Nothing renders the active group *persistently*: the tool
+ * window's row renderer shows name, count and collapsed-ness only, and [ManageGroupsStep] is
+ * rebuilt on every popup open, so its `" (active)"` suffix is computed fresh each time it's shown.
+ * There is no stale view for a notification to refresh.
+ */
+internal fun toggleActiveGroup(group: TabGroup, service: TabGroupService) {
+    val clearing = service.activeGroupId() == group.id
+    if (clearing || PrismTabsLicense.requirePaidFeature("Marking a tab group active")) {
+        service.setActiveGroup(if (clearing) null else group.id)
     }
 }
 

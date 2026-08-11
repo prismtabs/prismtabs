@@ -14,6 +14,7 @@ import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
+import com.intellij.openapi.wm.ex.ToolWindowManagerListener
 import com.intellij.ui.CollectionListModel
 import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.JBColor
@@ -21,7 +22,9 @@ import com.intellij.ui.PopupHandler
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBList
+import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.ui.content.ContentFactory
+import io.prismtabs.license.PrismTabsLicense
 import io.prismtabs.model.TabGroup
 import io.prismtabs.service.TabGroupCollapse
 import io.prismtabs.service.TabGroupService
@@ -29,6 +32,7 @@ import io.prismtabs.service.TabGroupsChangedListener
 import java.awt.Color
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
+import javax.swing.JComponent
 import javax.swing.JList
 import javax.swing.ListSelectionModel
 
@@ -38,6 +42,12 @@ import javax.swing.ListSelectionModel
  * [TabGroupService] via [TabGroupsChangedListener] rather than only refreshing on its own actions,
  * so a group created from [TabGroupPopup] while this panel is already visible still shows up.
  * `DumbAware`: nothing here reads the index.
+ *
+ * This whole tool window — and with it collapse/expand, which is only driven from here — is a paid
+ * feature (see the README's "Marketplace publishing prep"). It is gated inside [TabGroupsPanel]
+ * rather than by declining to register the tool window at all: a subscription can be activated
+ * while the IDE is running, and a stripe button that only appears after a restart would read as the
+ * plugin being broken.
  */
 internal class TabGroupsToolWindowFactory : ToolWindowFactory, DumbAware {
 
@@ -60,6 +70,8 @@ private class TabGroupsPanel(
         cellRenderer = GroupCellRenderer(service)
         emptyText.text = "No tab groups yet — right-click a tab to create one."
     }
+    private val groupList = ScrollPaneFactory.createScrollPane(list, true)
+    private val toolbarComponent: JComponent
 
     init {
         val actions = DefaultActionGroup(
@@ -70,8 +82,7 @@ private class TabGroupsPanel(
         )
         val toolbar = ActionManager.getInstance().createActionToolbar("PrismTabs.TabGroupsToolWindow", actions, true)
         toolbar.setTargetComponent(list)
-        setToolbar(toolbar.component)
-        setContent(ScrollPaneFactory.createScrollPane(list, true))
+        toolbarComponent = toolbar.component
         PopupHandler.installPopupMenu(list, actions, "PrismTabs.TabGroupsToolWindow.Popup")
 
         // Double-click as a shortcut for the toolbar's collapse/expand toggle — mirrors the
@@ -84,16 +95,107 @@ private class TabGroupsPanel(
             }
         })
 
-        project.messageBus.connect(disposable).subscribe(TabGroupsChangedListener.TOPIC, TabGroupsChangedListener { refresh() })
+        val connection = project.messageBus.connect(disposable)
+        connection.subscribe(TabGroupsChangedListener.TOPIC, TabGroupsChangedListener { refresh() })
+        // A subscription activated mid-session doesn't notify anyone, so re-read the licence each
+        // time the tool window is shown: that's the moment the user would look for the unlock, and
+        // it's rare enough that re-verifying the signed stamp costs nothing.
+        connection.subscribe(
+            ToolWindowManagerListener.TOPIC,
+            object : ToolWindowManagerListener {
+                override fun toolWindowShown(toolWindow: ToolWindow) {
+                    if (toolWindow.id == TOOL_WINDOW_ID) refresh()
+                }
+            },
+        )
         refresh()
     }
 
     private fun refresh() {
+        if (!PrismTabsLicense.paidFeaturesEnabled()) {
+            setToolbar(null)
+            setContent(upsellPanel())
+            return
+        }
+        setToolbar(toolbarComponent)
+        setContent(groupList)
         val groups = service.groups()
         val selectedId = list.selectedValue?.id
         listModel.replaceAll(groups)
         groups.firstOrNull { it.id == selectedId }?.let { list.setSelectedValue(it, true) }
     }
+
+    /**
+     * What an unsubscribed user sees here instead of the list: what this window is, what stays free,
+     * and a way to subscribe — the platform's own empty-state idiom, so it reads as a locked feature
+     * rather than a failure.
+     *
+     * The "expand everything" line is not an upsell, it's the escape hatch: collapsing closes tabs
+     * and only this window can reopen them, so a subscription lapsing while a group is collapsed
+     * would otherwise hold those tabs hostage behind the paywall. Offered only when something is
+     * actually collapsed, and it expands rather than re-locking — a lapsed user gets their tabs
+     * back, but no ongoing collapse/expand.
+     */
+    private fun upsellPanel(): JComponent {
+        val panel = JBPanelWithEmptyText()
+        // Named so the paywall uiTest can find this exact panel: the tool window hierarchy contains
+        // other JBPanelWithEmptyText instances belonging to the platform (their empty text reads
+        // "Nothing to show"), and a by-type search picks one of those up instead.
+        panel.name = LOCKED_PANEL_NAME
+        val statusText = panel.emptyText
+        statusText.setText("The Tab Groups tool window is a PrismTabs paid feature.")
+        statusText.appendLine(
+            "Colouring tabs and managing groups from a tab's right-click menu stays free.",
+            SimpleTextAttributes.GRAYED_ATTRIBUTES,
+            null,
+        )
+        statusText.appendLine(
+            "Start the free trial or activate a subscription",
+            SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES,
+        ) {
+            PrismTabsLicense.requestLicense("The Tab Groups tool window needs an active PrismTabs subscription.")
+        }
+        val collapsedCount = service.groups().count { it.collapsed }
+        if (collapsedCount > 0) {
+            statusText.appendLine(
+                "Reopen the tabs of $collapsedCount collapsed group${if (collapsedCount == 1) "" else "s"}",
+                SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES,
+            ) {
+                expandAllCollapsedGroups(project, service)
+            }
+        }
+        return panel
+    }
+}
+
+/** Must match `plugin.xml`'s `<toolWindow id="">`. */
+private const val TOOL_WINDOW_ID = "Tab Groups"
+
+/**
+ * `Component.name` of the locked (unsubscribed) tool window panel. The paywall uiTest looks the
+ * panel up by this exact name — searching by type finds the platform's own `JBPanelWithEmptyText`
+ * instances in the same hierarchy instead. Kept in step with the literal in
+ * `IdeaFrame.toolWindowEmptyText`.
+ */
+internal const val LOCKED_PANEL_NAME = "PrismTabs.LockedToolWindow"
+
+/**
+ * The locked tool window's escape hatch: reopen the tabs of every collapsed group. Deliberately
+ * *not* gated — see [TabGroupsPanel.upsellPanel] for why a lapsed subscription must never leave
+ * tabs closed behind the paywall that closed them.
+ *
+ * `internal`, not `private`: the paywall uiTest drives this directly rather than clicking a
+ * `StatusText` link at computed coordinates, the same trade-off (and for the same reason)
+ * `IdeaFrame.setGroupCollapsed` already makes for collapse/expand.
+ *
+ * The group list is read once and filtered before iterating, not re-read per iteration: each
+ * [TabGroupCollapse.expand] republishes a change, and `expand` needs the *pre-expand* [TabGroup]
+ * (its `collapsedFileUrls` is what says which tabs to reopen — see [TabGroupService.expand]).
+ * Expanding one group doesn't affect the others' snapshots, so one read is both correct and the
+ * only thing that keeps each group's recorded URLs intact.
+ */
+internal fun expandAllCollapsedGroups(project: Project, service: TabGroupService) {
+    service.groups().filter { it.collapsed }.forEach { TabGroupCollapse.expand(project, service, it) }
 }
 
 /** Swatch dot, name, member count, and a "collapsed" suffix — the plan's stated row shape. */
@@ -177,7 +279,14 @@ private class DeleteAction(project: Project, service: TabGroupService, list: JBL
     }
 }
 
+/**
+ * The single place collapse/expand is driven from — the toolbar action, the context menu and the
+ * double-click shortcut all land here — so it carries the paid-feature gate itself rather than
+ * relying on the locked panel simply not showing the list. The one deliberate way past it is the
+ * locked panel's own "reopen the tabs" escape hatch, which calls [TabGroupCollapse.expand] direct.
+ */
 private fun toggleCollapse(project: Project, service: TabGroupService, group: TabGroup) {
+    if (!PrismTabsLicense.requirePaidFeature("Collapsing and expanding tab groups")) return
     if (group.collapsed) {
         TabGroupCollapse.expand(project, service, group)
     } else {

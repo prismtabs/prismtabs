@@ -9,6 +9,7 @@ import com.intellij.ui.dsl.builder.MutableProperty
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.panel
+import io.prismtabs.license.PrismTabsLicense
 import io.prismtabs.model.PresetColor
 import io.prismtabs.model.TabGroupPalette
 import io.prismtabs.service.TabGroupPaletteService
@@ -42,6 +43,11 @@ internal class TabGroupPaletteConfigurable :
     private val edited: MutableList<PresetColor> = original.toMutableList()
 
     override fun createPanel(): DialogPanel {
+        // Editing the palette is paid; the palette a subscriber already saved keeps being used
+        // either way (see the README's free/paid split — the free tier loses features, never data).
+        // Read once per panel: a Settings dialog is short-lived and rebuilt on each open, so a
+        // subscription activated meanwhile is picked up the next time this page is opened.
+        val paidFeatures = PrismTabsLicense.paidFeaturesEnabled()
         lateinit var dialogPanel: DialogPanel
         dialogPanel = panel {
             row {
@@ -50,6 +56,13 @@ internal class TabGroupPaletteConfigurable :
                         "and “Recolour…”. Changes apply to newly assigned or recoloured " +
                         "groups; existing groups keep their own colour until recoloured.",
                 )
+            }
+            if (!paidFeatures) {
+                row {
+                    link("Editing the preset palette is a paid feature — start the free trial") {
+                        PrismTabsLicense.requestLicense("Editing the PrismTabs preset palette needs an active subscription.")
+                    }
+                }
             }
             TabGroupPalette.PRESETS.forEachIndexed { index, default ->
                 row("${default.label}:") {
@@ -71,7 +84,7 @@ internal class TabGroupPaletteConfigurable :
                             { colorPanel, value -> colorPanel.selectedColor = value },
                             MutableProperty({ edited[index].dark }, { edited[index] = edited[index].copy(dark = it) }),
                         )
-                }
+                }.enabled(paidFeatures)
             }
             row {
                 link("Restore Defaults") {
@@ -79,7 +92,7 @@ internal class TabGroupPaletteConfigurable :
                     edited.addAll(TabGroupPalette.PRESETS)
                     dialogPanel.reset()
                 }
-            }
+            }.enabled(paidFeatures)
         }
         return dialogPanel
     }
@@ -94,6 +107,20 @@ internal class TabGroupPaletteConfigurable :
     override fun isModified(): Boolean = super.isModified() || edited != original
 
     override fun apply() {
+        // The rows above are disabled without a subscription, so the only way here with pending
+        // edits is a licence that lapsed while this dialog was open. Discard them via [reset] rather
+        // than just refusing to save: leaving the buffer dirty would leave the page permanently
+        // "modified" (see [isModified]) with no way for the user to settle it. The saved palette
+        // survives either way — the free tier is meant to lose features, not settings.
+        //
+        // The silent [PrismTabsLicense.paidFeaturesEnabled], not [PrismTabsLicense.requirePaidFeature]:
+        // clicking OK in Settings isn't "invoking a paid feature", so throwing a registration dialog
+        // at someone who couldn't type in these fields anyway would be noise. The upsell here is the
+        // link row [createPanel] renders in its place.
+        if (!PrismTabsLicense.paidFeaturesEnabled()) {
+            reset()
+            return
+        }
         super.apply()
         paletteService.setPresets(edited)
         original = edited.toList()

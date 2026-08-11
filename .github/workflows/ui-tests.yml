@@ -59,6 +59,7 @@ jobs:
         # won't run in this workflow.
         run: >
           ./gradlew uiTest
+          --tests "io.prismtabs.uitest.PaywallUiTest"
           --tests "io.prismtabs.uitest.TabGroupPaletteConfigurableUiTest"
           --tests "io.prismtabs.uitest.TabGroupPopupUiTest"
           --tests "io.prismtabs.uitest.TabGroupsToolWindowUiTest"
