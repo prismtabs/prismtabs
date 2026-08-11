@@ -511,14 +511,43 @@ how the check was driven, not evidence of a problem in the plugin being checked.
 
 ## Marketplace publishing prep
 
-**Decision:** PrismTabs will be sold as a **Paid** plugin (no free tier) under a **Perpetual
-License** — a one-time purchase, lifetime updates, rather than a subscription. Reasoning: the
-plugin has no backend and no ongoing hosting cost, and the Plugin Verifier CI matrix (see
-[Compatibility policy](#compatibility-policy)) already keeps the "stay compatible with new IDE
-releases" cost low, so there's no recurring cost a subscription would need to fund. A subscription
-(with or without fallback) makes more sense for products with continuous infrastructure spend or
-heavy feature churn — neither applies here. Trial period: JetBrains' 30-day default, set later in
-the Marketplace Sales Info tab, not in code.
+**Decision:** PrismTabs will be sold under JetBrains Marketplace's **Freemium** model, priced as a
+**Yearly Subscription without a Fallback License** at **$10/year**, with the standard **30-day
+trial** of the paid features. This supersedes an earlier Perpetual License decision (see git
+history) — reasoning below.
+
+**Why not Perpetual:** the original reasoning was "the plugin has no backend/hosting cost and the
+Plugin Verifier CI matrix (see [Compatibility policy](#compatibility-policy)) keeps compatibility
+cost low, so there's no recurring cost to fund." That framing missed that Andrzej's own maintenance
+time — tracking new IDE versions, triaging bug reports — is a recurring cost even without a hosting
+bill. Perpetual decouples that recurring cost from recurring revenue: for a plugin this niche,
+new-user acquisition tapers off long before the obligation to keep it compatible does, so revenue
+trends toward zero while the maintenance burden doesn't.
+
+**Why not Subscription with a Fallback License:** JetBrains' fallback scheme (modelled on their own
+IDE licensing) freezes a lapsed subscriber onto the last version they were entitled to, forever,
+rather than cutting them off. Rejected because `untilBuild` is deliberately left unset (see
+[Compatibility policy](#compatibility-policy)) — a frozen fallback build doesn't naturally decay via
+IDE incompatibility the way it would for a plugin with a hard version ceiling. Once feature velocity
+slows, the frozen fallback and the live paid version would converge, undermining the subscription.
+The Freemium free tier already answers the question a fallback licence exists for — "don't leave a
+lapsed payer with nothing" — without that convergence risk: a lapsed subscriber drops to the free
+tier (below), not a frozen paid snapshot.
+
+**Free/paid split**, feature-based rather than quantity-based — capping the *number* of groups would
+punish a mid-task user who needs one more, which is exactly the "too limited" outcome to avoid:
+
+- **Free forever:** assigning tabs to the 8 preset colours, unlimited groups, create/rename/recolour
+  (Phase 1–3 core), persistence across restarts, and rename/move remapping — the last one is a
+  correctness feature (your assignments survive a rename), not a premium one, so it stays free.
+- **Paid** (active subscription, or during the 30-day trial): the Tab Groups tool window,
+  collapse/expand, active/sticky-group auto-join on newly opened files (Phase 4's tool window +
+  Phase 3's inheritance rule), and custom palette editing (Phase 5's settings page). These are the
+  workflow-multiplier features a daily user builds a habit around, not ones a casual tab-colourer
+  misses.
+- **Trial:** new installs get the full paid feature set for 30 days (JetBrains' "reverse trial"
+  pattern), then silently downgrade to the free tier above if not subscribed — never a hard
+  lockout.
 
 Done so far, none of it published anywhere:
 
@@ -538,35 +567,64 @@ Done so far, none of it published anywhere:
   JetBrains-root-certificate signature verification for both licence-key and licence-server-ticket
   stamps. `LicenseSignatureVerification` has no `LicensingFacade` dependency at all, so its
   malformed-input reject paths are covered by plain JUnit 5
-  (`LicenseSignatureVerificationTest`) — same split as the plan's §7 testing policy. All
+  (`LicenseSignatureVerificationTest`) — same split as the plan's §7 testing policy, and
+  `PrismTabsLicense.decide` (the freemium truth table, with the `PluginManager`/`LicensingFacade`
+  reads lifted out as parameters) is unit-tested the same way in `PrismTabsLicenseTest`. All
   `[VERIFY]`-worthy platform calls it uses (`LicensingFacade`, `AnActionEvent.createFromDataContext`,
   `ModalityState.nonModal()`) were checked against the 2024.2 jars the same way as everything else
   in this codebase, not guessed.
 
-**Deliberately not done yet, and why:** the module above is written and tested but **not called
-from anywhere**, and `plugin.xml` has **no `<product-descriptor>`** tag. Both are held back for the
-same reason: `<product-descriptor release-date="">` has to be the actual date this version ships,
-which doesn't exist yet — writing today's date would just be a fabricated fact sitting in the repo.
-Adding the tag is also the thing that would make the IDE start treating `runIde`/`uiTest` as running
-an unlicensed paid plugin, which would block exactly the plugin functionality the pending
-[cross-platform manual verification pass](docs/cross-platform-manual-verification.md) needs to
-exercise. Wiring `PrismTabsLicense` into `AssignTabGroupAction` (the single entry point identified
-in [Phase 2 result](#phase-2-result), so the single gate) is one `if` before `TabGroupPopup.show(...)`
-away once that tag exists.
+- **Free/paid gating, wired at each paid feature.** The feature-based split changed the shape of
+  this from what the plan originally described: it is no longer a single gate.
+  `AssignTabGroupAction` (the [Phase 2 result](#phase-2-result) entry point) stays *ungated* — it is
+  the free-tier action — and instead `PrismTabsLicense.paidFeaturesEnabled()` /
+  `requirePaidFeature()` are called from four places: the Tab Groups tool window (`TabGroupsPanel`
+  shows an upsell empty-state instead of the list), `toggleCollapse` (the one choke point all three
+  collapse/expand entry points funnel through), the popup's "Mark as Active Group" action, and
+  `TabGroupPaletteConfigurable`. A `false` there means "fall back to the free tier", never "block
+  the plugin". Two consequences worth knowing:
+  - **The locked side is covered by `PaywallUiTest`.** Every other test runs against an unlocked
+    build and always will (no `<product-descriptor>` ⇒ the gate is open), so that class simulates an
+    unlicensed paid build inside the running sandbox — setting the descriptor's `productCode` and
+    installing a stamp-less `LicensingFacade`, both real platform state, no test-only seam in
+    production code — and asserts what a free user actually gets. It is script-driven rather than
+    mouse-driven so it runs on Wayland too (see "These tests need an X11 display").
+  - **Nothing is ever held hostage.** *Clearing* an active group stays free even though setting one
+    is paid, and the locked tool window still offers a one-click "reopen the tabs of N collapsed
+    groups" — otherwise a lapsed subscription would leave tabs closed behind the very window needed
+    to reopen them. `TabGroupFileListener` re-checks per file open, so auto-join stops the moment a
+    subscription lapses rather than at the next restart.
+  - **The gates are inert until the plugin is actually for sale.** `paidFeaturesEnabled()` returns
+    `true` outright when our own `PluginDescriptor.getProductCode()` is `null`, i.e. when
+    `plugin.xml` carries no `<product-descriptor>`. Without that clause every locally built plugin —
+    `runIde`, `uiTest` — would lock its own paid features, since `LicensingFacade` has no product to
+    issue a stamp for and `isLicensed()` answers `false` for everyone. With it, the gates go live by
+    themselves on the day the tag lands.
+
+**Deliberately not done yet, and why:** `plugin.xml` has **no `<product-descriptor>`** tag.
+`<product-descriptor release-date="">` has to be the actual date this version ships, which doesn't
+exist yet — writing today's date would just be a fabricated fact sitting in the repo. Adding the tag
+is also the thing that would make the IDE start treating `runIde`/`uiTest` as running an unlicensed
+paid plugin, which would block exactly the plugin functionality the pending [cross-platform manual
+verification pass](docs/cross-platform-manual-verification.md) needs to exercise — which is why the
+gating call sites above are written to key off the tag's presence rather than being held back
+alongside it.
 
 **What's left, roughly in order:**
 
 1. Finish the [cross-platform manual verification pass](docs/cross-platform-manual-verification.md)
    — Windows passed 2026-08-09; the macOS sign-off log entry is still empty.
 2. Pick the real release date, bump `pluginVersion` off `-SNAPSHOT` (currently `0.8.2-SNAPSHOT`) to
-   the first paid release's version, add `<product-descriptor code="PPRISMTABS"
-   release-date="YYYYMMDD" release-version="10"/>` to `plugin.xml`, and wire the one `if` in
-   `AssignTabGroupAction` described above.
+   the first paid release's version, and add `<product-descriptor code="PPRISMTABS"
+   release-date="YYYYMMDD" release-version="10"/>` to `plugin.xml` — which is also what arms the
+   already-wired gating call sites. Re-run `runIde` once afterwards to see the free tier as an
+   unsubscribed user would, since that's the first build where the gates do anything.
 3. Create the JetBrains Marketplace vendor profile, set it to **trader** status, and submit banking
    details (Sales Info tab) — external, account-level, only Andrzej can do this.
 4. Upload the plugin (first release, not an update), then in **Sales Info → Add to Marketplace**:
-   confirm/register product code `PPRISMTABS`, choose the **Perpetual License** scheme, set the
-   price, leave the trial at its 30-day default unless there's a reason not to.
+   confirm/register product code `PPRISMTABS`, choose **Freemium**, then the **Yearly Subscription
+   without a Fallback License** scheme, set the price to $10/year, leave the trial at its 30-day
+   default.
 5. Write the actual listing content — tagline, full description, ≥1200×760 screenshots, tags. Not
    started; `plugin.xml`'s `<description>` is a reasonable first draft of the prose but the
    screenshots and tags still need doing.
@@ -579,7 +637,8 @@ published, so there are no existing free users to warn.
 
 ## UI testing
 
-`TabGroupPopup` and the Tab Groups tool window are covered end-to-end by
+`TabGroupPopup`, the Tab Groups tool window, and the free/paid paywall (`PaywallUiTest`, see
+"Marketplace publishing prep" above) are covered end-to-end by
 [`remote-robot`](https://github.com/JetBrains/intellij-ui-test-robot) tests (`src/uiTest/`), not
 just eyeballed in `runIde`. They live in their own Gradle source set — slow, need a live IDE — kept
 out of the fast `./gradlew test` path entirely.
@@ -631,6 +690,18 @@ no matter what the tests say:
   framebuffer, so JDK 21 routes it to `sun.awt.screencast.ScreencastHelper` — the xdg-desktop-portal
   ScreenCast (PipeWire) API — which waits on a portal grant that never comes. See finding 5 below
   for why one such call used to kill an entire run.
+
+**`PaywallUiTest` is the one exception** — verified 2026-08-11 running under a live GNOME Wayland
+session (`$XDG_SESSION_TYPE=wayland`), all 4 tests passing. Every paywall-specific interaction goes
+through `IdeaFrame`'s `runJs`/`callJs` helpers (in-process method calls inside the sandbox IDE, same
+mechanism `resetTabGroups`/`setGroupCollapsed` already used) rather than a popup or dialog click, so
+none of *that* needs `java.awt.Robot`. The one caveat: assertions that read the tool window's
+contents go through `toolWindowGroupRows()`, which opens the window with a real stripe-button
+`.click()` if it isn't already showing — but every `PaywallUiTest` case opens the window itself via
+the script-driven `showTabGroupsToolWindow()` first, so that fallback branch is never actually
+reached in this class; it stays a live Robot dependency for whoever calls `toolWindowGroupRows()`
+without opening the window some other way first. The other three uiTest classes click through real
+popups and dialogs throughout and still need the workaround below.
 
 Check with `echo $XDG_SESSION_TYPE`. If it says `wayland`, either log in to a **GNOME on Xorg**
 session, or run the sandbox IDE on a dedicated X display (`Xvfb`) and point `runIdeForUiTests` at it:

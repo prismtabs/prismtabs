@@ -93,6 +93,7 @@ the full checklist above: it's the same asserted suite CI runs on Windows, not e
                                 # Allow (System Settings → Privacy & Security → Screen Recording);
                                 # this and all future runs need no further prompts
 ./gradlew uiTest \
+  --tests "io.prismtabs.uitest.PaywallUiTest" \
   --tests "io.prismtabs.uitest.TabGroupPaletteConfigurableUiTest" \
   --tests "io.prismtabs.uitest.TabGroupPopupUiTest" \
   --tests "io.prismtabs.uitest.TabGroupsToolWindowUiTest"
