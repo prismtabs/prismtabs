@@ -1,6 +1,6 @@
 # PrismTabs
 
-Chrome-style colour groups for IntelliJ editor tabs.
+Colour-coded tab groups for IntelliJ editor tabs.
 
 **Status: Phase 5 (hardening) in progress.** Features are complete through Phase 4: a **Tab Groups
 tool window** (right-hand stripe) lists every group with its colour dot, member count and collapsed
