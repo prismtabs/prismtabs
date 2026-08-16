@@ -164,24 +164,44 @@ tasks {
 
 intellijPlatformTesting {
     runIde {
+        // Opens the throwaway fixture project on startup so there's always exactly one editor tab
+        // to right-click — see README for why exactly one, not "the plugin's own project".
+        val fixtureProject =
+            layout.projectDirectory.dir("src/uiTest/resources/fixture-project").asFile.absolutePath
+
+        // Needed by every remote-robot sandbox regardless of platform chrome: a robot-server to
+        // drive, and no first-run walls (privacy policy, consents, tips, project trust) for it to
+        // get stuck behind. Both variants below listen on the same port, so the `uiTest` client
+        // needs no changes to target either — but that also means only one may run at a time.
+        val robotServerArgs = listOf(
+            "-Drobot-server.port=8082",
+            "-Djb.privacy.policy.text=<!--999.999-->",
+            "-Djb.consents.confirmation.enabled=false",
+            "-Didea.trust.all.projects=true",
+            "-Dide.show.tips.on.startup.default.value=false",
+            "-Didea.is.internal=true",
+        )
+
+        // See README "UI testing": run this in the background, THEN `./gradlew uiTest` against it.
         register("runIdeForUiTests") {
             task {
-                // Opens the throwaway fixture project on startup so there's always exactly one
-                // editor tab to right-click — see README for why exactly one, not "the plugin's
-                // own project".
-                args(layout.projectDirectory.dir("src/uiTest/resources/fixture-project").asFile.absolutePath)
+                args(fixtureProject)
                 jvmArgumentProviders += CommandLineArgumentProvider {
-                    listOf(
-                        "-Drobot-server.port=8082",
-                        "-Dide.mac.message.dialogs.as.sheets=false",
-                        "-Djb.privacy.policy.text=<!--999.999-->",
-                        "-Djb.consents.confirmation.enabled=false",
-                        "-Dide.mac.file.chooser.native=false",
+                    robotServerArgs + listOf(
+                        // Native macOS chrome that remote-robot cannot introspect or drive. The
+                        // screen-menu-bar pair is the one that actually bites: with the global
+                        // NSMenu in play the menu bar is not Swing, so nothing in the suite can
+                        // see it. See runIdeForUiTestsNativeMac below for the variant that leaves
+                        // it on precisely to cover that gap.
                         "-DjbScreenMenuBar.enabled=false",
                         "-Dapple.laf.useScreenMenuBar=false",
-                        "-Didea.trust.all.projects=true",
-                        "-Dide.show.tips.on.startup.default.value=false",
-                        "-Didea.is.internal=true",
+                        "-Dide.mac.file.chooser.native=false",
+                        // Vestigial on the 2024.2 baseline and kept only for older/newer hosts:
+                        // nothing in the platform reads this property any more, and
+                        // Messages.canShowMacSheetPanel()/isMacSheetEmulation() are both compiled
+                        // to a bare `iconst_0; ireturn` (confirmed by javap on app-client.jar), so
+                        // no Messages dialog can render as a native sheet whatever this says.
+                        "-Dide.mac.message.dialogs.as.sheets=false",
                     )
                 }
             }
@@ -189,5 +209,21 @@ intellijPlatformTesting {
                 robotServerPlugin(remoteRobotVersion)
             }
         }
+
+        // A second "native macOS chrome" variant (screen menu bar left ON, to drive ⌘, through the
+        // real menu layer) was built and measured here on 2026-08-16, and deliberately removed
+        // again — it cannot work, for a reason worth not rediscovering:
+        //
+        // With JetBrains' screen menu bar enabled, the IDE frame reports focusedWindow and
+        // activeWindow as IdeFrameImpl but **focusOwner as NONE**, so AWT has no component to
+        // deliver key events to and discards them. Measured with a global AWTEventListener: a real
+        // Robot mouse click still registered (mouse=1), every keystroke registered 0, and even a
+        // KeyEvent posted directly onto the system event queue registered 0 — while the identical
+        // control on the regular sandbox gave focusOwner=EditorComponentImpl and key=1. So the
+        // variant loses keyboard automation entirely and gains nothing testable.
+        //
+        // ⌘, is covered against this regular sandbox instead (MacSettingsShortcutUiTest): it is an
+        // ordinary keymap binding — `meta COMMA` -> ShowSettings, read live from the active
+        // "Mac OS X 10.5+" keymap — not something the screen menu bar owns.
     }
 }

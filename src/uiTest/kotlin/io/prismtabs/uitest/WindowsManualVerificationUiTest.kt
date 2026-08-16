@@ -38,6 +38,41 @@ class WindowsManualVerificationUiTest {
         File("build/reports/manual").apply { mkdirs() }.resolve(name).writeText(log.toString())
     }
 
+    /**
+     * Does this [IdeaFrame.pixelColorAtTabCenter] reading match [r]/[g]/[b] to within [tolerance]
+     * per channel?
+     *
+     * Deliberately a tolerance rather than the exact `contains("r=46,g=92,b=156")` string match
+     * this used to be: **macOS's screen-capture path is colour-managed and does not return the
+     * exact bytes that were painted.** Measured directly on macOS 26.6.1 (Apple Silicon) with no
+     * PrismTabs code in the picture at all — a bare `JWindow` filled with a known colour, read
+     * straight back via `Robot.getPixelColor` — 4 of 10 sampled colours came back shifted by 1–2
+     * per channel, and the rest exactly:
+     *
+     * ```
+     * blue   0x2E5C9C -> 0x2D5C9C   (-1 red)     green  0x1E6B3C -> 0x1F6B3B  (+1 red, -1 blue)
+     * grey   0x5F6368 -> 0x5F6369   (+1 blue)    cyan   0x156C77 -> 0x176C77  (+2 red)
+     * red / yellow / pink / purple and both IDE background controls: exact
+     * ```
+     *
+     * So the *selected Blue tab* reads `r=45,g=92,b=156` on macOS where Windows reports
+     * `r=46,g=92,b=156` — same painted colour, different capture pipeline. The old exact match
+     * therefore failed on macOS for a reason that has nothing to do with the plugin. (The
+     * unselected ~50% blend and the untinted control both happen to land on values macOS leaves
+     * alone, which is why only this one assertion tripped.)
+     *
+     * A tolerance of 3 is far tighter than the check needs to stay meaningful: an untinted tab is
+     * `r=30,g=31,b=34`, i.e. 16/61/122 away from Blue, so this cannot silently pass an untinted or
+     * wrongly-coloured tab. It only absorbs the capture pipeline's rounding.
+     */
+    private fun String.matchesChannelwise(r: Int, g: Int, b: Int, tolerance: Int = 3): Boolean {
+        val m = Regex("""r=(\d+),g=(\d+),b=(\d+)""").find(this) ?: return false
+        val (ar, ag, ab) = m.destructured
+        return kotlin.math.abs(ar.toInt() - r) <= tolerance &&
+            kotlin.math.abs(ag.toInt() - g) <= tolerance &&
+            kotlin.math.abs(ab.toInt() - b) <= tolerance
+    }
+
     @Test
     fun part1WalkthroughChecklist(remoteRobot: RemoteRobot) {
         try {
@@ -86,7 +121,8 @@ class WindowsManualVerificationUiTest {
                 remoteRobot.saveScreenshot("02b-assigned-preset-selected")
                 note("2b. Sample.kt selected pixel: $selectedPixel (expect full-strength Blue: dark 0x2E5C9C r=46,g=92,b=156, or light 0xAECBFA r=174,g=203,b=250)")
                 assertTrue(
-                    selectedPixel.contains("r=46,g=92,b=156") || selectedPixel.contains("r=174,g=203,b=250"),
+                    selectedPixel.matchesChannelwise(46, 92, 156) ||
+                        selectedPixel.matchesChannelwise(174, 203, 250),
                     "expected the selected Sample.kt tab to render Blue at full strength, got $selectedPixel",
                 )
 
