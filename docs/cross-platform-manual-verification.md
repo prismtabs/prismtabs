@@ -96,25 +96,129 @@ the full checklist above: it's the same asserted suite CI runs on Windows, not e
   --tests "io.prismtabs.uitest.PaywallUiTest" \
   --tests "io.prismtabs.uitest.TabGroupPaletteConfigurableUiTest" \
   --tests "io.prismtabs.uitest.TabGroupPopupUiTest" \
-  --tests "io.prismtabs.uitest.TabGroupsToolWindowUiTest"
+  --tests "io.prismtabs.uitest.TabGroupsToolWindowUiTest" \
+  --tests "io.prismtabs.uitest.MacSettingsShortcutUiTest"
 ```
+
+`MacSettingsShortcutUiTest` is the one addition to `ui-tests.yml`'s list, and deliberately so: it
+covers checklist item 7's ⌘, and `assumeTrue`-skips off macOS, so it belongs in this macOS command
+rather than in the Windows CI workflow where it would only ever report as skipped.
 
 Same `--tests` list as `ui-tests.yml`, for the same reason: `WindowsManualVerificationUiTest` (see
 below) needs a human-driven IDE restart between its two methods and isn't written to run as a single
-`uiTest` invocation. It's named for Windows because that's the only OS it's been run against so far,
-but nothing in it is Windows-specific — porting it to drive this same checklist on macOS, restart step
-included, is a reasonable next step rather than something blocked by platform.
+`uiTest` invocation. Despite the name, it now runs unmodified on macOS too — confirmed 2026-08-16,
+both methods, restart included (see the sign-off log). Nothing in it is Windows-specific; the name
+and its `TeamWindows` fixture group are historical.
 
 If the Allow prompt never appears (some macOS versions only prompt the *first* time a process asks,
 and a previously-denied grant has to be reset manually): `tccutil reset ScreenCapture` from a
 Terminal, then re-run. This is the normal, supported TCC flow — nothing here touches `TCC.db`
 directly or needs SIP disabled, which is exactly what makes it work where the CI approach can't.
 
+### Which permission actually blocks the run, and which app it attaches to
+
+Measured on the 2026-08-16 pass, and worth knowing before chasing a failure that looks like a broken
+locator:
+
+- **Accessibility, not Screen Recording, is what stops the suite.** Screen Recording governs
+  `Robot.getPixelColor`/`createScreenCapture`; *input injection* (`Robot.mouseMove`, clicks, keys)
+  is governed by the Accessibility grant. On this machine screen capture already worked while input
+  did not, and every one of the four `TabGroupPopupUiTest` cases failed identically with
+  `WaitForConditionTimeoutException: Failed to find 'ComponentFixture' by 'text 'Tab Group…''` —
+  i.e. the right-click never opened the tab's context menu. That is the *same* symptom as a genuine
+  locator bug, and the same one Wayland produces on Linux.
+- **Confirm it in one call rather than guessing**, since the two failure modes are visually
+  identical: read `MouseInfo.getPointerInfo()`, call `Robot.mouseMove` to a different point, read it
+  again. Unchanged means input is being dropped — measured `pointer.before=(810,53)`,
+  `requested=(947,144)`, `after=(810,53)` while the grant was missing, and an exact match once it
+  was in place. Note there is **no prompt** for this: `Robot` posts CGEvents, which macOS drops
+  silently rather than asking, so waiting for an "Allow" dialog that never comes is a dead end.
+- **The grant attaches to the *responsible* parent app, not to the IDE under test.** The sandbox IDE
+  is a bare JBR `java` binary out of the Gradle cache with no `.app` bundle of its own, so TCC
+  charges its requests to whichever bundled app owns the session that launched Gradle — check with
+  `ps -o pid=,ppid=` up the chain. Granting Accessibility to the *sandbox* IDE is not a thing you
+  can do, and looking for it in the list is wasted time.
+- **It is the *Gradle daemon's* ancestry that decides this, which makes it change under you.**
+  Daemons are long-lived, shared between runs, and get reparented to `launchd` when the shell that
+  spawned them exits — at which point there is no bundled ancestor at all and the grant silently
+  stops applying. Observed within one session on 2026-08-16: the suite went green through a daemon
+  whose chain was `IDE <- daemon <- IntelliJ IDEA.app`, and later failed with input dead through
+  `IDE <- daemon <- launchd`. Same machine, same code, same permissions UI. If a previously-green
+  run starts failing on every locator, check the chain before you touch the tests, and
+  `./gradlew --stop` to force a fresh daemon under the current shell.
+- **Granting a *running* app does not take effect until it is relaunched.** Accessibility is read at
+  process start, so ticking Terminal (or iTerm) in the list while it is open changes nothing for the
+  session already running inside it — confirmed here, where a previously-green
+  `TabGroupPopupUiTest` still failed after the grant. Quit and reopen the terminal app, then start a
+  fresh run. The path of least resistance is to run the suite from whichever app is *already*
+  granted rather than granting a new one mid-session.
+
+### macOS screen capture is colour-managed — do not assert exact RGB
+
+The Windows pass established that a live pixel read beats eyeballing a screenshot. On macOS there is
+a second-order catch: **`Robot.getPixelColor` does not return the bytes that were painted.** The
+capture path runs through the display's colour profile, and the round trip is near-identity but not
+identity.
+
+Measured with no PrismTabs code involved at all — a bare `JWindow` filled with a known colour, read
+straight back off the screen — 4 of 10 sampled colours came back shifted by 1–2 per channel:
+
+```
+blue   0x2E5C9C -> 0x2D5C9C  (-1 red)      green  0x1E6B3C -> 0x1F6B3B  (+1 red, -1 blue)
+grey   0x5F6368 -> 0x5F6369  (+1 blue)     cyan   0x156C77 -> 0x176C77  (+2 red)
+red / yellow / pink / purple, and the two IDE background controls: exact
+```
+
+The practical consequence: a selected Blue tab reads `r=45,g=92,b=156` on macOS where Windows
+reports `r=46,g=92,b=156` — same painted colour, different capture pipeline. This is not a rendering
+defect and not a repaint bug; the ~50% unselected blend (`r=37,g=61,b=94`) and the untinted control
+(`r=30,g=31,b=34`) both happen to land on values macOS leaves alone, which is why only the
+full-strength assertion tripped. `WindowsManualVerificationUiTest.matchesChannelwise` now compares
+per channel with a tolerance of 3 instead of matching the string exactly. That stays meaningful: an
+untinted tab is 16/61/122 away from Blue, two orders of magnitude outside the tolerance, so it can
+still never pass an untinted or wrongly-coloured tab.
+
+Corollary for anyone adding a pixel assertion: assert *channel-wise with a tolerance*, never
+`contains("r=..,g=..,b=..")`, or the test is Windows-only by accident.
+
 This doesn't replace the manual checklist pass above: `runIdeForUiTests` deliberately disables native
 sheets, the native file chooser, and the screen menu bar so `remote-robot` can drive them, which means
 this run never exercises what a real user actually sees for those three things. Run both when doing a
 full pre-release pass; the automated suite alone is enough for routine "did I break rendering"
 debugging.
+
+### Checklist item 3's "sheet" question is obsolete — the platform has no sheets
+
+Item 3 asks whether **New Tab Group** renders as a sheet attached to the main window. It cannot, on
+any sandbox flag, and this is settled by bytecode rather than observation (IC-2024.2,
+`lib/app-client.jar`, via `javap` per CLAUDE.md's recipe):
+
+- `Messages.canShowMacSheetPanel()` and `Messages.isMacSheetEmulation()` are both compiled to a bare
+  `iconst_0; ireturn` — hardcoded `false`, no property read, nothing to switch on.
+- `com.intellij.ui.mac.MacMessages` declares only `showMessageDialog`, `showOkMessageDialog` and
+  `showErrorDialog`. There is **no input-dialog entry point at all**, so
+  `Messages.showInputDialog` — what `TabGroupPopup` uses for New Tab Group — has no native path it
+  could take even if sheets existed.
+- The string `ide.mac.message.dialogs.as.sheets` appears in **no** platform jar. (It does appear in
+  `plugins/Kotlin/kotlinc/lib/kotlin-compiler.jar`, which shades an ancient intellij-core — not
+  live code, and a good way to fool a naive grep.)
+
+So the free-floating Swing dialog in `03-new-group-name-dialog.png` **is** what a real macOS user
+sees, and the automated pass's screenshot is faithful rather than an artifact of the test flags. The
+flag stays in `build.gradle.kts` only as harmless insurance for other host versions. Treat item 3 on
+macOS as "confirm the dialog is focused and Enter submits" — which the automated pass already
+asserts — and drop the sheet clause.
+
+**Item 7's ⌘, is now covered by `MacSettingsShortcutUiTest`** — the one macOS path the rest of the
+suite structurally cannot reach, since it goes through `ShowSettingsUtil` and would pass even if the
+shortcut were unbound. The test drives a real ⌘, keystroke, then asserts the Settings dialog opened
+and that this plugin's page is reachable in it. Verified 2026-08-16: passing in 10.6s, screenshot
+`09-cmd-comma-settings.png` showing **Tools › PrismTabs** with all 8 presets rendered. The binding
+it exercises reads `Mac OS X 10.5+` / `getActionIds(KeyStroke("meta COMMA"))` -> `[ShowSettings]`.
+
+It runs against the regular sandbox, so add it to any full-pass `--tests` list; it self-skips off
+macOS via `assumeTrue`. Note it needs a *granted* terminal like the rest of the suite — see the
+permission section above, which is exactly what delayed this one being run.
 
 ## Windows pass: driven by remote-robot, not by hand
 
@@ -184,4 +288,53 @@ Result:      PASS — all 8 checklist items confirmed. Swatch popup shows all 8 
              GradleJvmSupportMatrix error on this machine because its default `java` on PATH is JDK
              25, which this IDE build's version parser can't handle — harmless, and unrelated to
              io.prismtabs (confirmed absent from idea.log's PrismTabs-attributed entries).
+```
+
+```
+Date:        2026-08-16
+OS:          macOS 26.6.1 (Apple Silicon, arm64), Retina @ 2x, screen 1440x900, dpi 127
+IDE build:   IC-242.20224.300 (JBR 21.0.3)
+Theme(s):    dark (New UI "Dark" theme)
+Result:      PASS — all 8 checklist items confirmed, driven by remote-robot rather than by hand
+             (WindowsManualVerificationUiTest, both methods, unmodified apart from the pixel
+             tolerance noted below). Automated suite green too: PaywallUiTest (4),
+             TabGroupPaletteConfigurableUiTest (1), TabGroupPopupUiTest (4),
+             TabGroupsToolWindowUiTest (1) — 10/10, run twice, the second time against a
+             freshly restarted IDE. Fast `./gradlew test` suite: 42/42.
+
+             Item detail: all 8 presets present and legible in the swatch popup; assigning Blue
+             tinted the tab at full strength when selected (r=45,g=92,b=156 — see the
+             colour-management note above for why this is 46 on Windows and correct on both) and
+             at the documented ~50% blend when unselected (r=37,g=61,b=94 vs. an untinted tab's
+             r=30,g=31,b=34, both matching Windows exactly); the New Group name field had focus
+             immediately (typed and Enter-submitted with no prior click); rename/recolour
+             propagated to every member and active-group inheritance worked; Remove from Group
+             cleared the tint; the tool window listed membership, collapse/expand worked, and its
+             stripe icon and colour dots are crisp at 2x — visibly sharper than the Windows pass,
+             with the tint plainly visible in the screenshots rather than needing a pixel read;
+             Settings | Tools | PrismTabs rendered correctly with all 8 light/dark swatches and
+             Restore Defaults reverted a renamed preset; group name/colour/membership survived a
+             real restart (process killed and relaunched, with an explicit force-save first).
+             Screenshots: build/reports/manual/*.png.
+
+             No PrismTabs defects found. Three environment/harness-only observations, none of them
+             io.prismtabs issues:
+             (1) Robot input injection was initially dropped entirely — the Accessibility grant,
+                 not Screen Recording, is the gate; see "Which permission actually blocks the run".
+             (2) One test assertion was macOS-incompatible, not the plugin: the exact-RGB match on
+                 the selected tab, now a channel-wise tolerance. See the colour-management note.
+             (3) idea.log SEVEREs are all non-PrismTabs: the same GradleJvmSupportMatrix parser
+                 error the Windows entry records (this machine's default `java` on PATH is JDK 25),
+                 and TransactionGuardImpl "Write-unsafe context!" whose stack is pure platform save
+                 code (ProjectStoreImpl.doSave -> SaveSessionProducerManager -> VFS refresh) with
+                 zero io.prismtabs frames, blamed on "Robot server version: 0.11.23" — an artifact
+                 of the harness calling forceSaveSettings from a script thread, which a real user's
+                 save-on-exit does not do.
+
+             Nothing outstanding for macOS. Item 7's ⌘, keystroke was closed the same day by
+             MacSettingsShortcutUiTest (passing, 10.6s, screenshot 09-cmd-comma-settings.png:
+             Tools › PrismTabs, all 8 presets). Item 3's sheet clause was retired rather than
+             tested — the platform has no sheet code path at all (see "Checklist item 3's 'sheet'
+             question is obsolete"), so the dialog the pass already screenshotted is what a real
+             user sees.
 ```
