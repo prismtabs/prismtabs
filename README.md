@@ -217,18 +217,19 @@ impl-class dependency, not a hack around access control.
 ## Phase 2 result
 
 The real swatch popup (`io.prismtabs.ui.TabGroupPopup`) replaces Phase 1's hard-coded Red/Blue/
-Clear actions. Right-clicking a tab now shows: 8 Chrome-style preset dots, a separator, "Add to
-Group…" (nested — lists existing groups, each with its own dot), "New Group…" (nested — pick a
-colour, then name it), and "Remove from Group" (only when the tab is currently assigned). All of
-it is one `AssignTabGroupAction` on `EditorTabPopupMenu`, since the tree is data-driven and can't
-be expressed as a static `plugin.xml` `<group>`.
+Clear actions. Right-clicking a tab now shows: a "New Group" caption over 8 Chrome-style preset
+dots, a separator, "Add to Group…" (nested — lists existing groups, each with its own dot), and
+"Remove from Group" (only when the tab is currently assigned). All of it is one
+`AssignTabGroupAction` on `EditorTabPopupMenu`, since the tree is data-driven and can't be
+expressed as a static `plugin.xml` `<group>`.
 
-**Acceptance: passed**, verified by three `remote-robot` UI tests (`./gradlew uiTest` — see
-[UI testing](#ui-testing)) driving a real sandbox IDE end-to-end: a preset click assigns the
-shared colour group, "New Group…" prompts for a name and assigns the named group, and "Remove
-from Group" clears an assignment — all confirmed by reading back `TabGroupService` state through
-the running plugin, not by guessing at Swing internals. `./gradlew test` (the plain-JUnit suite,
-including `TabGroupServiceTest` updated for the `lightRgb`/`darkRgb` split below) also passes.
+**Acceptance: passed**, verified by `remote-robot` UI tests (`./gradlew uiTest` — see
+[UI testing](#ui-testing)) driving a real sandbox IDE end-to-end: a preset click prompts for a
+name pre-filled with the colour's label, a typed name wins over that default, cancelling the
+prompt creates nothing, and "Remove from Group" clears an assignment — all confirmed by reading
+back `TabGroupService` state through the running plugin, not by guessing at Swing internals.
+`./gradlew test` (the plain-JUnit suite, including `TabGroupServiceTest` updated for the
+`lightRgb`/`darkRgb` split below) also passes.
 Not covered by either suite: light-theme legibility of the palette, since verified separately — see
 [Palette](#palette).
 
@@ -309,7 +310,7 @@ already-in-sync components, which every field's own live-vs-bound comparison rea
 `TabGroupPaletteConfigurable` keeps a separate `original`/`edited` baseline and overrides
 `isModified`/`apply`/`reset` to account for that case — see the class's doc comment.
 
-`TabGroupPopup`'s three preset lists (`RootStep`'s quick-assign row, "New Group…", "Recolour…") all
+`TabGroupPopup`'s two preset lists (`RootStep`'s swatch row and "Recolour…") both
 read `effectivePresets()` — a small file-scoped helper calling `TabGroupPaletteService.presets()` —
 instead of `TabGroupPalette.PRESETS` directly, so a customised name/colour shows up immediately,
 with no signature changes needed anywhere the palette used to be threaded through.
@@ -325,14 +326,69 @@ separately, the same plain-JUnit split the rest of the service layer uses.
 
 The plan describes the popup's shape but leaves two behaviours to fill in:
 
-- **Clicking a top-level preset dot** doesn't prompt for a name — it assigns (creating on first
-  use) a shared, colour-named group (`id = "preset-<colour>"`, e.g. "Blue"), so repeated quick
-  clicks across files converge on one group per colour instead of spawning duplicates. This is the
-  fast path; "New Group…" is the deliberate, named path.
-- **"New Group…"'s name prompt** (`Messages.showInputDialog`) runs from the colour-pick step's
-  `getFinalRunnable()`, not inline in `onChosen()` — deferred until the popup has actually closed,
-  so the modal dialog doesn't race the popup's close animation. Cancelling the name prompt aborts
-  the whole flow; no group is created.
+- **One creation path, not two.** The plan sketched a quick-assign swatch row *and* a separate
+  nested "New Group…" step. That shipped first and was then merged: the swatch row is now itself
+  the New Group control, labelled by a captioned `ListSeparator` above it, and the "New Group…"
+  entry is gone. Two ways to make a group, differing only in whether you got to name it, was a
+  choice with no principle behind it — and it left the popup's most prominent control (the dots)
+  silently creating groups named after colours. Clicking a dot now prompts, pre-filled with that
+  colour's own label, so accepting the default costs one keystroke rather than a decision.
+  The trade is that repeat clicks on the same colour no longer converge on one shared group
+  (`quickAssign`'s old `id = "preset-<colour>"`); each mints a fresh `UUID`. Putting a second file
+  into an existing group is what "Add to Group…" is for, and that reading is now the only one.
+- **The name prompt** (`Messages.showInputDialog`) runs from `RootStep`'s `getFinalRunnable()`, not
+  inline in `onChosen()` — deferred until the popup has actually closed, so the modal dialog
+  doesn't race the popup's close animation. Cancelling the prompt aborts the whole flow; no group
+  is created and nothing is assigned.
+
+The caption is a captioned `ListSeparator` on the first entry rather than the step's own title,
+because the popup's title bar would label the *whole* tree — including "Add to Group…" and "Manage
+Groups…", which create nothing. That it renders at all above the top row is a platform detail worth
+recording: `GroupedItemsListRenderer.hasSeparator` suppresses a separator at index 0 **only when its
+caption is blank** (`iload_2; ifne` → `StringUtil.isEmptyOrSpaces`, checked by `javap` per CLAUDE.md's
+recipe), so a captioned one survives there while the bare `ListSeparator` above "Add to Group…"
+would not.
+
+It is also repainted. `SeparatorWithText` defaults its caption to `JBUI.CurrentTheme.Popup.
+separatorTextColor()` — `111,115,122` in the sandbox's dark theme, a deliberately muted grey suited
+to the incidental dividers it was built for ("Recent Files"), where the caption is a hint and the
+items are the content. Here the caption is the *only* label the eight swatches get and it names what
+clicking one does, so at that grey it reads as chrome and the eye skips it. `TabGroupPopup`'s
+`CaptionedListPopup` overrides `PopupListElementRenderer.createSeparator()` to set
+`UIUtil.getListForeground()` (`223,225,229`) instead — not an invented colour, but the exact call
+`GroupedElementsRenderer.List` makes for every item's own text, so the two track each other across
+themes. `GroupHeaderSeparator.paintComponent` does `g.setColor(getTextForeground())` immediately
+before `drawString`, so that field is precisely what gets painted. This is why the popup is built by
+constructing `ListPopupImpl` directly instead of calling `JBPopupFactory.createListPopup`: the
+factory returns that same class, but typed as a `ListPopup` with no hook for its renderer.
+
+The caption also gets more room beneath it than the platform's vgap leaves. Measured on the rendered
+popup, the swatch row sat 3px below the caption's glyphs where a nested step's title gets 11px above
+its first row — close enough to look accidental and far enough to read as crowding, one click apart
+in the same plugin. `CAPTION_BOTTOM_GAP` (8 unscaled px, through `JBUI.Borders` so it survives
+HiDPI) closes exactly that measured shortfall, bringing both to 11px.
+
+The awkward part is that `GroupedElementsRenderer` builds **one** separator component and reuses it
+for every row that has one, so widening it at creation would also have pushed "Add to Group…" off
+its own bare divider. The border is therefore set per row in `getListCellRendererComponent`, keyed
+on whether the separator currently carries a caption, with the platform's own border captured once
+beforehand (compounding it every pass would stack insets indefinitely). Reading the caption there is
+sound rather than lucky: `configureComponent` calls `setCaption` on *every* row unconditionally, and
+`getCaptionAboveOf` yields `""` both for a row with no separator and for a bare `ListSeparator()` —
+whose no-arg constructor delegates to `ListSeparator("")`, not null.
+
+`TabGroupPopupUiTest`'s `the New Group caption is painted at the list's own foreground` and `only the
+captioned separator gets extra room beneath it` lock both in. The first reads `textForeground` off
+the live `GroupHeaderSeparator` rather than sampling screenshot pixels. That distinction was learned
+the hard way: the caption is drawn through `UISettings.setupAntialiasing`, and LCD subpixel AA
+fringes glyph edges enough that a pixel-sampling check reported an identical value before *and*
+after the fix, while the component had genuinely gone from `111,115,122` to `223,225,229`.
+
+The second asserts on *both* halves of the per-row rule — heading widened, every uncaptioned row
+untouched — in one test, deliberately: check only the heading and the test still passes on the naive
+implementation it exists to rule out. Both tests were confirmed to fail without their fix, not
+merely to pass with it (the spacing one by pinning `CAPTION_BOTTOM_GAP` to 0, so it isolates the
+gap rather than the caption's existence).
 
 ## Phase 3 result
 
@@ -343,8 +399,8 @@ assigns any not-yet-grouped file to it. The swatch popup gained "Manage Groups�
 at least one group exists): pick a group, then Rename…/Recolour…/Mark as Active Group (or Clear
 Active Group)/Delete Group. Rename is `io.prismtabs.ui.RenameGroupDialog`, a small Kotlin UI DSL
 v2 dialog (`panel { row("Name:") { cell(nameField) } }`) per the plan — the one place in the tree
-that needs free text rather than a list choice. Recolour reuses the nested-list-step pattern
-already established by "New Group…", applying immediately and repainting every member via
+that needs free text rather than a list choice. Recolour is another nested list step over the same
+`effectivePresets()` the root swatch row uses, applying immediately and repainting every member via
 `VirtualFileManager.findFileByUrl`.
 
 **Acceptance: passed**, verified live in `runIdeForUiTests` (`IC-242.20224.300`) by a new
@@ -720,6 +776,17 @@ pass (`clicking a preset dot…` 3.153s, `New Group…` 8.063s, `Remove from Gro
 end-to-end test 22.083s, the Phase 4 collapse/expand test 9.582s) — `KeyboardFocusManager` reports the
 frame `active=true focused=true` throughout, and a `robot.rightClick` now measurably delivers 23 real
 `MouseEvent`s instead of Wayland's 0.
+
+Re-verified 2026-08-17 on the same Xvfb setup after the swatch popup's two creation paths were
+merged into one (see [Two design choices…](#two-design-choices-not-spelled-out-in-the-plan)):
+`TabGroupPopupUiTest`'s five cases (`clicking a preset dot prompts for a name…` 3.956s, `the name
+prompt assigns the typed name…` 7.362s, `cancelling the name prompt creates nothing` 3.732s,
+`Remove from Group…` 6.161s, the Phase 3 end-to-end test 21.263s) plus the Phase 4 collapse/expand
+test (10.110s) all pass. Note that `saveScreenshot`'s `Robot.createScreenCapture` still cannot be
+used from this desktop even with the IDE on `:99` — JDK 21 routes it to the xdg-desktop-portal, which
+answers for the *Wayland* session rather than the X display the IDE is on, so it returns the wrong
+screen. `RemoteRobotExtension`'s offscreen `Window.paint` capture is unaffected and is what to reach
+for when a popup needs photographing on Linux.
 
 ### What it actually took to get working (six real findings, not guesses)
 

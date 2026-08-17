@@ -7,6 +7,7 @@ import com.intellij.remoterobot.utils.waitFor
 import io.prismtabs.model.TabGroupPalette
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import java.time.Duration.ofSeconds
@@ -24,13 +25,73 @@ class TabGroupPopupUiTest {
         StepsLogger.init()
     }
 
+    /**
+     * The "New Group" caption must read at the same weight as the list's own items, not in the
+     * platform's muted `separatorTextColor`.
+     *
+     * Asserted against `UIUtil.getListForeground()` rather than a hardcoded RGB triple, because the
+     * point is *sameness*, not a particular colour: both sides move together across themes, so a
+     * literal would only pin this test to the sandbox's dark theme. Read off the live
+     * `GroupHeaderSeparator` rather than off screenshot pixels — the caption is drawn with
+     * `UISettings.setupAntialiasing`, and LCD subpixel AA fringes glyph edges enough that sampled
+     * pixels are not a trustworthy read of the colour actually set (measured: a screenshot-based
+     * check on this popup reported the *same* value before and after the fix, while the component
+     * genuinely went from `111,115,122` to `223,225,229`).
+     */
     @Test
-    fun `clicking a preset dot assigns the shared colour group`(remoteRobot: RemoteRobot) {
+    fun `the New Group caption is painted at the list's own foreground`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            openFile("Sample.kt")
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+
+            val (caption, listForeground) = remoteRobot.popupSeparatorAndListForeground()
+            assertEquals(listForeground, caption, "expected the caption to match the list foreground")
+        }
+    }
+
+    /**
+     * The "New Group" heading gets extra room beneath it, and the plain divider above
+     * "Add to Group…" does not.
+     *
+     * Asserted as one test because the two are a single risk: the renderer reuses **one** separator
+     * component across every row that has one, so widening it in the obvious place also pushes
+     * "Add to Group…" off its divider. A test that only checked the heading would pass on exactly
+     * the implementation this is guarding against.
+     */
+    @Test
+    fun `only the captioned separator gets extra room beneath it`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            openFile("Sample.kt")
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+
+            val insets = remoteRobot.popupSeparatorInsetsByCaption()
+            val heading = insets.filter { (caption, _) -> caption == "New Group" }.map { it.second }
+            val plain = insets.filter { (caption, _) -> caption.isBlank() }.map { it.second }
+
+            assertTrue(heading.isNotEmpty(), "no \"New Group\" caption in the popup at all, got $insets")
+            assertTrue(plain.isNotEmpty(), "no uncaptioned rows to compare against, got $insets")
+            assertTrue(
+                heading.min() > plain.max(),
+                "expected the \"New Group\" heading to sit on a larger bottom inset than every " +
+                    "uncaptioned row, got $insets",
+            )
+        }
+    }
+
+    @Test
+    fun `clicking a preset dot prompts for a name, pre-filled with the colour's label`(remoteRobot: RemoteRobot) {
         remoteRobot.idea {
             resetTabGroups()
             openFile("Sample.kt")
             remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
             remoteRobot.clickPopupItem("Blue")
+
+            dialog("New Tab Group") {
+                assertEquals("Blue", find<JTextFieldFixture>(JTextFieldFixture.byType()).text)
+                find<JButtonFixture>(JButtonFixture.byText("OK")).click()
+            }
 
             waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == "Blue" }
             assertEquals("Blue", groupNameFor("Sample.kt"))
@@ -38,21 +99,32 @@ class TabGroupPopupUiTest {
     }
 
     @Test
-    fun `New Group prompts for a name and assigns the named group`(remoteRobot: RemoteRobot) {
+    fun `the name prompt assigns the typed name, not the colour's`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            openFile("Sample.kt")
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Purple", name = "Auth")
+
+            assertEquals("Auth", groupNameFor("Sample.kt"))
+        }
+    }
+
+    /** Cancelling the prompt must abort the whole flow — no group, and no assignment either. */
+    @Test
+    fun `cancelling the name prompt creates nothing`(remoteRobot: RemoteRobot) {
         remoteRobot.idea {
             resetTabGroups()
             openFile("Sample.kt")
             remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
-            remoteRobot.clickPopupItem("New Group…")
-            remoteRobot.clickPopupItem("Purple")
+            remoteRobot.clickPopupItem("Red")
 
             dialog("New Tab Group") {
-                find<JTextFieldFixture>(JTextFieldFixture.byType()).text = "Auth"
-                find<JButtonFixture>(JButtonFixture.byText("OK")).click()
+                find<JButtonFixture>(JButtonFixture.byText("Cancel")).click()
             }
 
-            waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == "Auth" }
-            assertEquals("Auth", groupNameFor("Sample.kt"))
+            waitFor(ofSeconds(10)) { groupCount() == 0 }
+            assertNull(groupNameFor("Sample.kt"))
+            assertEquals(0, groupCount())
         }
     }
 
@@ -61,9 +133,7 @@ class TabGroupPopupUiTest {
         remoteRobot.idea {
             resetTabGroups()
             openFile("Sample.kt")
-            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
-            remoteRobot.clickPopupItem("Grey")
-            waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == "Grey" }
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Grey", name = "Grey")
 
             remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
             remoteRobot.clickPopupItem("Remove from Group")
@@ -83,14 +153,7 @@ class TabGroupPopupUiTest {
         remoteRobot.idea {
             resetTabGroups()
             openFile("Sample.kt")
-            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
-            remoteRobot.clickPopupItem("New Group…")
-            remoteRobot.clickPopupItem("Blue")
-            dialog("New Tab Group") {
-                find<JTextFieldFixture>(JTextFieldFixture.byType()).text = "StickyGroup"
-                find<JButtonFixture>(JButtonFixture.byText("OK")).click()
-            }
-            waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == "StickyGroup" }
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Blue", name = "StickyGroup")
 
             remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
             remoteRobot.clickPopupItem("Manage Groups…")

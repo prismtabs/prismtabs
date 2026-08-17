@@ -43,9 +43,10 @@ The plugin has no hardcoded keyboard shortcuts, no file choosers, and no OS-cond
 (checked: no `SystemInfo.isMac`/`isWindows` branching, no `JFileChooser`/`FileChooserFactory`
 calls) — so most of the risk is platform *chrome*, not plugin logic:
 
-- **Dialogs render as native sheets on macOS by default** (`New Tab Group`, `Rename Tab Group`).
-  `runIdeForUiTests` turns this off for testability; a real Mac user sees it. Confirm the sheet
-  looks right and the text field still receives focus and Enter still submits.
+- **Dialog chrome on macOS** (`New Tab Group`, `Rename Tab Group`). ~~Native sheets~~ — the platform
+  has no sheet code path for these at all, established by bytecode below ("Checklist item 3's
+  'sheet' question is obsolete"), so both are plain Swing dialogs everywhere. What is still worth
+  confirming per-OS is that the text field receives focus and Enter submits.
 - **Font rendering / HiDPI.** Retina on Mac, and Windows' own DPI scaling, both differ from Linux.
   The palette's colour dots (`ColorSwatchIcon`) and the tool window's icon are the things most
   likely to look soft or misaligned if this bites.
@@ -61,13 +62,15 @@ calls) — so most of the risk is platform *chrome*, not plugin logic:
 Record IDE build, OS version, and theme (dark/light) tested. Repeat for macOS and Windows; Linux is
 already covered continuously by local development.
 
-1. **Swatch popup** — right-click a tab → **Tab Group…** opens; all 8 presets are visible and
-   legible in both dark and light theme.
-2. **Assign a preset** — click a preset dot → tab background tints; unselected tabs are still
-   legible (the ~50%-strength blend documented in README "Measured constraint").
-3. **New Group** — **New Group…** → pick a colour → the name dialog appears. **On macOS, confirm
-   it renders as a sheet attached to the main window**, the text field has focus immediately, and
-   both Enter and clicking OK submit it.
+1. **Swatch popup** — right-click a tab → **Tab Group…** opens; the **New Group** caption sits
+   above the swatch row, and all 8 presets are visible and legible in both dark and light theme.
+2. **Assign a preset** — click a preset dot, accept the pre-filled name → tab background tints;
+   unselected tabs are still legible (the ~50%-strength blend documented in README "Measured
+   constraint").
+3. **New Group** — clicking a preset dot pops the name dialog, pre-filled with that colour's own
+   label. Confirm the text field has focus immediately and that both Enter and clicking OK submit
+   it; cancelling creates no group. (No sheet check — see "Checklist item 3's 'sheet' question is
+   obsolete" below.)
 4. **Rename / Recolour / active group** — via **Manage Groups…**, rename a group and recolour it;
    confirm every member tab picks up both changes, and that opening a new file while a group is
    marked active colours it automatically.

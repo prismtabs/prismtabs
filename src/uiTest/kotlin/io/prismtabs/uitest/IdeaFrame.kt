@@ -106,6 +106,26 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     )
 
     /**
+     * How many tab groups exist. Distinct from [groupNameFor], which only reports the group a
+     * *file* is in: a flow can create an orphan group without assigning anything, and only a count
+     * catches that.
+     */
+    fun groupCount(): Int = callJs<Int>(
+        """
+        importPackage(com.intellij.openapi.wm.impl)
+        importPackage(com.intellij.ide.plugins)
+        importPackage(com.intellij.openapi.extensions)
+
+        const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+        const project = frameHelper.getProject()
+        const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
+        const service = project.getService(java.lang.Class.forName('io.prismtabs.service.TabGroupService', true, pluginLoader))
+        service.groups().size()
+        """,
+        true,
+    )
+
+    /**
      * Deletes every tab group and clears the active group, so a test starts from a known-empty
      * state. **Necessary, not hygiene theatre:** assignments persist to the fixture project's
      * `.idea/tabGroups.xml` and survive both the test run and an IDE restart, so without this a
@@ -464,8 +484,9 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
 
     /**
      * Assigns [path] to a new group named [groupName] straight through [TabGroupService.assign] —
-     * the same call the popup's own "New Group…" ends in — rather than by clicking through
-     * [io.prismtabs.ui.TabGroupPopup].
+     * the same call the popup's own swatch-click-then-name flow ends in — rather than by clicking
+     * through [io.prismtabs.ui.TabGroupPopup]. Contrast [createGroupViaPopup], which drives that
+     * real flow for tests whose subject *is* the popup.
      *
      * Deliberate, and not only for speed: the popup path needs `java.awt.Robot` mouse input, which
      * does not reach the IDE under Wayland (see README "These tests need an X11 display"), so a

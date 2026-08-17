@@ -1,8 +1,6 @@
 package io.prismtabs.uitest
 
 import com.intellij.remoterobot.RemoteRobot
-import com.intellij.remoterobot.fixtures.JButtonFixture
-import com.intellij.remoterobot.fixtures.JTextFieldFixture
 import com.intellij.remoterobot.utils.waitFor
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -30,7 +28,7 @@ class TabGroupsToolWindowUiTest {
                 openFile("Sample.kt")
                 openFile("Second.kt")
 
-                assignNewGroup(remoteRobot, this, "Sample.kt", colour = "Green", name = "CollapseMe")
+                remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Green", name = "CollapseMe")
                 remoteRobot.openTabGroupPopupOn(this, "Second.kt")
                 remoteRobot.clickPopupItem("Add to Group…")
                 remoteRobot.clickPopupItem("CollapseMe")
@@ -75,16 +73,5 @@ class TabGroupsToolWindowUiTest {
                 hideTabGroupsToolWindow()
             }
         }
-    }
-
-    private fun assignNewGroup(remoteRobot: RemoteRobot, ideaFrame: IdeaFrame, path: String, colour: String, name: String) {
-        remoteRobot.openTabGroupPopupOn(ideaFrame, path)
-        remoteRobot.clickPopupItem("New Group…")
-        remoteRobot.clickPopupItem(colour)
-        ideaFrame.dialog("New Tab Group") {
-            find<JTextFieldFixture>(JTextFieldFixture.byType()).text = name
-            find<JButtonFixture>(JButtonFixture.byText("OK")).click()
-        }
-        waitFor(ofSeconds(10)) { ideaFrame.groupNameFor(path) == name }
     }
 }

@@ -89,7 +89,7 @@ src/main/kotlin/<pkg>/
     TabGroupColorProvider.kt // implements EditorTabColorProvider
   ui/
     ColorSwatchIcon.kt       // small filled-circle Icon, JBUI-scaled
-    TabGroupPopup.kt         // BaseListPopupStep tree: swatches + New group… + Add to group… + Remove
+    TabGroupPopup.kt         // BaseListPopupStep tree: New Group swatches + Add to group… + Remove
     TabGroupsToolWindow.kt   // Phase 4: the group list / collapse UI
   action/
     AssignTabGroupAction.kt  // the single entry point on EditorTabPopupMenu
@@ -144,12 +144,19 @@ Goal: prove that a hard-coded colour actually appears on a tab **in Andrzej's ID
 - `ColorSwatchIcon`: a filled circle, `JBUI.scale`-aware, with a subtle border so pale swatches are
   visible on light themes.
 - `TabGroupPopup`: `BaseListPopupStep<PopupEntry>` where `getIconFor()` returns the swatch. Top level:
-  - 8 preset colours (Chrome's palette: grey, blue, red, yellow, green, pink, purple, cyan) — as
-    `JBColor(light, dark)` pairs so both themes stay legible;
+  - a `New Group` caption (a captioned `ListSeparator` on the first entry) over 8 preset colours
+    (Chrome's palette: grey, blue, red, yellow, green, pink, purple, cyan) — as `JBColor(light, dark)`
+    pairs so both themes stay legible. Clicking one prompts for a name, pre-filled with the colour's
+    label;
   - separator;
   - `Add to group…` → nested `PopupStep` listing existing groups (each with its colour dot);
-  - `New group…` → nested step: pick colour, then inline-edit name;
-  - `Remove from group` (only when `hasSubstep == false` and the file is assigned).
+  - `Remove from group` (only when the file is currently assigned).
+
+  **Superseded:** this section originally had the swatch row assign immediately *and* a separate
+  `New group…` → nested colour step → name prompt. Both shipped, then merged into the single path
+  above — see the README's "Two design choices not spelled out in the plan". The list here is still
+  the *Phase 2* tree; Phase 3 adds a fifth top-level entry, `Manage Groups…`, shown once at least
+  one group exists.
 - Wire it to a single `AssignTabGroupAction` on `EditorTabPopupMenu`.
 - **Required:** override `getActionUpdateThread()` on every `AnAction` (return `BGT` unless you touch
   Swing). Missing this throws/warns on modern platforms.
