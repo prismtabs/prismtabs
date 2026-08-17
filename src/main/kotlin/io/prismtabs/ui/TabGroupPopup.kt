@@ -6,13 +6,17 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.InputValidator
 import com.intellij.openapi.ui.MessageDialogBuilder
 import com.intellij.openapi.ui.Messages
-import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.ui.popup.ListPopupStep
 import com.intellij.openapi.ui.popup.ListSeparator
 import com.intellij.openapi.ui.popup.PopupStep
 import com.intellij.openapi.ui.popup.util.BaseListPopupStep
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.ui.JBColor
+import com.intellij.ui.popup.list.ListPopupImpl
+import com.intellij.ui.popup.list.PopupListElementRenderer
+import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtil
 import io.prismtabs.license.PrismTabsLicense
 import io.prismtabs.model.PresetColor
 import io.prismtabs.model.TabGroup
@@ -21,20 +25,111 @@ import io.prismtabs.service.TabGroupPaletteService
 import io.prismtabs.service.TabGroupService
 import io.prismtabs.service.TabRepaint
 import java.awt.Color
+import java.awt.Component
 import java.util.UUID
+import javax.swing.BorderFactory
 import javax.swing.Icon
+import javax.swing.JList
+import javax.swing.ListCellRenderer
+import javax.swing.border.Border
 
 /**
  * The Chrome-style swatch popup: `AssignTabGroupAction`'s single entry point. Tree shape per the
- * plan's Phase 2 section — 8 preset dots, a separator, "Add to Group…" / "New Group…" (both
- * `hasSubstep`), and "Remove from Group" (only when the file is currently assigned).
+ * plan's Phase 2 section, with the plan's separate "New Group…" substep folded into the dots
+ * themselves — a "New Group" caption over 8 preset dots, a separator, "Add to Group…"
+ * (`hasSubstep`), "Manage Groups…" (`hasSubstep`, only once a group exists), and "Remove from
+ * Group" (only when the file is currently assigned).
  */
 internal object TabGroupPopup {
 
     fun show(project: Project, file: VirtualFile, dataContext: DataContext) {
         val service = project.service<TabGroupService>()
         val step = RootStep(project, file, service)
-        JBPopupFactory.getInstance().createListPopup(step).showInBestPositionFor(dataContext)
+        CaptionedListPopup(project, step).showInBestPositionFor(dataContext)
+    }
+}
+
+/**
+ * A [ListPopupImpl] that paints a separator's caption at the same weight as the list's own items.
+ *
+ * The platform's `SeparatorWithText` sets its caption to `JBUI.CurrentTheme.Popup.separatorTextColor()`
+ * — a deliberately muted grey, right for the incidental dividers it was built for ("Recent Files",
+ * "Previous Searches"), where the caption is a hint and the items are the content. [RootStep]'s
+ * "New Group" caption is not that: it is the only label the eight swatches ever get, and it names
+ * what clicking one *does*. At the platform's grey it reads as chrome and the eye skips it. It is
+ * repainted in `UIUtil.getListForeground()` — not an invented colour, but the exact call
+ * `GroupedElementsRenderer.List` makes for every item's own text (checked with `javap` per
+ * CLAUDE.md's recipe), so the caption tracks the theme wherever the items do. Everything else the
+ * platform decides — bold face, the divider line — is left alone.
+ *
+ * It also gives a *captioned* separator more room beneath it. The platform's own vgap leaves the
+ * swatch row crowding the caption — measured on the rendered popup, 3px of clear space below the
+ * glyphs, against the 11px a nested step's title gets above its first row. That difference is
+ * legible as sloppiness when the two sit one click apart, so [CAPTION_BOTTOM_GAP] closes it and the
+ * two headers in this plugin breathe alike.
+ *
+ * Constructing [ListPopupImpl] directly rather than via `JBPopupFactory.createListPopup` is what
+ * makes [getListElementRenderer] reachable: the factory returns this same class, but as a
+ * `ListPopup` with no hook for its renderer.
+ *
+ * Building a fresh renderer per call, rather than caching one in a field, matches the platform's own
+ * implementation and is the only constructor-safe option: `createContent()` calls this from within
+ * the superclass constructor, before any subclass field initialiser has run.
+ */
+private class CaptionedListPopup(project: Project, step: ListPopupStep<*>) : ListPopupImpl(project, step) {
+
+    override fun getListElementRenderer(): ListCellRenderer<*> =
+        object : PopupListElementRenderer<Any>(this) {
+
+            /**
+             * The platform's own separator border, captured before this class first widens it.
+             *
+             * Needed because `GroupedElementsRenderer` builds **one** separator component and reuses
+             * it for every row that has one — so the border cannot simply be widened once at
+             * creation without also pushing "Add to Group…" away from the bare divider above it,
+             * and it cannot be compounded on each pass without stacking up indefinitely. Captured
+             * lazily on first render rather than in [createSeparator]: that runs from the
+             * superclass constructor, before this field's initialiser.
+             */
+            private var platformSeparatorBorder: Border? = null
+
+            // Return type inferred rather than spelled out: `createSeparator` is the live extension
+            // point and is not itself deprecated, but the `SeparatorWithText` it is declared to
+            // return is (a bare `@Deprecated`, no removal schedule — the platform still returns its
+            // non-deprecated `GroupHeaderSeparator` subclass from here). Naming it would import a
+            // deprecation this override has no way to avoid and no reason to advertise.
+            override fun createSeparator() =
+                super.createSeparator().apply { textForeground = UIUtil.getListForeground() }
+
+            override fun getListCellRendererComponent(
+                list: JList<out Any>,
+                value: Any?,
+                index: Int,
+                isSelected: Boolean,
+                cellHasFocus: Boolean,
+            ): Component {
+                val rendered = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
+                // After super, the shared separator carries this row's caption, which is what
+                // decides whether it is a heading (widen) or a plain divider (leave alone).
+                val separator = mySeparatorComponent
+                val platform = platformSeparatorBorder ?: separator.border.also { platformSeparatorBorder = it }
+                separator.border = if (separator.caption.isNullOrBlank()) {
+                    platform
+                } else {
+                    BorderFactory.createCompoundBorder(platform, JBUI.Borders.emptyBottom(CAPTION_BOTTOM_GAP))
+                }
+                return rendered
+            }
+        }
+
+    private companion object {
+        /**
+         * Extra space below a separator's caption, in unscaled px — `JBUI.Borders` scales it, so it
+         * holds at HiDPI. 8 is not a taste call: it is the measured shortfall between this caption's
+         * 3px of clear space and the 11px a nested step's title gets, so the two match rather than
+         * merely both being "roomy".
+         */
+        const val CAPTION_BOTTOM_GAP = 8
     }
 }
 
@@ -49,7 +144,6 @@ private fun effectivePresets(): List<PresetColor> = service<TabGroupPaletteServi
 private sealed class Entry {
     class Preset(val preset: PresetColor) : Entry()
     data object AddToGroup : Entry()
-    data object NewGroup : Entry()
     data object ManageGroups : Entry()
     data object RemoveFromGroup : Entry()
 }
@@ -57,7 +151,6 @@ private sealed class Entry {
 private fun textFor(entry: Entry): String = when (entry) {
     is Entry.Preset -> entry.preset.label
     Entry.AddToGroup -> "Add to Group…"
-    Entry.NewGroup -> "New Group…"
     Entry.ManageGroups -> "Manage Groups…"
     Entry.RemoveFromGroup -> "Remove from Group"
 }
@@ -73,24 +166,37 @@ private class RootStep(
     private val service: TabGroupService,
 ) : BaseListPopupStep<Entry>("", buildEntries(service, file)) {
 
+    private var finalRunnable: Runnable? = null
+
     override fun getTextFor(value: Entry): String = textFor(value)
 
     override fun getIconFor(value: Entry): Icon? = iconFor(value)
 
-    override fun getSeparatorAbove(value: Entry): ListSeparator? =
-        if (value == Entry.AddToGroup) ListSeparator() else null
+    /**
+     * The "New Group" caption over the swatch row is a captioned [ListSeparator] on the *first*
+     * entry rather than the step's own title: the popup's title bar would label the whole tree,
+     * including "Add to Group…" and "Manage Groups…", which create nothing. `GroupedItemsListRenderer`
+     * suppresses a separator at index 0 only when its caption is blank, so a captioned one does
+     * render above the top item — the bare [ListSeparator] before "Add to Group…" still would not.
+     */
+    override fun getSeparatorAbove(value: Entry): ListSeparator? = when {
+        value === values.firstOrNull() -> ListSeparator("New Group")
+        value == Entry.AddToGroup -> ListSeparator()
+        else -> null
+    }
 
     override fun hasSubstep(value: Entry): Boolean =
-        value == Entry.AddToGroup || value == Entry.NewGroup || value == Entry.ManageGroups
+        value == Entry.AddToGroup || value == Entry.ManageGroups
 
     override fun onChosen(selectedValue: Entry, finalChoice: Boolean): PopupStep<*>? =
         when (selectedValue) {
             is Entry.Preset -> {
-                quickAssign(project, file, service, selectedValue.preset)
+                finalRunnable = Runnable {
+                    promptForNameAndCreate(project, file, service, selectedValue.preset)
+                }
                 PopupStep.FINAL_CHOICE
             }
             Entry.AddToGroup -> AddToGroupStep(project, file, service)
-            Entry.NewGroup -> NewGroupColorStep(project, file, service)
             Entry.ManageGroups -> ManageGroupsStep(project, service)
             Entry.RemoveFromGroup -> {
                 service.clear(file.url)
@@ -100,12 +206,13 @@ private class RootStep(
             }
         }
 
+    override fun getFinalRunnable(): Runnable? = finalRunnable
+
     private companion object {
         fun buildEntries(service: TabGroupService, file: VirtualFile): List<Entry> {
             val entries = mutableListOf<Entry>()
             entries += effectivePresets().map { Entry.Preset(it) }
             entries += Entry.AddToGroup
-            entries += Entry.NewGroup
             if (service.groups().isNotEmpty()) entries += Entry.ManageGroups
             if (service.groupFor(file.url) != null) entries += Entry.RemoveFromGroup
             return entries
@@ -131,32 +238,6 @@ private class AddToGroupStep(
         TabGroupNotifier.notifyChanged(project)
         return PopupStep.FINAL_CHOICE
     }
-}
-
-/**
- * "New Group…"'s first step: pick a colour. The name prompt runs from [getFinalRunnable] rather
- * than inline in [onChosen] — deferring the modal `Messages.showInputDialog` until after this
- * popup has actually closed avoids a dialog racing the popup's own close animation.
- */
-private class NewGroupColorStep(
-    private val project: Project,
-    private val file: VirtualFile,
-    private val service: TabGroupService,
-) : BaseListPopupStep<PresetColor>("New Group", effectivePresets()) {
-
-    private var finalRunnable: Runnable? = null
-
-    override fun getTextFor(value: PresetColor): String = value.label
-
-    override fun getIconFor(value: PresetColor): Icon =
-        ColorSwatchIcon(JBColor(value.light, value.dark))
-
-    override fun onChosen(selectedValue: PresetColor, finalChoice: Boolean): PopupStep<*>? {
-        finalRunnable = Runnable { promptForNameAndCreate(project, file, service, selectedValue) }
-        return PopupStep.FINAL_CHOICE
-    }
-
-    override fun getFinalRunnable(): Runnable? = finalRunnable
 }
 
 /** "Manage Groups…"'s step: every existing group, each opening [GroupActionsStep]. */
@@ -186,7 +267,7 @@ private sealed class GroupAction {
 
 /**
  * Per-group actions reached from [ManageGroupsStep]. Rename and Delete both pop a modal — same
- * [getFinalRunnable] deferral as [NewGroupColorStep], for the same reason (avoid racing the
+ * [getFinalRunnable] deferral as [RootStep]'s preset click, for the same reason (avoid racing the
  * popup's close animation). Recolour instead opens [RecolorStep], a further list step with no
  * modal involved, so it can apply and repaint straight from `onChosen`.
  */
@@ -324,20 +405,18 @@ internal fun repaintFiles(project: Project, fileUrls: Collection<String>) {
     fileUrls.forEach { url -> vfm.findFileByUrl(url)?.let { TabRepaint.request(project, it) } }
 }
 
-private fun quickAssign(project: Project, file: VirtualFile, service: TabGroupService, preset: PresetColor) {
-    val id = "preset-${preset.id}"
-    val group = service.groups().find { it.id == id } ?: TabGroup(
-        id = id,
-        name = preset.label,
-        lightRgb = preset.light.rgb and 0xFFFFFF,
-        darkRgb = preset.dark.rgb and 0xFFFFFF,
-        order = service.groups().size,
-    )
-    service.assign(file.url, group)
-    TabRepaint.request(project, file)
-    TabGroupNotifier.notifyChanged(project)
-}
-
+/**
+ * The popup's single group-creation path, reached by clicking a preset dot. The name field is
+ * pre-filled with the colour's own label, so accepting the default is one extra keystroke rather
+ * than a decision — the swatch row stays fast for people who only want a colour tag, while anyone
+ * who wants "Auth" instead of "Blue" gets to say so before the group exists.
+ *
+ * Every call mints a fresh `UUID`, so two files given the same colour land in two *distinct*
+ * groups. That is the intended reading of "New Group": putting a second file into an existing
+ * group is what "Add to Group…" is for.
+ *
+ * Cancelling the prompt aborts the whole flow; no group is created and nothing is assigned.
+ */
 private fun promptForNameAndCreate(
     project: Project,
     file: VirtualFile,

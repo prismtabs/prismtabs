@@ -16,7 +16,7 @@ import io.prismtabs.service.TabGroupPaletteService
 
 /**
  * Phase 5's settings page: lets the user rename and recolour the 8 preset hues that
- * [TabGroupPopup]'s quick-assign row, "New Group…" and "Recolour…" steps offer, persisted via the
+ * [TabGroupPopup]'s "New Group" swatch row and "Recolour…" step offer, persisted via the
  * application-level [TabGroupPaletteService] (see that class's doc for why app-level).
  *
  * `BoundSearchableConfigurable` (UI DSL v2), not manual `isModified`/`apply`/`reset`: each row's two
@@ -52,8 +52,8 @@ internal class TabGroupPaletteConfigurable :
         dialogPanel = panel {
             row {
                 comment(
-                    "Colours offered by the tab group popup's quick-assign row, “New Group…” " +
-                        "and “Recolour…”. Changes apply to newly assigned or recoloured " +
+                    "Colours offered by the tab group popup's “New Group” swatch row and " +
+                        "“Recolour…”. Changes apply to newly assigned or recoloured " +
                         "groups; existing groups keep their own colour until recoloured.",
                 )
             }

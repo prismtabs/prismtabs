@@ -92,6 +92,12 @@ class WindowsManualVerificationUiTest {
                 }
                 note("1. Swatch popup — missing presets: $missingPresets (empty = all 8 found)")
                 assertTrue(missingPresets.isEmpty(), "missing presets: $missingPresets")
+                // The captioned ListSeparator above the swatch row — the only thing that tells a
+                // first-time user what clicking a dot is about to do, so it is worth asserting on
+                // the platforms this file exists to check rather than trusting the screenshot.
+                val caption = remoteRobot.popupList().findAllText("New Group").isNotEmpty()
+                note("1b. \"New Group\" caption above the swatch row present: $caption")
+                assertTrue(caption, "expected a \"New Group\" caption above the swatch row")
                 Keyboard(remoteRobot).escape()
 
                 // --- 2. Assign a preset: selected vs. unselected legibility -----------------
@@ -102,8 +108,14 @@ class WindowsManualVerificationUiTest {
                 // message for the full trail). A pixel read is the only check that can't be
                 // fooled by how muted the colour looks to a human eye.
                 openFile("Second.kt")
+                // Accepting the pre-filled name with an explicit OK click, not Enter: whether the
+                // field is focused the instant the dialog renders is item 3's subject, and this
+                // step must not depend on it.
                 remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
                 remoteRobot.clickPopupItem("Blue")
+                dialog("New Tab Group") {
+                    find<JButtonFixture>(JButtonFixture.byText("OK")).click()
+                }
                 waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == "Blue" }
 
                 selectTab("Second.kt")
@@ -128,7 +140,6 @@ class WindowsManualVerificationUiTest {
 
                 // --- 3. New Group: name field has focus immediately, Enter submits ---------
                 remoteRobot.openTabGroupPopupOn(this, "Second.kt")
-                remoteRobot.clickPopupItem("New Group…")
                 remoteRobot.clickPopupItem("Yellow")
                 dialog("New Tab Group") {}
                 remoteRobot.saveScreenshot("03-new-group-name-dialog")
