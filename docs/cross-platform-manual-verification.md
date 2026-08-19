@@ -256,6 +256,26 @@ Two findings worth recording, both about *how* to check this pass rather than ab
   fair test — confirmed live: without it, a real assignment made moments earlier read back as
   unassigned after the "restart," which looked exactly like a persistence bug until the missing save
   was the actual explanation.
+- **That force-save has to be dispatched off the EDT with `ModalityState.nonModal()`, or it
+  silently saves nothing.** Found on the 2026-08-19 Windows pass, and the most expensive kind of
+  harness bug: part 1 reported PASS while writing no `.idea/tabGroups.xml` at all, and part 2 then
+  read every assignment back as `null` — presenting exactly like a persistence bug in the plugin.
+  `TransactionGuardImpl` allows model changes only from a *write-safe* modality, and its
+  constructor registers exactly one (`ModalityState.nonModal()`); a `remote-robot` script runs
+  under `ModalityState:{[JobProviderWithOwnerContext@…]}`, which is not it. The save then dies in
+  `FileBasedStorage.getVirtualFile` → `RefreshSessionImpl.<init>` → `assertWriteSafeContext`, and
+  the platform logs it as a bare `WARN - StoreUtil - Save settings failed` **without propagating
+  anything to the caller**. Two things make it hide: passing the modality is useless from the EDT,
+  because `ApplicationImpl.invokeAndWait` runs inline via `runIntendedWriteActionOnCurrentThread`
+  and only reaches `wrapLaterInvocation` (which establishes the write-safe context) on the off-EDT
+  branch; and the failing VFS refresh is only needed when the storage file does **not exist yet**,
+  so any sandbox where `tabGroups.xml` already existed saved cleanly and hid the whole thing. Hence
+  `runJs(..., runInEdt = false)` plus an explicit `ModalityState.nonModal()` — see
+  `IdeaFrame.forceSaveSettings`'s doc comment. **When re-testing this, delete
+  `src/uiTest/resources/fixture-project/.idea/tabGroups.xml` and restart the sandbox IDE first**,
+  or the first-write path the bug lives on is never exercised. Note that path is covered by the
+  root `.gitignore`'s `.idea/`, so a fresh clone starts without it every time — which is to say the
+  broken case was the *default* one, and a machine that had run this pass before was the lucky one.
 
 ## Sign-off log
 
@@ -333,6 +353,14 @@ Result:      PASS — all 8 checklist items confirmed, driven by remote-robot ra
                  zero io.prismtabs frames, blamed on "Robot server version: 0.11.23" — an artifact
                  of the harness calling forceSaveSettings from a script thread, which a real user's
                  save-on-exit does not do.
+                 **Correction (2026-08-19): (3)'s TransactionGuardImpl half was not harmless.**
+                 That stack is the force-save aborting outright — see the "dispatched off the EDT
+                 with ModalityState.nonModal()" finding above. It stayed invisible here only
+                 because this sandbox's .idea/tabGroups.xml already existed, so the save had no new
+                 file to create and succeeded anyway; item 8 above is therefore still genuinely
+                 verified on macOS, but it passed one deleted file away from a false PASS. It is
+                 still true that the stack carries zero io.prismtabs frames and that this is a
+                 harness bug rather than a plugin one — only "harmless" was wrong.
 
              Nothing outstanding for macOS. Item 7's ⌘, keystroke was closed the same day by
              MacSettingsShortcutUiTest (passing, 10.6s, screenshot 09-cmd-comma-settings.png:
@@ -340,4 +368,54 @@ Result:      PASS — all 8 checklist items confirmed, driven by remote-robot ra
              tested — the platform has no sheet code path at all (see "Checklist item 3's 'sheet'
              question is obsolete"), so the dialog the pass already screenshotted is what a real
              user sees.
+```
+
+```
+Date:        2026-08-19
+OS:          Windows 11 Pro (10.0.22000.2538)
+IDE build:   IC-242.20224.300 (JBR 21.0.3)
+Theme(s):    dark (New UI "Dark" theme), DPI 120 (125% Windows scaling), screen 1536x864
+Result:      PASS — first Windows pass covering the merged swatch-popup group-creation flow
+             (commit 694cf43, untested on Windows before this). Automated suite green:
+             PaywallUiTest (4), TabGroupPaletteConfigurableUiTest (1), TabGroupPopupUiTest (7),
+             TabGroupsToolWindowUiTest (1) — 13/13, run twice, the second time after the harness
+             fix below. Fast `./gradlew build` (compile + plain-JUnit): 42/42.
+             All 8 checklist items confirmed via WindowsManualVerificationUiTest, both methods,
+             with a real process kill-and-relaunch between them.
+
+             The two new regression tests for this commit both pass here: the "New Group" caption
+             is painted at the list's own foreground, and only the captioned separator gets extra
+             room beneath it. Both assert *relatively* (caption vs. UIUtil.getListForeground(),
+             heading inset vs. every uncaptioned row) rather than against fixed pixel values, which
+             is why neither is sensitive to this machine's 125% scaling — worth keeping that way.
+             Screenshot 01-swatch-popup.png confirms the intended layout visually: caption above
+             the 8 dots, "Add to Group…" below on its own bare divider, all legible at 125%.
+
+             Item detail: all 8 presets present and legible; assigning Blue tinted the tab at full
+             strength when selected (r=46,g=92,b=156) and at the documented ~50% blend when
+             unselected (r=37,g=61,b=94 vs. an untinted tab's r=30,g=31,b=34) — identical to the
+             2026-08-09 Windows numbers and matching macOS within the documented capture tolerance;
+             the New Group dialog was pre-filled with the colour's label, had focus immediately
+             (typed and Enter-submitted with no prior click) and named the group from what was
+             typed; rename/recolour propagated to every member and active-group inheritance worked;
+             Remove from Group cleared the tint; the tool window listed membership, collapse/expand
+             worked, icons and dots crisp at 125%; Settings | Tools | PrismTabs rendered and
+             Restore Defaults reverted a renamed preset; group name/colour/membership survived a
+             real restart. Screenshots: build/reports/manual/*.png.
+
+             No PrismTabs defects found. One real harness defect found and fixed, and it is the
+             reason this pass took three attempts:
+             (1) IdeaFrame.forceSaveSettings was silently saving nothing. Part 1 reported PASS
+                 while writing no .idea/tabGroups.xml at all, and part 2 then read every assignment
+                 back as null — which presents exactly like a persistence bug in the plugin and is
+                 not one. Root cause is the write-safe-modality rule; see the "dispatched off the
+                 EDT with ModalityState.nonModal()" finding above for the full mechanism, and note
+                 the correction it forces on the 2026-08-16 macOS entry's observation (3), which
+                 recorded this same stack as harmless. Fixed by runJs(..., runInEdt = false) plus
+                 an explicit ModalityState.nonModal(); verified by deleting tabGroups.xml,
+                 restarting the sandbox, and re-running both parts — the file is now written on the
+                 first-write path and idea.log has zero "Save settings failed" entries afterwards.
+             (2) Environment-only, not a PrismTabs issue: the IDE shows a "launched with a script
+                 launcher ('bin\idea.bat')" notification in every screenshot — that is how
+                 runIdeForUiTests starts the sandbox, unrelated to the plugin.
 ```

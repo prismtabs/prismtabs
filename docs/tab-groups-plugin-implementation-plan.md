@@ -224,7 +224,8 @@ tinting is invisible (§2.4).
   licence-verification module and its call sites (one per paid feature, not a single gate) are done;
   the gates stay inert until `plugin.xml` gains a `<product-descriptor>`, which is deliberately
   deferred until the actual release date is known. The cross-platform manual verification pass is
-  still outstanding.
+  now done on macOS and Windows; see
+  [cross-platform manual verification](cross-platform-manual-verification.md)'s sign-off log.
 
 ---
 
