@@ -109,9 +109,9 @@ rather than in the Windows CI workflow where it would only ever report as skippe
 
 Same `--tests` list as `ui-tests.yml`, for the same reason: `WindowsManualVerificationUiTest` (see
 below) needs a human-driven IDE restart between its two methods and isn't written to run as a single
-`uiTest` invocation. Despite the name, it now runs unmodified on macOS too — confirmed 2026-08-16,
-both methods, restart included (see the sign-off log). Nothing in it is Windows-specific; the name
-and its `TeamWindows` fixture group are historical.
+`uiTest` invocation. Despite the name, it now runs unmodified on macOS too — confirmed 2026-08-16
+and again 2026-08-19, both methods, restart included (see the sign-off log). Nothing in it is
+Windows-specific; the name and its `TeamWindows` fixture group are historical.
 
 If the Allow prompt never appears (some macOS versions only prompt the *first* time a process asks,
 and a previously-denied grant has to be reset manually): `tccutil reset ScreenCapture` from a
@@ -141,14 +141,31 @@ locator:
   charges its requests to whichever bundled app owns the session that launched Gradle — check with
   `ps -o pid=,ppid=` up the chain. Granting Accessibility to the *sandbox* IDE is not a thing you
   can do, and looking for it in the list is wasted time.
-- **It is the *Gradle daemon's* ancestry that decides this, which makes it change under you.**
-  Daemons are long-lived, shared between runs, and get reparented to `launchd` when the shell that
-  spawned them exits — at which point there is no bundled ancestor at all and the grant silently
-  stops applying. Observed within one session on 2026-08-16: the suite went green through a daemon
+- **It is the *Gradle daemon's* ancestry that decides this, which makes it change under you** —
+  but the live `ppid` chain is *not* the thing to read it off. Daemons are long-lived, shared
+  between runs, and get reparented to `launchd`, at which point `ps -o ppid=` shows no bundled
+  ancestor at all. Observed within one session on 2026-08-16: the suite went green through a daemon
   whose chain was `IDE <- daemon <- IntelliJ IDEA.app`, and later failed with input dead through
-  `IDE <- daemon <- launchd`. Same machine, same code, same permissions UI. If a previously-green
-  run starts failing on every locator, check the chain before you touch the tests, and
-  `./gradlew --stop` to force a fresh daemon under the current shell.
+  `IDE <- daemon <- launchd`. Same machine, same code, same permissions UI.
+
+  **Corrected on the 2026-08-19 macOS pass: `<- launchd` on its own does not predict a failure.**
+  Every run of that pass — 14/14 automated cases plus both halves of the driven walkthrough, every
+  one green — went through a chain that read `IDE(1671) <- daemon(1257) <- launchd(1)` from the
+  first `ps` to the last. The one thing known to differ from the failing 2026-08-16 case is
+  *provenance*, not ppid: this daemon was started by a `./gradlew` invocation from a Terminal.app
+  shell that stayed alive for the whole pass, whereas a daemon that has outlived the session that
+  spawned it has no granted app behind it. The natural explanation is that TCC resolves the
+  responsible app once, at exec time, so later reparenting cannot revoke it — but treat that as
+  inference, not measurement: `launchctl procinfo <pid>` is what prints the recorded responsible
+  process and it needs root, so the attribution itself stayed a black box on both passes.
+
+  So: `./gradlew --stop` before a pass, to guarantee the daemon is one *this* shell started, is
+  still exactly the right habit — just don't read a `<- launchd` chain afterwards as evidence that
+  it failed. **Prove it with the pointer probe instead**, which costs one call and answers the
+  actual question (see the bullet above): the 2026-08-19 pass ran `MouseInfo.getPointerInfo()` ->
+  `Robot.mouseMove` -> read again from a throwaway `java InputProbe.java` in the same shell before
+  starting the IDE, got `before=(1010,284) requested=(1147,375) after=(1147,375)`, and knew input
+  was live before a single test had run.
 - **Granting a *running* app does not take effect until it is relaunched.** Accessibility is read at
   process start, so ticking Terminal (or iTerm) in the list while it is open changes nothing for the
   session already running inside it — confirmed here, where a previously-green
@@ -276,6 +293,63 @@ Two findings worth recording, both about *how* to check this pass rather than ab
   or the first-write path the bug lives on is never exercised. Note that path is covered by the
   root `.gitignore`'s `.idea/`, so a fresh clone starts without it every time — which is to say the
   broken case was the *default* one, and a machine that had run this pass before was the lucky one.
+
+## verifyPlugin was red, and had been for a while
+
+Not a cross-platform finding — `verifyPlugin` is a static bytecode check whose result cannot vary
+by host OS, which is exactly why `build.yml` runs it once rather than in the matrix. It is recorded
+here because this pass is what surfaced it: running "all the tests" on real hardware included the
+one task nobody had run locally in weeks.
+
+`.github/workflows/build.yml`'s `verify-plugin` job had failed on **every** push since at least
+2026-08-08 while all three `build` matrix legs stayed green. The failure was a single
+`OVERRIDE_ONLY_API_USAGES` problem: `PrismTabsLicense.showRegisterDialog` invoked
+`AnAction.actionPerformed(AnActionEvent)` directly, and that method is `@ApiStatus.OverrideOnly`.
+That category is in `build.gradle.kts`'s `failureLevel` deliberately — only `INTERNAL_API_USAGES`
+was dropped, and only for `TabRepaint.queueUpdateFile` — so the build failed as designed.
+
+Fixed by going through the platform's own entry point,
+`ActionUtil.invokeAction(action, dataContext, place, inputEvent, onDone)`, which is present on the
+242 floor. It is a better call quite apart from the verifier: it runs the action's `update` via
+`lastUpdateAndCheckDumb` and performs the action only if it enabled itself, where a bare
+`actionPerformed` fires a disabled action regardless. It also builds its event with the
+non-deprecated `createFromInputEvent`, retiring the deprecated `AnActionEvent.createFromDataContext`
+call the old code made.
+
+One warning remains and is unavoidable at this floor: `invokeAction` is undeprecated on 242 but
+deprecated from 243 on, in favour of `ActionUtil.performAction(..., ActionUiKind)` — which only
+exists from 243. Measured across the verifier matrix: 0 deprecation findings on IU-242, 1 on each
+of IU-243/251/252/253/261/262. `DEPRECATED_API_USAGES` is not in `failureLevel`, so this is a note,
+not a failure — the same accepted trade-off `CaptionedListPopup` already makes for
+`SeparatorWithText`. Switch to `performAction` on the day the compile floor moves to 243.
+
+After the fix, `./gradlew verifyPlugin` is green across all seven IDEs it resolves
+(IU-242.26775.15, 243.28141.41, 251.29188.72, 252.28539.97, 253.33813.55, 261.27258.48,
+262.9437.185), with zero override-only findings anywhere in the reports.
+
+## Light theme: what the 2026-08-19 spot-check actually establishes
+
+Checklist item 1 asks for the swatch popup "in both dark and light theme", and no pass — Linux,
+Windows or macOS — had ever run the light half. It was covered here by a **throwaway** `uiTest`
+class, written for this pass and deleted afterwards rather than left in the suite: it flips the
+sandbox to the platform's default light theme via
+`LafManager.setCurrentUIThemeLookAndFeel(getDefaultLightLaf())` + `updateUI()` (all confirmed on the
+242 jars with `javap`), re-runs the popup/tint/tool-window/settings checks, and flips back. Its
+numbers are in the sign-off entry above.
+
+Two things to know before repeating it:
+
+- **The screenshots are partly stale, and that is the theme switch, not a rendering defect.** A
+  runtime `LafManager` swap repaints what gets rebuilt — the popup, the Settings dialog, the tab
+  strip, the editor, the status bar all come back light — but leaves the main toolbar, title bar
+  and project tree painted dark in `light-01`/`light-02b`. A real user switching theme through
+  Settings does not see this. So read those screenshots for the popup and the tabs, and take the
+  rest of the frame as an artifact; the **pixel reads and the component-level colour reads are the
+  evidence**, exactly as the "do not trust a screenshot" finding above already argues for dark.
+- **A permanent version needs the restore in a `finally`.** The throwaway restores the dark theme
+  on its happy path only. Left in the suite as written, one failed assertion would strand the
+  sandbox in light theme and poison every later test in the same session — `LafManager` is
+  application-global, the same hazard `restoreRegisterDialog` already documents for `ActionManager`.
 
 ## Sign-off log
 
@@ -418,4 +492,89 @@ Result:      PASS — first Windows pass covering the merged swatch-popup group-
              (2) Environment-only, not a PrismTabs issue: the IDE shows a "launched with a script
                  launcher ('bin\idea.bat')" notification in every screenshot — that is how
                  runIdeForUiTests starts the sandbox, unrelated to the plugin.
+```
+
+```
+Date:        2026-08-19
+OS:          macOS 26.6.2 (Apple Silicon, arm64), Retina @ 2x, screen 1440x900, dpi 127
+IDE build:   IC-242.20224.300 (JBR 21.0.3), plugin 1.2.1-SNAPSHOT
+Theme(s):    dark (New UI "Dark" theme) for the full pass; light spot-checked separately, below
+             — the first time any pass has covered checklist item 1's "and light theme" half
+Result:      PASS — first macOS pass covering the merged swatch-popup group-creation flow (commit
+             694cf43, which post-dates the 2026-08-16 macOS entry by a day and had only ever been
+             verified on Linux and Windows) and the first macOS run of the forceSaveSettings fix
+             (commit e5d0bdf, found on Windows). Automated suite green: PaywallUiTest (4),
+             TabGroupPaletteConfigurableUiTest (1), TabGroupPopupUiTest (7),
+             TabGroupsToolWindowUiTest (1), MacSettingsShortcutUiTest (1) — 14/14. Fast
+             `./gradlew build` (compile + plain-JUnit): 42/42. All 8 checklist items confirmed via
+             WindowsManualVerificationUiTest, both methods, with a real process kill-and-relaunch
+             between them.
+
+             e5d0bdf verified on the path it was written for, not just incidentally: this pass
+             deleted .idea/tabGroups.xml *before* launching the sandbox, exactly as the
+             "dispatched off the EDT with ModalityState.nonModal()" finding instructs, so the
+             force-save had to create the file rather than overwrite one. It did — a 961-byte
+             tabGroups.xml appeared at part 1's forceSaveSettings, part 2 read both assignments
+             back as TeamWindows after the kill, and idea.log has zero "Save settings failed" and
+             zero "Write-unsafe context!" entries for the whole session. That closes the gap the
+             2026-08-16 entry's own correction flagged: macOS item 8 had passed one deleted file
+             away from a false PASS, and now passes on the previously-broken branch.
+
+             694cf43's two regression tests both pass here, and neither needed a Retina-specific
+             adjustment — the caption-colour test compares against UIUtil.getListForeground() and
+             the spacing test compares the captioned separator's inset against every uncaptioned
+             row, so both are scale-independent by construction (same reason they were insensitive
+             to Windows' 125% scaling). Screenshot 01-swatch-popup.png shows the intended layout at
+             2x: "New Group" caption at full item weight above the 8 dots, clear space beneath it,
+             "Add to Group…" below on its own bare divider.
+
+             Item detail: all 8 presets present and legible; assigning Blue tinted the tab at full
+             strength when selected (r=45,g=92,b=156 — the documented macOS colour-managed -1 red
+             against Windows' r=46, and identical to the 2026-08-16 macOS reading) and at the
+             documented ~50% blend when unselected (r=37,g=61,b=94 vs. an untinted tab's
+             r=30,g=31,b=34, both matching Windows exactly); the New Group dialog was pre-filled
+             with the colour's label, had focus immediately (typed "FocusTest" and Enter-submitted
+             with no prior click) and named the group from what was typed; rename/recolour
+             propagated to every member and active-group inheritance worked; Remove from Group
+             cleared the tint; the tool window listed TeamWindows with 2 tabs, collapse closed its
+             tabs and marked the row collapsed, expand reopened them, and its stripe icon and
+             colour dots are crisp at 2x; Settings | Tools | PrismTabs rendered all 8 presets with
+             their light/dark hex swatches and Restore Defaults reverted a renamed preset; ⌘, is
+             covered by MacSettingsShortcutUiTest (passing, 9.3s). Screenshots:
+             build/reports/manual/*.png.
+
+             Light theme, spot-checked (see "Light theme" above for how, and for what the
+             screenshots do and do not prove): all 8 presets present and legible; the "New Group"
+             caption still matched the list foreground exactly (both 0,0,0 at light, against
+             223,225,229 at dark — the point of asserting sameness rather than a literal, now
+             demonstrated rather than argued); the caption kept its 8px bottom inset while every
+             uncaptioned row stayed at 0; Blue rendered r=175,g=203,b=250 selected against the
+             painted light preset 0xAECBFA = 174,203,250 (the same +1 capture shift documented
+             above) and r=214,g=228,b=252 unselected against an untinted tab's plain white
+             255,255,255, so the ~50% blend stays clearly distinguishable on a light background
+             too; the tool window listed the group and the settings page rendered all 8 rows with
+             both hex swatches, the pale light ones still separated from white by ColorSwatchIcon's
+             border. Screenshots: build/reports/manual/light-*.png.
+
+             No PrismTabs defects found. Four environment/harness-only observations, none of them
+             io.prismtabs issues:
+             (1) The daemon-ancestry rule recorded on 2026-08-16 does not hold as written — every
+                 green run here went through `IDE <- daemon <- launchd`. See the correction in
+                 "Which permission actually blocks the run".
+             (2) Screenshot 08-after-restart.png carries an "IDE error occurred" balloon. It is the
+                 GradleJvmSupportMatrix parser error the Windows and 2026-08-16 macOS entries both
+                 already record (`Caused by: java.lang.IllegalArgumentException: 25`, this
+                 machine's default `java` on PATH being JDK 25); zero io.prismtabs frames in the
+                 stack. Worth knowing that it renders as a visible red balloon on macOS, so it
+                 looks alarming in an otherwise clean screenshot.
+             (3) Two SlowOperations SEVEREs, both blamed on the Kotlin plugin and both raised while
+                 the Settings dialog enumerated configurables for item 7
+                 (KotlinScriptingSettingsConfigurable.<init> ->
+                 ScriptTemplatesFromDependenciesProvider -> FilenameIndex on the EDT). Zero
+                 io.prismtabs frames.
+             (4) Out of scope for this checklist but found while running everything on this
+                 machine: `./gradlew verifyPlugin` was failing, and had been red in CI on every
+                 push since at least 2026-08-08 (the `build` matrix was green throughout, which is
+                 why it went unnoticed). Cause and fix are unrelated to either platform — see
+                 "verifyPlugin was red" above.
 ```

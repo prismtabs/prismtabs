@@ -20,9 +20,10 @@ the Islands-theme bug — are now closed; see [Checked: all three open items](#c
 verified live, alongside the Plugin Verifier CI matrix and palette settings that shipped earlier.
 [Marketplace publishing prep](#marketplace-publishing-prep) has the paid-plugin groundwork laid so
 far — vendor metadata, plugin icon, and a tested licence-verification module — and the deliberately
-short list of what's still left before the actual upload, including the
-[cross-platform verification pass](docs/cross-platform-manual-verification.md): Windows is now
-signed off (2026-08-09), macOS is still open.
+short list of what's still left before the actual upload. The
+[cross-platform verification pass](docs/cross-platform-manual-verification.md) is no longer on that
+list: Windows and macOS are both signed off against the current code, on 2026-08-19, each pass
+covering the merged swatch-popup flow and the `forceSaveSettings` fix under it.
 
 ---
 
@@ -538,6 +539,18 @@ in `build.gradle.kts`) runs as a dedicated `verify-plugin` job in CI, and the
 [Constraints that are not going away](#constraints-that-are-not-going-away) section below is that
 checklist item directly. This section closes the one piece that hadn't been checked anywhere yet:
 **dynamic plugin loading.**
+
+**A gap the matrix itself had, closed 2026-08-19:** the `verify-plugin` job was *failing* on every
+push from at least 2026-08-08, and stayed unnoticed because the three-OS `build` matrix beside it
+was green the whole time. One `OVERRIDE_ONLY_API_USAGES` problem caused it —
+`PrismTabsLicense.showRegisterDialog` invoked `AnAction.actionPerformed` directly, which is
+`@ApiStatus.OverrideOnly`. It now goes through `ActionUtil.invokeAction`, the platform's own entry
+point on the 2024.2 floor, which also runs the action's `update` first instead of firing a possibly
+disabled action, and retires a deprecated `AnActionEvent.createFromDataContext` call along the way.
+`verifyPlugin` is green across all seven IDEs it resolves (242 → 262). Full write-up, including the
+one deprecation warning that is unavoidable until the compile floor moves to 243, in
+[cross-platform manual verification](docs/cross-platform-manual-verification.md)'s "verifyPlugin was
+red" section.
 
 `plugin.xml` has no `<component>` entries — only `<projectListeners>`, `<applicationConfigurable>`
 and one action — which is what dynamic-plugin-safety requires structurally. That was true by
