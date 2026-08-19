@@ -423,28 +423,58 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
 
     /**
      * Forces every open project's and the application's persistent state to disk right now, via
-     * `StoreUtil.saveDocumentsAndProjectsAndApp` (confirmed `public static final` by `javap` on
-     * `app-client.jar`, 2024.2) — the same call IntelliJ's own normal shutdown path uses. Needed
-     * because a *forced* process kill (simulating a restart for the manual verification pass,
-     * since there's no in-process "click Restart IDE" for `remote-robot` to drive) skips the normal
-     * shutdown sequence entirely: confirmed live that `TabGroupState`'s `@Storage`-backed save is
-     * debounced, not synchronous per-mutation, so a bare `Stop-Process -Force` right after a flurry
-     * of assignments can lose everything since the last periodic flush. A real user closing the IDE
+     * `StoreUtil.saveDocumentsAndProjectsAndApp` (confirmed `public static final` by `javap`,
+     * 2024.2) — the same call IntelliJ's own normal shutdown path uses. Needed because a *forced*
+     * process kill (simulating a restart for the manual verification pass, since there's no
+     * in-process "click Restart IDE" for `remote-robot` to drive) skips the normal shutdown
+     * sequence entirely: confirmed live that `TabGroupState`'s `@Storage`-backed save is debounced,
+     * not synchronous per-mutation, so a bare `Stop-Process -Force` right after a flurry of
+     * assignments can lose everything since the last periodic flush. A real user closing the IDE
      * normally would trigger this same save automatically; simulating that restart with a forced
      * kill needs to trigger it explicitly first.
+     *
+     * **`runInEdt = false` plus an explicit `ModalityState.nonModal()` is the load-bearing part**,
+     * and is not interchangeable with the obvious `runJs(..., true)` + bare `invokeAndWait(task)`
+     * this used to be. `TransactionGuardImpl` only treats a *write-safe* modality as allowed, and
+     * its constructor registers exactly one: `ModalityState.nonModal()` (bytecode: `nonModal()` ->
+     * `myWriteSafeModalities.put(..., true)`, the map's only unconditional entry). A `remote-robot`
+     * script runs under `ModalityState:{[JobProviderWithOwnerContext@...]}`, which is not it — so
+     * the save reaches `FileBasedStorage.getVirtualFile` -> `refreshAndFindFileByNioFile` ->
+     * `RefreshSessionImpl.<init>` -> `assertWriteSafeContext` and dies with
+     * `AssertionError: Write-unsafe context!`, logged by the platform as a bare
+     * `WARN - StoreUtil - Save settings failed` and **not** propagated to the caller.
+     *
+     * Passing the modality is only half of it: `ApplicationImpl.invokeAndWait(Runnable,
+     * ModalityState)` opens with `if (isDispatchThread()) runIntendedWriteActionOnCurrentThread(r)`
+     * — running inline, ignoring the argument entirely — and only reaches
+     * `TransactionGuardImpl.wrapLaterInvocation(r, modality)`, the thing that actually establishes
+     * the write-safe context, on the *off-EDT* branch (both confirmed by `javap -c`). So the script
+     * has to start off the EDT for the requested modality to mean anything.
+     *
+     * Why this went unnoticed until 2026-08-19: the assert fires from the VFS *refresh* that
+     * `FileBasedStorage` only needs when the storage file does not exist yet, so it aborts the save
+     * precisely on the first write of `.idea/tabGroups.xml` — and any sandbox where that file
+     * already existed saved cleanly and hid the bug. Measured here: with the file absent, part 1 of
+     * [io.prismtabs.uitest.WindowsManualVerificationUiTest] reported PASS while writing nothing at
+     * all, and part 2 then read every assignment back as `null` — indistinguishable from a genuine
+     * persistence bug in the plugin, which is what makes this worth the comment. The macOS pass on
+     * 2026-08-16 logged this same stack and filed it as harmless harness noise; it was not.
      */
     fun forceSaveSettings() {
         runJs(
             """
             importClass(com.intellij.configurationStore.StoreUtil)
             importClass(com.intellij.openapi.application.ApplicationManager)
+            importClass(com.intellij.openapi.application.ModalityState)
 
-            const task = new Runnable({
+            // `var` rather than `const`, matching the convention the rest of this suite's Rhino
+            // scripts follow — see RemoteRobotExtension's doc for the scoping failure behind it.
+            var task = new Runnable({
                 run: function() { StoreUtil.saveDocumentsAndProjectsAndApp(true) }
             })
-            ApplicationManager.getApplication().invokeAndWait(task)
+            ApplicationManager.getApplication().invokeAndWait(task, ModalityState.nonModal())
             """,
-            true,
+            false,
         )
     }
 

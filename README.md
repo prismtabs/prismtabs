@@ -661,30 +661,28 @@ Done so far, none of it published anywhere:
 `<product-descriptor release-date="">` has to be the actual date this version ships, which doesn't
 exist yet — writing today's date would just be a fabricated fact sitting in the repo. Adding the tag
 is also the thing that would make the IDE start treating `runIde`/`uiTest` as running an unlicensed
-paid plugin, which would block exactly the plugin functionality the pending [cross-platform manual
-verification pass](docs/cross-platform-manual-verification.md) needs to exercise — which is why the
-gating call sites above are written to key off the tag's presence rather than being held back
-alongside it.
+paid plugin, which would block the plugin functionality that the completed
+[cross-platform manual verification pass](docs/cross-platform-manual-verification.md) needed to
+exercise — which is why the gating call sites above are written to key off the tag's presence rather
+than being held back alongside it.
 
 **What's left, roughly in order:**
 
-1. Finish the [cross-platform manual verification pass](docs/cross-platform-manual-verification.md)
-   — Windows passed 2026-08-09; the macOS sign-off log entry is still empty.
-2. Pick the real release date, bump `pluginVersion` off `-SNAPSHOT` (currently `0.8.2-SNAPSHOT`) to
+1. Pick the real release date, bump `pluginVersion` off `-SNAPSHOT` (currently `1.2.1-SNAPSHOT`) to
    the first paid release's version, and add `<product-descriptor code="PPRISMTABS"
    release-date="YYYYMMDD" release-version="10"/>` to `plugin.xml` — which is also what arms the
    already-wired gating call sites. Re-run `runIde` once afterwards to see the free tier as an
    unsubscribed user would, since that's the first build where the gates do anything.
-3. Create the JetBrains Marketplace vendor profile, set it to **trader** status, and submit banking
+2. Create the JetBrains Marketplace vendor profile, set it to **trader** status, and submit banking
    details (Sales Info tab) — external, account-level, only Andrzej can do this.
-4. Upload the plugin (first release, not an update), then in **Sales Info → Add to Marketplace**:
+3. Upload the plugin (first release, not an update), then in **Sales Info → Add to Marketplace**:
    confirm/register product code `PPRISMTABS`, choose **Freemium**, then the **Yearly Subscription
    without a Fallback License** scheme, set the price to $10/year, leave the trial at its 30-day
    default.
-5. Write the actual listing content — tagline, full description, ≥1200×760 screenshots, tags. Not
+4. Write the actual listing content — tagline, full description, ≥1200×760 screenshots, tags. Not
    started; `plugin.xml`'s `<description>` is a reasonable first draft of the prose but the
    screenshots and tags still need doing.
-6. Submit for review (JetBrains' stated turnaround is about two business days).
+5. Submit for review (JetBrains' stated turnaround is about two business days).
 
 Not applicable here: the "inform your users in advance" notice
 ([`inform-your-users-in-advance.html`](https://plugins.jetbrains.com/docs/marketplace/inform-your-users-in-advance.html))
