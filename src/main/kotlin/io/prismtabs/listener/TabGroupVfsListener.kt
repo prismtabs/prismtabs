@@ -1,14 +1,19 @@
 package io.prismtabs.listener
 
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
+import com.intellij.openapi.vfs.newvfs.events.VFileDeleteEvent
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import com.intellij.openapi.vfs.newvfs.events.VFileMoveEvent
 import com.intellij.openapi.vfs.newvfs.events.VFilePropertyChangeEvent
+import io.prismtabs.model.TabGroup
 import io.prismtabs.service.TabGroupNotifier
 import io.prismtabs.service.TabGroupService
+import io.prismtabs.ui.promptToDeleteEmptied
 import io.prismtabs.ui.repaintFiles
 
 /**
@@ -22,6 +27,9 @@ import io.prismtabs.ui.repaintFiles
  * `oldPath`/`newPath`, the same construction `VirtualFile.getUrl()` itself uses — not read off
  * `VirtualFile.url` before/after, since [BulkFileListener.after] only sees the file in its
  * post-change state.
+ *
+ * Deletion is the third VFS event that touches an assignment, and is handled in [before] — see
+ * that override's doc for why it cannot wait for [after] like the other two.
  *
  * Registered via `<projectListeners>` in plugin.xml against
  * [com.intellij.openapi.vfs.VirtualFileManager.VFS_CHANGES]. That topic lives on the *application*
@@ -39,6 +47,41 @@ import io.prismtabs.ui.repaintFiles
  * already does, with no extra synchronisation. `VFS_CHANGES_BG` would run off-EDT instead.
  */
 internal class TabGroupVfsListener(private val project: Project) : BulkFileListener {
+
+    /**
+     * Deletion, handled in [before] rather than [after] because that is the only side of the write
+     * action where the file being deleted is still valid enough to take a URL from.
+     *
+     * A deleted file's assignment has to go: left behind, it is what makes a group read as "1 tab"
+     * in the tool window while pointing at a file that no longer exists — and dropping the last one
+     * leaves the group genuinely empty, which is what the prompt is for.
+     *
+     * That prompt is deferred with `invokeLater`: [before] runs inside the write action performing
+     * the deletion, and a modal cannot be shown from there. `nonModal` so it waits for whatever
+     * dialog is driving the deletion (Safe Delete, for one) to close instead of stacking on top of
+     * it, and `project.disposed` so a project closed in the meantime drops it.
+     */
+    override fun before(events: List<VFileEvent>) {
+        val service = project.service<TabGroupService>()
+        val removedUrls = mutableListOf<String>()
+        val emptiedGroups = mutableListOf<TabGroup>()
+
+        for (event in events) {
+            if (event !is VFileDeleteEvent) continue
+            val removal = service.clearTree(event.file.url)
+            removedUrls += removal.removedUrls
+            emptiedGroups += removal.emptiedGroups
+        }
+
+        if (removedUrls.isEmpty()) return
+        TabGroupNotifier.notifyChanged(project)
+        if (emptiedGroups.isEmpty()) return
+        ApplicationManager.getApplication().invokeLater(
+            { promptToDeleteEmptied(project, service, emptiedGroups) },
+            ModalityState.nonModal(),
+            project.disposed,
+        )
+    }
 
     override fun after(events: List<VFileEvent>) {
         val service = project.service<TabGroupService>()

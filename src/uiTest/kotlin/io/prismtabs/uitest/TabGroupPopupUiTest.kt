@@ -6,6 +6,7 @@ import com.intellij.remoterobot.fixtures.JTextFieldFixture
 import com.intellij.remoterobot.utils.waitFor
 import io.prismtabs.model.TabGroupPalette
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -128,18 +129,102 @@ class TabGroupPopupUiTest {
         }
     }
 
+    /**
+     * Removing a member that is not the last one leaves the group populated, so nothing is offered
+     * for deletion. The absence of the prompt is asserted rather than assumed — and a wrongly
+     * triggered one cannot slip past either way: the prompt is a modal opened from the same
+     * runnable that clears the assignment, so it would either be caught by [hasDialog] here or
+     * stall the `groupNameFor` round trip above into a timeout.
+     */
     @Test
     fun `Remove from Group clears an assignment made via the popup`(remoteRobot: RemoteRobot) {
         remoteRobot.idea {
             resetTabGroups()
             openFile("Sample.kt")
+            openFile("Second.kt")
             remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Grey", name = "Grey")
+            addFileToGroup("Second.kt", "Grey")
 
             remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
             remoteRobot.clickPopupItem("Remove from Group")
 
             waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == null }
             assertNull(groupNameFor("Sample.kt"))
+            assertEquals("Grey", groupNameFor("Second.kt"))
+            assertFalse(hasDialog("Empty Tab Group"), "a group with a member left must not be offered for deletion")
+            assertEquals(1, groupCount())
+        }
+    }
+
+    /**
+     * Chrome's "the group goes away with its last tab", as close as a file-scoped model gets to it:
+     * the prompt fires when the group's last *member* is removed — not when its last tab is closed,
+     * which does not touch membership at all.
+     */
+    @Test
+    fun `removing a group's last member offers to delete it`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            openFile("Sample.kt")
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Grey", name = "Solo")
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            remoteRobot.clickPopupItem("Remove from Group")
+
+            dialog("Empty Tab Group") {
+                find<JButtonFixture>(JButtonFixture.byText("Delete Group")).click()
+            }
+
+            waitFor(ofSeconds(10)) { groupCount() == 0 }
+            assertNull(groupNameFor("Sample.kt"))
+            assertEquals(0, groupCount())
+        }
+    }
+
+    /** Declining the prompt must leave the emptied group exactly where it was. */
+    @Test
+    fun `keeping an emptied group leaves it in place`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            openFile("Sample.kt")
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Grey", name = "Kept")
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            remoteRobot.clickPopupItem("Remove from Group")
+
+            dialog("Empty Tab Group") {
+                find<JButtonFixture>(JButtonFixture.byText("Keep")).click()
+            }
+
+            waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == null }
+            assertEquals(1, groupCount())
+        }
+    }
+
+    /**
+     * The second way a group empties, and the one that is easy to miss: nothing was *removed* —
+     * the group's only member was moved into a different group.
+     */
+    @Test
+    fun `moving a group's last member elsewhere offers to delete the group it left`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            openFile("Sample.kt")
+            openFile("Second.kt")
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Blue", name = "Origin")
+            remoteRobot.createGroupViaPopup(this, "Second.kt", colour = "Green", name = "Target")
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            remoteRobot.clickPopupSubstepItem("Add to Group…", "Target")
+
+            dialog("Empty Tab Group") {
+                find<JButtonFixture>(JButtonFixture.byText("Delete Group")).click()
+            }
+
+            waitFor(ofSeconds(10)) { groupCount() == 1 }
+            assertEquals("Target", groupNameFor("Sample.kt"))
+            assertEquals("Target", groupNameFor("Second.kt"))
+            assertEquals(1, groupCount())
         }
     }
 
