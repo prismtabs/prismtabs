@@ -159,6 +159,10 @@ tasks {
         // strong encapsulation blocks that without this. Confirmed necessary by a live failure
         // (InaccessibleObjectException on Throwable#detailMessage), not a guess.
         jvmArgs("--add-opens", "java.base/java.lang=ALL-UNNAMED")
+        // A `-D` on the `./gradlew` command line only sets a system property on this build's own
+        // JVM — it does not reach the forked JVM this task runs tests in unless copied across
+        // explicitly. WindowsManualVerificationUiTest's assumeTrue opt-in gate relies on this.
+        systemProperty("prismtabs.manualVerification", System.getProperty("prismtabs.manualVerification", "false"))
     }
 }
 

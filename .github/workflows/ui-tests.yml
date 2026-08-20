@@ -51,18 +51,13 @@ jobs:
         shell: bash
 
       - name: Run UI tests
-        # WindowsManualVerificationUiTest is deliberately excluded: it's a hand-run checklist
-        # walkthrough whose two @Test methods need a human to kill and relaunch runIdeForUiTests in
-        # between (see its own doc comment and docs/cross-platform-manual-verification.md) — it was
-        # never written to survive unattended CI. Gradle's --tests has no exclude syntax, so this is
-        # an explicit include list instead: add any new automated uiTest class here, or it silently
-        # won't run in this workflow.
-        run: >
-          ./gradlew uiTest
-          --tests "io.prismtabs.uitest.PaywallUiTest"
-          --tests "io.prismtabs.uitest.TabGroupPaletteConfigurableUiTest"
-          --tests "io.prismtabs.uitest.TabGroupPopupUiTest"
-          --tests "io.prismtabs.uitest.TabGroupsToolWindowUiTest"
+        # No --tests include list needed: every uiTest class that shouldn't run unattended
+        # self-gates with a JUnit `assumeTrue` instead — MacSettingsShortcutUiTest to macOS,
+        # WindowsManualVerificationUiTest to an explicit -Dprismtabs.manualVerification=true this
+        # workflow never passes (see both classes' doc comments and README "UI testing"). A bare
+        # `uiTest` run therefore always executes exactly the automated classes and needs no upkeep
+        # when a new one is added.
+        run: ./gradlew uiTest
         shell: bash
 
       - name: Upload UI test reports

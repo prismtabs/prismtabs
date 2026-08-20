@@ -750,6 +750,13 @@ out of the fast `./gradlew test` path entirely.
 not this plugin's own project — on startup, so there is always exactly one editor tab to
 right-click; the tests never have to disambiguate between tabs by filename.
 
+A bare `./gradlew uiTest` needs no `--tests` curation on any machine: classes that shouldn't run
+unattended or off their target platform self-gate with a JUnit `assumeTrue` and simply report
+skipped rather than failing or being silently left out. `MacSettingsShortcutUiTest` gates on
+`os.name` starting with `Mac`; `WindowsManualVerificationUiTest` gates on an explicit
+`-Dprismtabs.manualVerification=true` that neither local dev nor `ui-tests.yml` ever passes (see its
+own doc comment, and `docs/cross-platform-manual-verification.md` for how to run it deliberately).
+
 **Locally this only runs on Linux** — see "These tests need an X11 display" below. In CI it also
 runs on Windows, via a manual-trigger-only workflow
 ([`.github/workflows/ui-tests.yml`](.github/workflows/ui-tests.yml), `workflow_dispatch`, not run on
