@@ -73,6 +73,18 @@ class WindowsManualVerificationUiTest {
             kotlin.math.abs(ab.toInt() - b) <= tolerance
     }
 
+    /**
+     * Just the `r=..,g=..,b=..` part of an [IdeaFrame.pixelColorAtTabCenter] reading, dropping the
+     * ` at (x,y)` suffix it also carries.
+     *
+     * Comparing two readings for equality without this is meaningless: the coordinates belong to
+     * the tab that was sampled, so two *different* tabs never produce equal strings however
+     * identical their colours are. Caught live when both tabs read pure black and the
+     * "these must differ" assertion below passed anyway.
+     */
+    private fun String.colourOnly(): String =
+        Regex("""r=\d+,g=\d+,b=\d+""").find(this)?.value ?: this
+
     @Test
     fun part1WalkthroughChecklist(remoteRobot: RemoteRobot) {
         try {
@@ -124,7 +136,7 @@ class WindowsManualVerificationUiTest {
                 val unselectedPixel = pixelColorAtTabCenter("Sample.kt")
                 note("2a. Sample.kt unselected pixel: $unselectedPixel vs. an untinted tab's pixel: $untintedControl")
                 assertTrue(
-                    unselectedPixel != untintedControl,
+                    unselectedPixel.colourOnly() != untintedControl.colourOnly(),
                     "expected Sample.kt's unselected tint to differ from an untinted tab's pixel colour",
                 )
 
