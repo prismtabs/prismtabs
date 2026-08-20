@@ -9,6 +9,7 @@ import io.prismtabs.model.TabGroupPalette
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import java.io.File
@@ -16,10 +17,21 @@ import java.time.Duration.ofSeconds
 
 /**
  * One-off, driven pass through docs/cross-platform-manual-verification.md's checklist on a real
- * Windows desktop, in place of a human clicking through it — reuses the same fixtures the permanent
- * `uiTest` suite already relies on rather than inventing new low-level driving code. Not part of the
- * regular suite and not meant to run in CI: it exists to produce screenshots and a written log for
- * a human to review and sign off, matching the doc's own "on real hardware or a VM, not CI" framing.
+ * Windows (or macOS) desktop, in place of a human clicking through it — reuses the same fixtures the
+ * permanent `uiTest` suite already relies on rather than inventing new low-level driving code. Not
+ * part of the regular suite and not meant to run unattended: it exists to produce screenshots and a
+ * written log for a human to review and sign off, matching the doc's own "on real hardware or a VM,
+ * not CI" framing, and its pixel assertions need a real desktop's screen-capture pipeline (see
+ * README "These tests need an X11 display" for why that pipeline lies on this project's own Linux
+ * dev box).
+ *
+ * Both `@Test`s skip unless launched with `-Dprismtabs.manualVerification=true` — matching
+ * [MacSettingsShortcutUiTest]'s `assumeTrue` self-gating pattern, but opt-in rather than OS-keyed,
+ * since this class is meant for a deliberate human-run pass on *either* platform, never picked up by
+ * a bare `./gradlew uiTest` sweep. Before this gate existed, that sweep had to remember to exclude
+ * this class by name instead — `ui-tests.yml` carried a curated `--tests` include list for exactly
+ * that reason, and any caller that forgot to replicate it would have hit this class's
+ * real-hardware-only assumptions head-on.
  *
  * Split into two methods, run as two separate `uiTest` invocations with an actual IDE restart
  * (killing and relaunching the `runIdeForUiTests` process) in between — checklist item 8 asks
@@ -33,6 +45,12 @@ class WindowsManualVerificationUiTest {
     private fun note(line: String) {
         log.appendLine(line)
     }
+
+    private fun requireManualOptIn() = assumeTrue(
+        System.getProperty("prismtabs.manualVerification") == "true",
+        "manual cross-platform checklist walkthrough — run with -Dprismtabs.manualVerification=true, " +
+            "see this class's doc comment",
+    )
 
     private fun flush(name: String) {
         File("build/reports/manual").apply { mkdirs() }.resolve(name).writeText(log.toString())
@@ -87,6 +105,7 @@ class WindowsManualVerificationUiTest {
 
     @Test
     fun part1WalkthroughChecklist(remoteRobot: RemoteRobot) {
+        requireManualOptIn()
         try {
             remoteRobot.idea {
                 resetTabGroups()
@@ -258,6 +277,7 @@ class WindowsManualVerificationUiTest {
 
     @Test
     fun part2VerifyPersistenceAfterRestart(remoteRobot: RemoteRobot) {
+        requireManualOptIn()
         try {
             remoteRobot.idea {
                 openFile("Second.kt")

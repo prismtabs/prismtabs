@@ -95,23 +95,18 @@ the full checklist above: it's the same asserted suite CI runs on Windows, not e
 ./gradlew runIdeForUiTests &   # first run: macOS prompts for Screen Recording permission — click
                                 # Allow (System Settings → Privacy & Security → Screen Recording);
                                 # this and all future runs need no further prompts
-./gradlew uiTest \
-  --tests "io.prismtabs.uitest.PaywallUiTest" \
-  --tests "io.prismtabs.uitest.TabGroupPaletteConfigurableUiTest" \
-  --tests "io.prismtabs.uitest.TabGroupPopupUiTest" \
-  --tests "io.prismtabs.uitest.TabGroupsToolWindowUiTest" \
-  --tests "io.prismtabs.uitest.MacSettingsShortcutUiTest"
+./gradlew uiTest
 ```
 
-`MacSettingsShortcutUiTest` is the one addition to `ui-tests.yml`'s list, and deliberately so: it
-covers checklist item 7's ⌘, and `assumeTrue`-skips off macOS, so it belongs in this macOS command
-rather than in the Windows CI workflow where it would only ever report as skipped.
-
-Same `--tests` list as `ui-tests.yml`, for the same reason: `WindowsManualVerificationUiTest` (see
-below) needs a human-driven IDE restart between its two methods and isn't written to run as a single
-`uiTest` invocation. Despite the name, it now runs unmodified on macOS too — confirmed 2026-08-16
-and again 2026-08-19, both methods, restart included (see the sign-off log). Nothing in it is
-Windows-specific; the name and its `TeamWindows` fixture group are historical.
+No `--tests` list needed, on macOS or anywhere else: every `uiTest` class that shouldn't run
+unattended self-gates with a JUnit `assumeTrue` rather than relying on a caller to curate an
+include/exclude list per machine. `MacSettingsShortcutUiTest` gates on `os.name` starting with
+`Mac`, so a bare run picks it up automatically here (and reports skipped on Windows CI) with no
+extra flag. `WindowsManualVerificationUiTest` (see below) gates on an explicit
+`-Dprismtabs.manualVerification=true` instead of an OS check — nothing in it is actually
+Windows-specific (the name and its `TeamWindows` fixture group are historical; confirmed running
+unmodified on macOS too, 2026-08-16 and 2026-08-19) — so it skips here by default and has to be
+invoked deliberately, which the restart procedure below covers.
 
 If the Allow prompt never appears (some macOS versions only prompt the *first* time a process asks,
 and a previously-denied grant has to be reset manually): `tccutil reset ScreenCapture` from a
@@ -236,9 +231,10 @@ and that this plugin's page is reachable in it. Verified 2026-08-16: passing in 
 `09-cmd-comma-settings.png` showing **Tools › PrismTabs** with all 8 presets rendered. The binding
 it exercises reads `Mac OS X 10.5+` / `getActionIds(KeyStroke("meta COMMA"))` -> `[ShowSettings]`.
 
-It runs against the regular sandbox, so add it to any full-pass `--tests` list; it self-skips off
-macOS via `assumeTrue`. Note it needs a *granted* terminal like the rest of the suite — see the
-permission section above, which is exactly what delayed this one being run.
+It runs against the regular sandbox, so a bare `./gradlew uiTest` picks it up on its own on macOS —
+no `--tests` needed, since it `assumeTrue`-skips off macOS by `os.name` rather than needing to be
+listed in. Note it needs a *granted* terminal like the rest of the suite — see the permission
+section above, which is exactly what delayed this one being run.
 
 ## Windows pass: driven by remote-robot, not by hand
 
@@ -247,10 +243,19 @@ human clicking through it — `src/uiTest/kotlin/io/prismtabs/uitest/WindowsManu
 walks the checklist above end-to-end, reusing the same fixtures the permanent `uiTest` suite already
 relies on. It's split into two `@Test` methods run as separate invocations with an actual
 `runIdeForUiTests` process kill-and-relaunch in between, since checklist item 8 needs a real restart
-that nothing inside a single JVM run can exercise. Unlike the three regular `uiTest` classes, it's
-deliberately excluded from `ui-tests.yml`'s `--tests` list and doesn't run in CI — same "on real
-hardware or a VM, not CI" framing as the rest of this doc — but it's there to rerun for a future pass
-rather than starting from scratch.
+that nothing inside a single JVM run can exercise. Unlike the regular `uiTest` classes, it
+`assumeTrue`-skips unless launched with `-Dprismtabs.manualVerification=true` (see its own doc
+comment), so it never runs as part of `ui-tests.yml`'s or this doc's bare `./gradlew uiTest` — same
+"on real hardware or a VM, not CI" framing as the rest of this doc — but it's there to rerun
+deliberately for a future pass rather than starting from scratch:
+
+```bash
+./gradlew uiTest --tests "io.prismtabs.uitest.WindowsManualVerificationUiTest.part1WalkthroughChecklist" \
+  -Dprismtabs.manualVerification=true
+# kill and relaunch runIdeForUiTests here — see the finding on forced restarts below
+./gradlew uiTest --tests "io.prismtabs.uitest.WindowsManualVerificationUiTest.part2VerifyPersistenceAfterRestart" \
+  -Dprismtabs.manualVerification=true
+```
 
 Two findings worth recording, both about *how* to check this pass rather than about the plugin:
 
