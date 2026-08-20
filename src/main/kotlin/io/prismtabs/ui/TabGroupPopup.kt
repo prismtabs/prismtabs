@@ -199,9 +199,7 @@ private class RootStep(
             Entry.AddToGroup -> AddToGroupStep(project, file, service)
             Entry.ManageGroups -> ManageGroupsStep(project, service)
             Entry.RemoveFromGroup -> {
-                service.clear(file.url)
-                TabRepaint.request(project, file)
-                TabGroupNotifier.notifyChanged(project)
+                finalRunnable = Runnable { removeFromGroup(project, file, service) }
                 PopupStep.FINAL_CHOICE
             }
         }
@@ -227,17 +225,30 @@ private class AddToGroupStep(
     private val service: TabGroupService,
 ) : BaseListPopupStep<TabGroup>("Add to Group", service.groups()) {
 
+    private var finalRunnable: Runnable? = null
+
     override fun getTextFor(value: TabGroup): String = value.name
 
     override fun getIconFor(value: TabGroup): Icon =
         ColorSwatchIcon(JBColor(Color(value.lightRgb), Color(value.darkRgb)))
 
+    /**
+     * Deferred to [getFinalRunnable] rather than applied straight from `onChosen`, unlike the
+     * one-line mutations elsewhere in this file: moving a file out of its previous group can empty
+     * that group, and the prompt that follows is a modal — same reason [RootStep]'s preset click
+     * defers.
+     */
     override fun onChosen(selectedValue: TabGroup, finalChoice: Boolean): PopupStep<*>? {
-        service.assign(file.url, selectedValue)
-        TabRepaint.request(project, file)
-        TabGroupNotifier.notifyChanged(project)
+        finalRunnable = Runnable {
+            val emptied = service.assign(file.url, selectedValue)
+            TabRepaint.request(project, file)
+            TabGroupNotifier.notifyChanged(project)
+            promptToDeleteEmptied(project, service, emptied)
+        }
         return PopupStep.FINAL_CHOICE
     }
+
+    override fun getFinalRunnable(): Runnable? = finalRunnable
 }
 
 /** "Manage Groups…"'s step: every existing group, each opening [GroupActionsStep]. */
@@ -395,6 +406,57 @@ internal fun confirmAndDelete(project: Project, group: TabGroup, service: TabGro
     TabGroupNotifier.notifyChanged(project)
 }
 
+/** "Remove from Group"'s handler: unassign, repaint, and offer to delete a group left empty. */
+private fun removeFromGroup(project: Project, file: VirtualFile, service: TabGroupService) {
+    val emptied = service.clear(file.url)
+    TabRepaint.request(project, file)
+    TabGroupNotifier.notifyChanged(project)
+    promptToDeleteEmptied(project, service, emptied)
+}
+
+/**
+ * Offers to delete groups that a just-completed removal left with no members — this plugin's
+ * answer to Chrome dropping a tab group once its last tab is gone.
+ *
+ * Chrome deletes silently; this asks first, because a PrismTabs group is persisted data — a name,
+ * a colour, a row in the tool window, all of it surviving restarts — rather than a strip
+ * decoration, and the removal that emptied it may have been a misclick.
+ *
+ * Deliberately *not* driven by closing tabs: a group's members are files, not open editors, so a
+ * group whose every tab is closed — which includes every collapsed group — is not empty. See
+ * [io.prismtabs.service.AssignmentRemoval].
+ *
+ * One dialog for the whole batch, not one per group: deleting a directory can empty several groups
+ * at once, and a queue of identical modals is the wrong way to ask. Membership is re-read here
+ * rather than trusted from [emptied], since the VFS caller reaches this through an `invokeLater`
+ * and a group can have been refilled, renamed or deleted outright in between.
+ */
+internal fun promptToDeleteEmptied(project: Project, service: TabGroupService, emptied: List<TabGroup>) {
+    val stillEmpty = emptied.mapNotNull { service.group(it.id) }.filter { service.membersOf(it.id).isEmpty() }
+    if (stillEmpty.isEmpty()) return
+
+    val names = stillEmpty.joinToString(", ") { "\"${it.name}\"" }
+    val single = stillEmpty.size == 1
+    val confirmed = MessageDialogBuilder
+        .yesNo(
+            if (single) "Empty Tab Group" else "Empty Tab Groups",
+            if (single) "$names has no tabs left. Delete the group?"
+            else "These groups have no tabs left: $names. Delete them?",
+        )
+        .yesText(if (single) "Delete Group" else "Delete Groups")
+        .noText("Keep")
+        .icon(Messages.getQuestionIcon())
+        .ask(project)
+    if (!confirmed) return
+
+    stillEmpty.forEach { service.delete(it.id) }
+    TabGroupNotifier.notifyChanged(project)
+}
+
+/** Single-group overload: what [TabGroupService.clear] and [TabGroupService.assign] hand back. */
+internal fun promptToDeleteEmptied(project: Project, service: TabGroupService, emptied: TabGroup?) =
+    promptToDeleteEmptied(project, service, listOfNotNull(emptied))
+
 /** Resolves each file URL back to a [VirtualFile] and requests a repaint. Callers capture the
  * URL list themselves (rather than re-reading [TabGroupService.membersOf]) when the mutation
  * that just happened — e.g. [TabGroupService.delete] — already removed those assignments.
@@ -443,7 +505,8 @@ private fun promptForNameAndCreate(
         darkRgb = preset.dark.rgb and 0xFFFFFF,
         order = service.groups().size,
     )
-    service.assign(file.url, group)
+    val emptied = service.assign(file.url, group)
     TabRepaint.request(project, file)
     TabGroupNotifier.notifyChanged(project)
+    promptToDeleteEmptied(project, service, emptied)
 }

@@ -20,6 +20,13 @@ import io.prismtabs.model.TabGroupState
  * resolved `Color` — resolving `lightRgb`/`darkRgb` into a theme-aware colour is the read
  * boundary's job (see [TabGroup]'s doc), not this service's.
  *
+ * A group is *empty* when it has no assigned files — which has nothing to do with how many of its
+ * files are open. Closing a tab never touches an assignment (there is no `fileClosed` handling
+ * anywhere in the plugin), and [collapse] deliberately closes every one of a group's tabs while
+ * keeping its members. The three removals that can genuinely empty a group all report it, so the
+ * UI can offer to delete it: [clear], [assign] (moving the last member elsewhere) and [clearTree]
+ * (the file being deleted on disk). See [AssignmentRemoval].
+ *
  * [activeGroupId] is Phase 3's "sticky group": [io.prismtabs.listener.TabGroupFileListener] reads
  * it to decide which group a newly opened, unassigned file should join. It is deliberately **not**
  * part of [TabGroupState] and does not survive an IDE restart — unlike an assignment, "sticky" is a
@@ -46,15 +53,58 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
 
     fun membersOf(groupId: String): List<String> = assignments.filterValues { it == groupId }.keys.toList()
 
-    fun assign(fileUrl: String, group: TabGroup) {
+    fun group(groupId: String): TabGroup? = groups[groupId]
+
+    /**
+     * Assigns [fileUrl] to [group], creating or updating the group itself in the same step.
+     *
+     * Returns the group [fileUrl] just *left*, if that move emptied it — moving a group's last
+     * member into another group is one of the three ways a group ends up with nothing in it. Null
+     * when the file was unassigned, when it stayed in the same group, and when the group it left
+     * still has other members.
+     */
+    fun assign(fileUrl: String, group: TabGroup): TabGroup? {
+        val previousId = assignments[fileUrl]
         groups = groups + (group.id to group)
         assignments = assignments + (fileUrl to group.id)
         recomputeCache()
+        if (previousId == null || previousId == group.id) return null
+        return groups[previousId]?.takeIf { membersOf(it.id).isEmpty() }
     }
 
-    fun clear(fileUrl: String) {
-        assignments = assignments - fileUrl
+    /** Unassigns [fileUrl]. Returns the group it left, if that removal emptied it. */
+    fun clear(fileUrl: String): TabGroup? =
+        removeAssignments { it == fileUrl }.emptiedGroups.firstOrNull()
+
+    /**
+     * Unassigns [rootUrl] and every assignment nested under it as a directory — the deletion
+     * counterpart to [remapUrl], prefix-matched for the same reason: deleting a directory fires a
+     * single VFS event for the directory itself, not one per descendant.
+     */
+    fun clearTree(rootUrl: String): AssignmentRemoval =
+        removeAssignments { it == rootUrl || it.startsWith("$rootUrl/") }
+
+    /**
+     * Drops every assignment whose URL [matches], and those same URLs from any group's
+     * [TabGroup.collapsedFileUrls] — a file that no longer exists must not be reopened by [expand].
+     *
+     * The early return keeps the overwhelmingly common case free of allocation: this runs once per
+     * deleted file, and almost none of them are assigned to anything.
+     */
+    private fun removeAssignments(matches: (String) -> Boolean): AssignmentRemoval {
+        val removedUrls = assignments.keys.filter(matches)
+        if (removedUrls.isEmpty() && groups.values.none { it.collapsedFileUrls.any(matches) }) {
+            return AssignmentRemoval(emptyList(), emptyList())
+        }
+        val affectedIds = removedUrls.mapNotNull { assignments[it] }.toSet()
+        assignments = assignments.filterKeys { !matches(it) }
+        groups = groups.mapValues { (_, group) ->
+            if (group.collapsedFileUrls.none(matches)) group
+            else group.copy(collapsedFileUrls = group.collapsedFileUrls.filterNot(matches))
+        }
         recomputeCache()
+        val emptied = affectedIds.filter { membersOf(it).isEmpty() }.mapNotNull { groups[it] }
+        return AssignmentRemoval(removedUrls, emptied)
     }
 
     fun rename(groupId: String, name: String) {
@@ -176,3 +226,13 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
         recomputeCache()
     }
 }
+
+/**
+ * What removing assignments actually did.
+ *
+ * [removedUrls] is the file URLs that were assigned and no longer are — empty when the removal
+ * matched nothing, which is the caller's cue that there is nothing to repaint or announce.
+ * [emptiedGroups] is those of the groups they belonged to that are now left with no members at
+ * all: the cue to offer deleting them (see `io.prismtabs.ui.promptToDeleteEmptied`).
+ */
+data class AssignmentRemoval(val removedUrls: List<String>, val emptiedGroups: List<TabGroup>)

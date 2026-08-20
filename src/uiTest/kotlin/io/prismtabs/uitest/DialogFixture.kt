@@ -20,6 +20,13 @@ fun ContainerFixture.dialog(
 ): DialogFixture =
     find<DialogFixture>(byXpath("title $title", "//div[@title='$title' and @class='MyDialog']"), timeout).apply(function)
 
+/**
+ * Whether a dialog titled [title] is showing *right now* — the check for asserting one is **not**,
+ * where [dialog]'s waiting `find` would block for its whole timeout before failing.
+ */
+fun ContainerFixture.hasDialog(title: String): Boolean =
+    findAll<DialogFixture>(byXpath("title $title", "//div[@title='$title' and @class='MyDialog']")).isNotEmpty()
+
 @FixtureName("Dialog")
 class DialogFixture(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     CommonContainerFixture(remoteRobot, remoteComponent)

@@ -296,4 +296,144 @@ class TabGroupServiceTest {
         assertEquals(true, group?.collapsed)
         assertEquals(listOf("file:///A.kt", "file:///B.kt"), group?.collapsedFileUrls)
     }
+
+    @Test
+    fun `clearing the last member reports the group it emptied`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+
+        assertEquals(red, service.clear("file:///A.kt"))
+    }
+
+    @Test
+    fun `clearing a member while others remain reports nothing emptied`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+        service.assign("file:///B.kt", red)
+
+        assertNull(service.clear("file:///A.kt"))
+    }
+
+    @Test
+    fun `clearing an unassigned file reports nothing emptied`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+
+        assertNull(service.clear("file:///Unassigned.kt"))
+        assertEquals(red, service.groupFor("file:///A.kt"))
+    }
+
+    @Test
+    fun `an emptied group survives until it is deleted explicitly`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+        service.clear("file:///A.kt")
+
+        assertEquals(listOf(red), service.groups())
+        assertEquals(emptyList<String>(), service.membersOf("red"))
+    }
+
+    @Test
+    fun `moving a group's last member elsewhere reports the group it emptied`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+
+        assertEquals(red, service.assign("file:///A.kt", blue))
+    }
+
+    @Test
+    fun `moving a member while others remain reports nothing emptied`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+        service.assign("file:///B.kt", red)
+
+        assertNull(service.assign("file:///A.kt", blue))
+    }
+
+    @Test
+    fun `assigning an unassigned file, or reassigning it to its own group, empties nothing`() {
+        val service = TabGroupService()
+
+        assertNull(service.assign("file:///A.kt", red))
+        assertNull(service.assign("file:///A.kt", red))
+    }
+
+    @Test
+    fun `clearTree unassigns a deleted file and reports what it removed`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+        service.assign("file:///B.kt", blue)
+
+        val removal = service.clearTree("file:///A.kt")
+
+        assertEquals(listOf("file:///A.kt"), removal.removedUrls)
+        assertEquals(listOf(red), removal.emptiedGroups)
+        assertNull(service.groupFor("file:///A.kt"))
+        assertEquals(blue, service.groupFor("file:///B.kt"))
+    }
+
+    @Test
+    fun `clearTree unassigns every file nested under a deleted directory`() {
+        val service = TabGroupService()
+        service.assign("file:///project/src/A.kt", red)
+        service.assign("file:///project/src/nested/B.kt", red)
+        service.assign("file:///project/other/C.kt", blue)
+
+        val removal = service.clearTree("file:///project/src")
+
+        assertEquals(
+            setOf("file:///project/src/A.kt", "file:///project/src/nested/B.kt"),
+            removal.removedUrls.toSet(),
+        )
+        assertEquals(listOf(red), removal.emptiedGroups)
+        assertEquals(blue, service.groupFor("file:///project/other/C.kt"))
+    }
+
+    @Test
+    fun `clearTree emptying several groups at once reports all of them`() {
+        val service = TabGroupService()
+        service.assign("file:///project/src/A.kt", red)
+        service.assign("file:///project/src/B.kt", blue)
+
+        val removal = service.clearTree("file:///project/src")
+
+        assertEquals(setOf(red, blue), removal.emptiedGroups.toSet())
+    }
+
+    @Test
+    fun `clearTree leaves a group with surviving members alone`() {
+        val service = TabGroupService()
+        service.assign("file:///project/src/A.kt", red)
+        service.assign("file:///project/other/B.kt", red)
+
+        val removal = service.clearTree("file:///project/src")
+
+        assertEquals(listOf("file:///project/src/A.kt"), removal.removedUrls)
+        assertEquals(emptyList<TabGroup>(), removal.emptiedGroups)
+        assertEquals(red, service.groupFor("file:///project/other/B.kt"))
+    }
+
+    @Test
+    fun `clearTree does not touch a URL that merely shares a prefix`() {
+        val service = TabGroupService()
+        service.assign("file:///project/FooBar.kt", red)
+
+        val removal = service.clearTree("file:///project/Foo")
+
+        assertEquals(emptyList<String>(), removal.removedUrls)
+        assertEquals(emptyList<TabGroup>(), removal.emptiedGroups)
+        assertEquals(red, service.groupFor("file:///project/FooBar.kt"))
+    }
+
+    @Test
+    fun `clearTree drops a deleted file from a collapsed group's recorded files`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+        service.assign("file:///B.kt", red)
+        service.collapse("red", listOf("file:///A.kt", "file:///B.kt"))
+
+        service.clearTree("file:///A.kt")
+
+        assertEquals(listOf("file:///B.kt"), service.groupFor("file:///B.kt")?.collapsedFileUrls)
+    }
 }

@@ -702,6 +702,37 @@ Not applicable here: the "inform your users in advance" notice
 only applies when an *already-published free plugin* switches to paid. PrismTabs has never been
 published, so there are no existing free users to warn.
 
+## Empty groups
+
+A group is **empty** when it has no assigned files. Closing tabs has nothing to do with it: group
+membership is a file URL -> group id assignment persisted in `.idea/tabGroups.xml`, so a file stays
+in its group with every editor closed and across restarts — and `collapse` deliberately closes
+every one of a group's tabs while keeping its members. There is no `fileClosed` handling anywhere
+in the plugin, by design.
+
+Three removals can genuinely empty a group, and each one reports it so the UI can offer to delete
+the group ([`promptToDeleteEmptied`](src/main/kotlin/io/prismtabs/ui/TabGroupPopup.kt)):
+
+| Removal | Reported by |
+| --- | --- |
+| "Remove from Group" on the last member | `TabGroupService.clear` |
+| Moving the last member into another group ("Add to Group…", or a preset dot creating a new one) | `TabGroupService.assign` |
+| The last member being deleted on disk | `TabGroupService.clearTree`, via `TabGroupVfsListener.before` |
+
+Chrome drops a tab group silently once its last tab is gone; this asks first, because a PrismTabs
+group is persisted data — name, colour, tool-window row — rather than a strip decoration, and the
+removal may have been a misclick. Declining leaves the empty group in place; the tool window shows
+it as "0 tabs" with its own Delete Group action.
+
+Deliberately **not** implemented: a sweep for groups that were already empty before this existed.
+The prompt fires on the *transition* to zero members, so a `tabGroups.xml` carrying an empty group
+from an earlier build keeps it. A dialog on project open would be intrusive for a case the tool
+window already surfaces plainly.
+
+Disk deletion is handled in `before`, not `after`, since that is the only side of the write action
+where the file being deleted still yields a URL; the prompt itself is deferred out of the write
+action with a non-modal `invokeLater`, because a modal cannot be shown from inside one.
+
 ## UI testing
 
 `TabGroupPopup`, the Tab Groups tool window, and the free/paid paywall (`PaywallUiTest`, see
