@@ -2,6 +2,7 @@ package io.prismtabs.ui
 
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionGroup
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
@@ -30,6 +31,8 @@ import io.prismtabs.service.TabGroupCollapse
 import io.prismtabs.service.TabGroupService
 import io.prismtabs.service.TabGroupsChangedListener
 import java.awt.Color
+import java.awt.Component
+import java.awt.Point
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.JComponent
@@ -83,7 +86,7 @@ private class TabGroupsPanel(
         val toolbar = ActionManager.getInstance().createActionToolbar("PrismTabs.TabGroupsToolWindow", actions, true)
         toolbar.setTargetComponent(list)
         toolbarComponent = toolbar.component
-        PopupHandler.installPopupMenu(list, actions, "PrismTabs.TabGroupsToolWindow.Popup")
+        installRowSelectingPopupMenu(list, actions)
 
         // Double-click as a shortcut for the toolbar's collapse/expand toggle — mirrors the
         // platform's own convention of double-click-as-default-action on list/tree tool windows.
@@ -120,9 +123,25 @@ private class TabGroupsPanel(
         setToolbar(toolbarComponent)
         setContent(groupList)
         val groups = service.groups()
+        val selectedIndex = list.selectedIndex
         val selectedId = list.selectedValue?.id
         listModel.replaceAll(groups)
-        groups.firstOrNull { it.id == selectedId }?.let { list.setSelectedValue(it, true) }
+        val stillListed = groups.indexOfFirst { it.id == selectedId }
+        when {
+            stillListed >= 0 -> select(stillListed)
+            // The selected group is gone — deleted here or from a tab's popup. Fall to the row that
+            // took its place (the last one, if it was the last) rather than leaving the list with no
+            // selection: an empty selection disables the whole toolbar and context menu, which is
+            // the platform's convention for "nothing is selected" and reads as a dead panel right
+            // after a delete. Only when something *was* selected: a list nobody has touched yet
+            // must not select a row on its own.
+            selectedId != null && groups.isNotEmpty() -> select(selectedIndex.coerceIn(groups.indices))
+        }
+    }
+
+    private fun select(index: Int) {
+        list.selectedIndex = index
+        list.ensureIndexIsVisible(index)
     }
 
     /**
@@ -167,6 +186,45 @@ private class TabGroupsPanel(
         return panel
     }
 }
+
+/**
+ * Installs [actions] as [list]'s context menu, moving the selection to the row under the cursor
+ * before the menu opens.
+ *
+ * [PopupHandler.installPopupMenu] on its own is not enough, and the gap is one users actually hit:
+ * Swing's `BasicListUI` moves a list's selection for the *left* mouse button only, so a right-click
+ * on an unselected row leaves the selection wherever it was — and every action here is enabled by
+ * `list.selectedValue` (see [SelectionAction]), so a list with nothing selected shows a wholly
+ * greyed-out menu. Deleting the selected group is the everyday way into that state, which is what
+ * made this read as a focus bug: the group vanishes, the selection goes with it, and the next
+ * right-click is dead until a left-click revives it. Reproduced end-to-end, and now guarded, by
+ * `TabGroupsToolWindowUiTest."right-clicking a group row acts on that row..."`.
+ *
+ * Selecting the right-clicked row is what the platform's own tool windows do — right-clicking an
+ * unselected file in the Project view selects it before opening the menu, verified against a live
+ * sandbox IDE rather than assumed. The two selection-aware helpers the platform ships
+ * ([PopupHandler.installSelectionListPopup] and `installFollowingSelectionTreePopup`) make the
+ * opposite trade: they *suppress* the menu unless the click is already on the selection, which
+ * suits a multi-selection list and would only make this one deader still.
+ */
+private fun installRowSelectingPopupMenu(list: JBList<TabGroup>, actions: ActionGroup) {
+    list.addMouseListener(object : PopupHandler() {
+        override fun invokePopup(comp: Component, x: Int, y: Int) {
+            val index = list.locationToIndex(Point(x, y))
+            // locationToIndex snaps to the nearest row for a point past the last one, so without the
+            // bounds check a right-click on the empty space below the list would select its last row.
+            if (index >= 0 && list.getCellBounds(index, index)?.contains(x, y) == true) {
+                list.selectedIndex = index
+            }
+            val menu = ActionManager.getInstance().createActionPopupMenu(POPUP_PLACE, actions)
+            menu.setTargetComponent(list)
+            menu.component.show(comp, x, y)
+        }
+    })
+}
+
+/** `place` for the context menu built in [installRowSelectingPopupMenu]. */
+private const val POPUP_PLACE = "PrismTabs.TabGroupsToolWindow.Popup"
 
 /** Must match `plugin.xml`'s `<toolWindow id="">`. */
 private const val TOOL_WINDOW_ID = "Tab Groups"
