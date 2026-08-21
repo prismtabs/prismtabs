@@ -686,3 +686,88 @@ Result:      PASS — first pass on any platform covering "offer to delete a tab
              "Write-unsafe context!" SEVERE per call — measured directly here, and cleaned up before
              sign-off, so idea.log has zero SEVEREs attributable to io.prismtabs for this pass.
 ```
+
+```
+Date:        2026-08-21
+OS:          macOS 26.6.2 (Apple Silicon, arm64), Retina @ 2x, screen 1440x900, dpi 127
+IDE build:   IC-242.20224.300 (JBR 21.0.3), plugin 1.3.3-SNAPSHOT
+Theme(s):    dark (New UI "Dark" theme)
+Result:      PASS — macOS half of the verification for "offer to delete a tab group when its last
+             member is removed" (commit 093b957), following the Windows pass of the same day.
+             Automated suite green: PaywallUiTest (4), TabGroupPaletteConfigurableUiTest (1),
+             TabGroupPopupUiTest (10), TabGroupsToolWindowUiTest (1), EmptyGroupOnDiskDeleteUiTest
+             (3), MacSettingsShortcutUiTest (1) — 20/20 from a bare `./gradlew uiTest`, with both
+             WindowsManualVerificationUiTest methods correctly reporting skipped and no `--tests`
+             curation anywhere. That is the same 5e40060 self-gating mechanism the Windows entry
+             confirmed, now demonstrated from the other side: the Mac-only class runs here and
+             skips there, the opt-in class skips on both. Fast `./gradlew test`: 55/55.
+             `./gradlew verifyPlugin`: green across all seven IDEs it resolves (IU-242.26775.15,
+             243.28141.41, 251.29188.72, 252.28539.97, 253.33813.55, 261.27258.48, 262.10315.19),
+             every one "Compatible", zero compatibility problems and zero override-only findings,
+             and nothing new from this feature — the reports hold exactly the four accepted notes
+             (SeparatorWithText, ActionUtil.invokeAction on 243+, FileEditorManagerImpl
+             .queueUpdateFile, PluginManager.getPluginByClass, that last one counted as internal
+             only from 262). All 8 checklist items confirmed via WindowsManualVerificationUiTest,
+             both methods, with a real process kill-and-relaunch between them.
+
+             All three ways a group can empty are verified against a live IDE here, matching the
+             Windows result trigger for trigger: "Remove from Group" on the last member and moving
+             the last member into another group via TabGroupPopupUiTest's three cases plus its
+             negative case (no prompt while a member remains), and deletion on disk via
+             EmptyGroupOnDiskDeleteUiTest — including the project-view Delete case, where the
+             platform's own delete confirmation is in play and the `nonModal` "queue behind the
+             dialog driving the deletion" claim is exercised rather than argued, and the directory
+             case, where two groups emptied at once and raised a single plural dialog.
+
+             The prompt itself was read off the screenshot, not just asserted, and it is worth
+             recording how macOS lays it out: 05-remove-from-group.png shows "Empty Tab Group"
+             with the question icon, `"Blue" has no tabs left. Delete the group?`, and "Keep" to
+             the *left* of the focused default "Delete Group" — native macOS button order, decided
+             by the platform's dialog layout rather than by anything PrismTabs positions, so it is
+             expected to read reversed against the Windows screenshot of the same prompt. No
+             PrismTabs painting is involved in this dialog at all (MessageDialogBuilder.yesNo),
+             which is why no light-theme spot-check was repeated for it; the light-theme evidence
+             from 2026-08-19 covers what this plugin actually paints.
+             06-tool-window-listing.png shows the declined group as `Blue  0 tabs` above
+             `TeamWindows  2 tabs`, dots and stripe icon crisp at 2x.
+
+             Item detail matches the previous macOS entries exactly where it should: all 8 presets
+             present and legible with the "New Group" caption above the swatch row; Blue tinted
+             the tab at full strength when selected (r=45,g=92,b=156 — the documented
+             colour-managed -1 red against Windows' r=46, identical to both earlier macOS
+             readings) and at the documented ~50% blend when unselected (r=37,g=61,b=94 vs. an
+             untinted tab's r=30,g=31,b=34); the New Group dialog had focus immediately (typed and
+             Enter-submitted with no prior click); rename/recolour propagated to every member and
+             active-group inheritance worked; the tool window listed membership, collapse/expand
+             worked; Settings | Tools | PrismTabs rendered and Restore Defaults reverted a renamed
+             preset; ⌘, covered by MacSettingsShortcutUiTest (passing, 9.6s).
+
+             Persistence was again tested on the first-write path, as the 2026-08-19 finding
+             instructs: .idea/tabGroups.xml was absent and the sandbox restarted before part 1, so
+             forceSaveSettings had to create the file. It did (961 bytes — exactly 23 fewer than
+             the Windows entry's 984, i.e. the same 23-line file with CRLF endings there), and
+             part 2 read back `[Blue 0 tabs, TeamWindows 2 tabs]` after the kill-and-relaunch, with
+             both assignments still TeamWindows. The emptied-but-kept group round-trips through
+             tabGroups.xml as a bare GroupEntry with no assignments to reconstruct it from, so
+             "Keep" means kept across restarts on macOS too.
+
+             No PrismTabs defects found, and no harness defects either — the walkthrough needed no
+             changes on this platform, ec8e1d0's item-5 fix having already brought it up to date
+             with the new prompt. idea.log for the whole pass carries five SEVEREs, all
+             environment-only and all previously recorded: three GradleJvmSupportMatrix parser
+             errors (`IllegalArgumentException: 25`, this machine's default `java` on PATH being
+             JDK 25 — the same one that renders as the red "IDE error occurred" balloon in
+             08-after-restart.png) and two SlowOperations from the Kotlin plugin's
+             ScriptTemplatesFromDependenciesProvider while the Settings dialog enumerated
+             configurables for item 7. Zero io.prismtabs frames in any of them, and — unlike
+             2026-08-16 — zero "Write-unsafe context!" and zero "Save settings failed" entries
+             anywhere in the session. Screenshots: build/reports/manual/*.png.
+
+             One environment note for whoever runs the next macOS pass: Terminal.app now holds the
+             Accessibility grant on this machine, so the "run it from IDEA's built-in terminal"
+             workaround the 2026-08-16 entry needed no longer applies. Confirmed the documented
+             way rather than assumed — a throwaway `java InputProbe.java` in the same shell read
+             `before=(329,77) requested=(466,168) after=(466,168)`, i.e. input live, before a
+             single test ran. The daemon chain was `<- launchd` throughout, as on 2026-08-19, and
+             again predicted nothing.
+```
