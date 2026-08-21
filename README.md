@@ -497,6 +497,35 @@ tabs disappear from the strip while it stays listed (now marked collapsed) in th
 expand it and see the tabs return in their recorded order. `./gradlew test` and all five
 `./gradlew uiTest` tests pass, repeatably (run three times in a row with no failures).
 
+### Selection: right-click acts on the row you clicked, and a delete doesn't empty the selection
+
+Every action here — toolbar and context menu alike — is enabled by the list's Swing selection
+(`list.selectedValue`), which makes two selection rules load-bearing rather than cosmetic.
+
+**Right-click selects the row under the cursor** (`installRowSelectingPopupMenu`). Swing's
+`BasicListUI` moves a list's selection for the *left* mouse button only, so
+`PopupHandler.installPopupMenu` on its own shows a menu that still acts on whatever was selected
+before — and, with nothing selected, one whose every item is greyed out. Selecting the clicked row
+is what the platform does: right-clicking an unselected file in the Project view selects it first,
+and — measured the same way, against a live sandbox — does *not* move keyboard focus, so neither
+does this. The two selection-aware helpers the platform ships
+(`PopupHandler.installSelectionListPopup`, `installFollowingSelectionTreePopup`) make the opposite
+trade: they *suppress* the menu unless the click is already on the selection, which suits a
+multi-selection list and would only make this one deader.
+
+**Deleting the selected group falls the selection onto the row that took its place** (`refresh`),
+rather than leaving the list with no selection at all — an empty selection disables the toolbar too,
+which reads as a dead panel right after a delete. Only when something *was* selected: a list nobody
+has touched must not select a row on its own. Group ids survive rename, recolour and collapse, so
+this branch is only ever reached by an actual deletion, whether made here or from a tab's popup.
+
+Both rules come from a bug reported on Linux on 2026-08-21: right-clicking a group straight after
+deleting one came up greyed out, and a left-click "woke the panel up", which made it look like a
+focus problem. Reproduced end-to-end before the fix — with nothing selected the menu read
+`[Collapse Group=false, Rename…=false, Recolour…=false, Delete Group=false]`, and the list's
+selection after the delete was empty. `TabGroupsToolWindowUiTest`'s second case now drives that
+exact sequence and asserts both rules.
+
 ### Three more UI-testing findings, all real, none predicted
 
 Phase 3 already found two (see above); Phase 4 found three more, all in the shared UI-test harness

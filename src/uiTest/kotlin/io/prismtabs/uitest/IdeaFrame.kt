@@ -1021,6 +1021,29 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
 }
 
 /**
+ * The "Tab Groups" tool-window list itself, for the tests that need more of it than
+ * [toolWindowGroupRows]' rendered rows — its live selection, or a right-click on one row. Opens the
+ * tool window first if it isn't already showing, exactly as [toolWindowGroupRows] does.
+ */
+fun RemoteRobot.toolWindowGroupList(): JListFixture {
+    toolWindowGroupRows()
+    return findAll<JListFixture>(byXpath("//div[@class='JBList']")).last()
+}
+
+/**
+ * Every item of the context menu that is open right now, as `"text=enabled"` — the reading that
+ * makes a greyed-out menu assertable. A menu whose items are all `=false` is what a right-click on
+ * a list with no selection used to produce; see `installRowSelectingPopupMenu`.
+ */
+fun RemoteRobot.contextMenuItemStates(): List<String> {
+    val locator = byXpath("//div[@class='ActionMenuItem']")
+    waitFor(Duration.ofSeconds(10)) { findAll<ComponentFixture>(locator).isNotEmpty() }
+    return findAll<ComponentFixture>(locator).map {
+        it.callJs("component.getText() + '=' + component.isEnabled()", true)
+    }
+}
+
+/**
  * The "Tab Groups" tool-window list rows, as rendered — colour dot aside, this is the group name,
  * member count and any "collapsed" suffix that [io.prismtabs.ui.TabGroupsToolWindow] paints. Opens
  * the tool window via its stripe button first if it isn't already showing. Unscoped
