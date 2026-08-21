@@ -216,12 +216,20 @@ class WindowsManualVerificationUiTest {
                 remoteRobot.clickPopupSubstepItem("TeamWindows (active)", "Clear Active Group")
 
                 // --- 5. Remove from Group ----------------------------------------------------
+                // Sample.kt is "Blue"'s only member, so this removal empties the group and raises
+                // the "delete the group?" prompt (README "Empty groups"). Answering it is not
+                // optional housekeeping: the prompt is **modal**, and leaving it up wedges every
+                // later step — item 6's tool-window click was the first casualty when this
+                // walkthrough was first re-run against that feature.
                 remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
                 remoteRobot.clickPopupItem("Remove from Group")
                 waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == null }
                 assertNull(groupNameFor("Sample.kt"))
                 remoteRobot.saveScreenshot("05-remove-from-group")
-                note("5. Remove from Group cleared Sample.kt back to the platform default")
+                dialog("Empty Tab Group") {
+                    find<JButtonFixture>(JButtonFixture.byText("Keep")).click()
+                }
+                note("5. Remove from Group cleared Sample.kt back to the platform default, and offered to delete the group it emptied; kept it")
 
                 // --- 6. Tab Groups tool window: listing, collapse, expand, HiDPI check ------
                 waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().any { it.contains("TeamWindows") } }
@@ -230,6 +238,14 @@ class WindowsManualVerificationUiTest {
                     remoteRobot.toolWindowGroupRows().any { it.contains("TeamWindows") && it.contains("2 tabs") },
                     "expected TeamWindows listed with 2 members, got ${remoteRobot.toolWindowGroupRows()}",
                 )
+                // The other half of "Keep": a declined group stays, and the tool window is where a
+                // user is told it is now empty rather than gone. README "Empty groups" promises
+                // exactly this row, and nothing else in the suite reads it.
+                assertTrue(
+                    remoteRobot.toolWindowGroupRows().any { it.contains("Blue") && it.contains("0 tabs") },
+                    "expected the kept, emptied Blue group listed with 0 tabs, got ${remoteRobot.toolWindowGroupRows()}",
+                )
+                note("5b. The kept, emptied group is listed by the tool window as \"0 tabs\"")
                 setGroupCollapsed("TeamWindows", collapsed = true)
                 waitFor(ofSeconds(10)) { !openTabNames().contains("Second.kt") }
                 assertTrue(remoteRobot.toolWindowGroupRows().any { it.contains("TeamWindows") && it.contains("collapsed") })
@@ -291,9 +307,18 @@ class WindowsManualVerificationUiTest {
 
                 waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().any { it.contains("TeamWindows") } }
                 note("Tool window rows after restart: ${remoteRobot.toolWindowGroupRows()}")
+                // The group item 5 declined to delete has to still be here. That is the whole
+                // argument for asking instead of deleting silently the way Chrome does: a PrismTabs
+                // group is persisted data, so "Keep" has to mean kept *across restarts*, not just
+                // until the IDE closes. Nothing else checks an empty group round-trips through
+                // tabGroups.xml — it has no assignments to reconstruct it from.
+                assertTrue(
+                    remoteRobot.toolWindowGroupRows().any { it.contains("Blue") && it.contains("0 tabs") },
+                    "expected the kept, emptied Blue group to survive the restart, got ${remoteRobot.toolWindowGroupRows()}",
+                )
                 hideTabGroupsToolWindow()
 
-                note("8. Group name, colour and membership all survived a real IDE restart")
+                note("8. Group name, colour and membership all survived a real IDE restart, including a kept empty group")
             }
         } finally {
             flush("part2-log.txt")

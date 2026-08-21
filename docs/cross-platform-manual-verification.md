@@ -583,3 +583,106 @@ Result:      PASS — first macOS pass covering the merged swatch-popup group-cr
                  why it went unnoticed). Cause and fix are unrelated to either platform — see
                  "verifyPlugin was red" above.
 ```
+
+```
+Date:        2026-08-21
+OS:          Windows 11 Pro (10.0.26200)
+IDE build:   IC-242.20224.300 (JBR 21.0.3), plugin 1.3.2-SNAPSHOT
+Theme(s):    dark (New UI "Dark" theme), DPI 120 (125% Windows scaling), screen 1536x864
+Result:      PASS — first pass on any platform covering "offer to delete a tab group when its last
+             member is removed" (commit 093b957), which had only ever been exercised on the Linux
+             machine it was written on. Automated suite green: PaywallUiTest (4),
+             TabGroupPaletteConfigurableUiTest (1), TabGroupPopupUiTest (10),
+             TabGroupsToolWindowUiTest (1), EmptyGroupOnDiskDeleteUiTest (3) — 19/19 from a bare
+             `./gradlew uiTest`, with MacSettingsShortcutUiTest and WindowsManualVerificationUiTest
+             both correctly reporting skipped and no `--tests` curation anywhere (the 5e40060
+             self-gating mechanism, confirmed working on a second machine). Fast `./gradlew test`:
+             55/55. `./gradlew verifyPlugin`: green across all seven IDEs it resolves
+             (IU-242.26775.15, 243.28141.41, 251.29188.72, 252.28539.97, 253.33813.55,
+             261.27258.48, 262.10315.19 — that last one a newer release than the 262.9437.185 the
+             2026-08-19 entry recorded), zero override-only and zero compatibility findings, and
+             nothing new from this feature: the remaining deprecation/internal-API notes are the
+             four already accepted on purpose (SeparatorWithText, ActionUtil.invokeAction on 243+,
+             FileEditorManagerImpl.queueUpdateFile, PluginManager.getPluginByClass). Run here
+             because the 2026-08-19 pass is what caught this task having been silently red for
+             weeks, and because 093b957 introduced new platform calls — MessageDialogBuilder.yesNo,
+             VFileDeleteEvent, ModalityState.nonModal, Project.getDisposed — that had never been
+             put through it. All 8 checklist items confirmed via WindowsManualVerificationUiTest,
+             both methods, with a real process kill-and-relaunch between them.
+
+             All three ways a group can empty are now verified against a live IDE, where the third
+             had no live coverage at all before this pass:
+             - "Remove from Group" on the last member, and moving the last member into another
+               group — TabGroupPopupUiTest's three new cases plus its reworked negative case, which
+               asserts the prompt does *not* appear while a member remains.
+             - The last member deleted on disk — the new EmptyGroupOnDiskDeleteUiTest. That trigger
+               is the only one that never touches TabGroupPopup: it arrives on
+               TabGroupVfsListener.before from inside the write action performing the deletion, so
+               nothing about it (the `before`-not-`after` URL read, the deferred non-modal prompt)
+               is reachable from a unit test. One of its three cases deletes the file the way a user
+               does — selecting it in the Project tool window and pressing Delete — so the
+               platform's own delete confirmation is genuinely in play and the `nonModal` "queue
+               behind the dialog driving the deletion rather than stack on it" claim is
+               demonstrated rather than argued. A second covers the batch case: deleting a
+               directory emptied two groups at once and raised a single plural "Empty Tab Groups"
+               dialog, not a queue of identical ones.
+
+             Item detail matches the previous Windows entries exactly where it should: all 8 presets
+             present and legible; Blue tinted the tab at full strength when selected
+             (r=46,g=92,b=156) and at the documented ~50% blend when unselected (r=37,g=61,b=94 vs.
+             an untinted tab's r=30,g=31,b=34) — identical to both the 2026-08-09 and 2026-08-19
+             Windows readings; the New Group dialog was pre-filled with the colour's label, had
+             focus immediately (typed and Enter-submitted with no prior click); rename/recolour
+             propagated to every member and active-group inheritance worked; the tool window listed
+             membership, collapse/expand worked, icons and dots crisp at 125%; Settings | Tools |
+             PrismTabs rendered and Restore Defaults reverted a renamed preset.
+
+             The empty-group prompt itself was read off the screenshot, not just asserted: 05-
+             remove-from-group.png shows the "Empty Tab Group" dialog with the question icon,
+             `"Blue" has no tabs left. Delete the group?`, and "Delete Group" as the focused default
+             beside "Keep". 06-tool-window-listing.png shows the declined group listed as
+             `Blue  0 tabs` above `TeamWindows  2 tabs` — the row README's "Empty groups" section
+             promises and which nothing had ever checked. Screenshots: build/reports/manual/*.png.
+
+             Persistence was tested on the first-write path deliberately, as the 2026-08-19 finding
+             instructs: .idea/tabGroups.xml was deleted and the sandbox restarted before part 1, so
+             forceSaveSettings had to create the file rather than overwrite one. It did (984 bytes),
+             and part 2 read back `[Blue 0 tabs, TeamWindows 2 tabs]` after the kill-and-relaunch.
+             That second row is the one worth noting: an emptied-but-kept group has no assignments
+             to reconstruct it from, so it round-trips through tabGroups.xml purely as a group
+             entry. "Keep" therefore means kept across restarts, which is the whole argument for
+             asking rather than deleting silently the way Chrome does.
+
+             One real defect found and fixed, in the verification harness rather than the plugin:
+             (1) WindowsManualVerificationUiTest.part1WalkthroughChecklist was stale against
+                 093b957 and could not pass. Checklist item 5 removes Sample.kt from its group, and
+                 Sample.kt is that group's *only* member, so the new prompt now fires there. The
+                 assignment is cleared before the prompt opens, so item 5's own wait still passed
+                 and the failure surfaced one step later as a timeout in item 6's tool-window
+                 click — with an unanswered modal sitting in front of the IDE. 093b957 updated
+                 TabGroupPopupUiTest but not this walkthrough. Item 5 now answers the prompt with
+                 "Keep" and asserts the emptied group is listed as "0 tabs"; part 2 asserts that
+                 row survives the restart. Worth recording as a pattern: a feature that adds a
+                 modal to an existing flow breaks every driven walkthrough of that flow, and this
+                 class only runs when someone deliberately opts in, so nothing was going to catch
+                 it until a pass was run.
+
+             Two environment-only observations, neither an io.prismtabs issue:
+             (2) An "Add File to Git" modal appears whenever a test creates a file in the fixture
+                 project, because that project sits inside this repository's own working copy
+                 (.idea/vcs.xml maps it). It swallows robot keystrokes, which is what initially
+                 stopped the project-view deletion case from doing anything at all.
+                 EmptyGroupOnDiskDeleteUiTest cancels it rather than accepting, so a run never
+                 stages anything into the real repository.
+             (3) The Project tree renders `Doomed.kt` as `Doomed`: the Kotlin plugin presents a .kt
+                 file holding a single top-level declaration by that declaration's name. A tree
+                 lookup by file name waits out its full timeout against a tree that is displaying
+                 the file perfectly well.
+
+             Also confirmed while writing (2)/(3): VFS mutations driven from a remote-robot script
+             must go through `runJs(..., runInEdt = false)` plus an explicit
+             `ModalityState.nonModal()`, exactly as IdeaFrame.forceSaveSettings already documents.
+             Without it the write still lands but the platform logs a TransactionGuardImpl
+             "Write-unsafe context!" SEVERE per call — measured directly here, and cleaned up before
+             sign-off, so idea.log has zero SEVEREs attributable to io.prismtabs for this pass.
+```

@@ -733,9 +733,18 @@ Disk deletion is handled in `before`, not `after`, since that is the only side o
 where the file being deleted still yields a URL; the prompt itself is deferred out of the write
 action with a non-modal `invokeLater`, because a modal cannot be shown from inside one.
 
+All three triggers are exercised against a live IDE, not only through `TabGroupService`'s unit
+tests: [`TabGroupPopupUiTest`](src/uiTest/kotlin/io/prismtabs/uitest/TabGroupPopupUiTest.kt) drives
+the two popup paths, and
+[`EmptyGroupOnDiskDeleteUiTest`](src/uiTest/kotlin/io/prismtabs/uitest/EmptyGroupOnDiskDeleteUiTest.kt)
+the deletion one — deleting the file the way a user does, from the Project tool window, so the
+platform's own delete confirmation is in play and the `nonModal` queuing above is demonstrated
+rather than argued. That class also covers the batch case a single directory deletion produces.
+
 ## UI testing
 
-`TabGroupPopup`, the Tab Groups tool window, and the free/paid paywall (`PaywallUiTest`, see
+`TabGroupPopup`, the Tab Groups tool window, the VFS deletion path (`EmptyGroupOnDiskDeleteUiTest`,
+see "Empty groups" above) and the free/paid paywall (`PaywallUiTest`, see
 "Marketplace publishing prep" above) are covered end-to-end by
 [`remote-robot`](https://github.com/JetBrains/intellij-ui-test-robot) tests (`src/uiTest/`), not
 just eyeballed in `runIde`. They live in their own Gradle source set — slow, need a live IDE — kept
