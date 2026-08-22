@@ -88,7 +88,7 @@ private class TabGroupsPanel(
         toolbarComponent = toolbar.component
         installRowSelectingPopupMenu(list, actions)
 
-        // Double-click as a shortcut for the toolbar's collapse/expand toggle — mirrors the
+        // Double-click as a shortcut for the toolbar's hide/show toggle — mirrors the
         // platform's own convention of double-click-as-default-action on list/tree tool windows.
         list.addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
@@ -177,7 +177,7 @@ private class TabGroupsPanel(
         val collapsedCount = service.groups().count { it.collapsed }
         if (collapsedCount > 0) {
             statusText.appendLine(
-                "Reopen the tabs of $collapsedCount collapsed group${if (collapsedCount == 1) "" else "s"}",
+                "Reopen the tabs of $collapsedCount hidden group${if (collapsedCount == 1) "" else "s"}",
                 SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES,
             ) {
                 expandAllCollapsedGroups(project, service)
@@ -256,7 +256,7 @@ internal fun expandAllCollapsedGroups(project: Project, service: TabGroupService
     service.groups().filter { it.collapsed }.forEach { TabGroupCollapse.expand(project, service, it) }
 }
 
-/** Swatch dot, name, member count, and a "collapsed" suffix — the plan's stated row shape. */
+/** Swatch dot, name, member count, and a "hidden" suffix — the plan's stated row shape. */
 private class GroupCellRenderer(private val service: TabGroupService) : ColoredListCellRenderer<TabGroup>() {
 
     override fun customizeCellRenderer(
@@ -270,7 +270,7 @@ private class GroupCellRenderer(private val service: TabGroupService) : ColoredL
         append(value.name)
         val count = service.membersOf(value.id).size
         append("  $count ${if (count == 1) "tab" else "tabs"}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
-        if (value.collapsed) append("  ·  collapsed", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+        if (value.collapsed) append("  ·  hidden", SimpleTextAttributes.GRAYED_ATTRIBUTES)
     }
 }
 
@@ -294,14 +294,19 @@ private abstract class SelectionAction(
     }
 }
 
+/**
+ * Presented as Hide/Show, not Collapse/Expand: the action closes a group's tabs and reopens them,
+ * with nothing left behind in their place, so the eye pair is what users read it as. The model
+ * keeps saying `collapsed` — that name is persisted state and is not worth churning for wording.
+ */
 private class ToggleCollapseAction(project: Project, service: TabGroupService, list: JBList<TabGroup>) :
-    SelectionAction("Collapse Group", AllIcons.Actions.Collapseall, project, service, list) {
+    SelectionAction("Hide Group", PrismTabsIcons.Hide, project, service, list) {
 
     override fun update(e: AnActionEvent) {
         super.update(e)
-        val group = list.selectedValue
-        e.presentation.text = if (group?.collapsed == true) "Expand Group" else "Collapse Group"
-        e.presentation.icon = if (group?.collapsed == true) AllIcons.Actions.Expandall else AllIcons.Actions.Collapseall
+        val collapsed = list.selectedValue?.collapsed == true
+        e.presentation.text = if (collapsed) "Show Group" else "Hide Group"
+        e.presentation.icon = if (collapsed) PrismTabsIcons.Show else PrismTabsIcons.Hide
     }
 
     override fun actionPerformed(e: AnActionEvent) {
@@ -328,8 +333,13 @@ private class RecolorAction(project: Project, service: TabGroupService, list: JB
     }
 }
 
+/**
+ * `Actions.GC` despite the name: it is the platform's own waste-basket, drawn as one in both the
+ * classic and the new UI (`expui/general/delete.svg`). `General.Remove`, which this used to carry,
+ * is a minus sign — the icon for taking a row out of a list, not for destroying what it points at.
+ */
 private class DeleteAction(project: Project, service: TabGroupService, list: JBList<TabGroup>) :
-    SelectionAction("Delete Group", AllIcons.General.Remove, project, service, list) {
+    SelectionAction("Delete Group", AllIcons.Actions.GC, project, service, list) {
 
     override fun actionPerformed(e: AnActionEvent) {
         val group = list.selectedValue ?: return
@@ -344,7 +354,7 @@ private class DeleteAction(project: Project, service: TabGroupService, list: JBL
  * locked panel's own "reopen the tabs" escape hatch, which calls [TabGroupCollapse.expand] direct.
  */
 private fun toggleCollapse(project: Project, service: TabGroupService, group: TabGroup) {
-    if (!PrismTabsLicense.requirePaidFeature("Collapsing and expanding tab groups")) return
+    if (!PrismTabsLicense.requirePaidFeature("Hiding and showing tab groups")) return
     if (group.collapsed) {
         TabGroupCollapse.expand(project, service, group)
     } else {

@@ -3,10 +3,10 @@
 Colour-coded tab groups for IntelliJ editor tabs.
 
 **Status: Phase 5 (hardening) in progress.** Features are complete through Phase 4: a **Tab Groups
-tool window** (right-hand stripe) lists every group with its colour dot, member count and collapsed
-state, and can rename, recolour, delete, or **collapse/expand** a group. Collapse is "close and
-remember" — IntelliJ has no collapsible in-strip chip and no API to build one, so collapsing closes
-the group's open tabs and records them, and expanding reopens them in order; see
+tool window** (right-hand stripe) lists every group with its colour dot, member count and hidden
+state, and can rename, recolour, delete, or **hide/show** a group. Hiding is "close and
+remember" — IntelliJ has no collapsible in-strip chip and no API to build one, so hiding closes
+the group's open tabs and records them, and showing reopens them in order; see
 [Phase 4 result](#phase-4-result). Everything is covered end-to-end by real UI tests
 (`./gradlew uiTest`, see [UI testing](#ui-testing)) driving an actual sandbox IDE, not just
 `./gradlew test`'s plain-JUnit coverage.
@@ -475,10 +475,25 @@ group and reopens each via `openFile(file, focusEditor = false)`, in the same or
 **4b — the "Tab Groups" tool window.** `io.prismtabs.ui.TabGroupsToolWindow` (a `ToolWindowFactory`
 + `DumbAware`, registered `anchor="right"`) is the plan's stated substitute for Chrome's in-strip
 chip: a `JBList<TabGroup>` showing each group's swatch, name, member count and — new this phase — a
-"collapsed" suffix, with a toolbar (and matching context menu) for Collapse/Expand, Rename…,
+"hidden" suffix, with a toolbar (and matching context menu) for Hide/Show Group, Rename…,
 Recolour…, and Delete Group. Rename, Recolour and Delete don't duplicate `TabGroupPopup`'s logic —
 `promptForRenameAndApply`, `confirmAndDelete` and `RecolorStep` were widened from `private` to
 `internal` and are invoked directly from here.
+
+**Hide/Show, not Collapse/Expand — and why two icons ship with the plugin.** The action closes a
+group's tabs and reopens them; nothing is left folded up in their place, so "collapse" described an
+affordance the IDE cannot give us (see 4a) while "hide" describes what actually happens. The eye and
+struck-through eye are the settled convention for that pair, and the platform has only half of it:
+`AllIcons.Actions.Show` is an eye, but nothing in `AllIcons` is its negative — `Actions.ToggleVisibility`
+is an eye badged with a table, `General.TbHidden` a toolbar outline, and `expui/general/hide.svg`
+(unreachable from `AllIcons` anyway) a plain dash. Borrowing the platform's eye and hand-drawing only
+its counterpart would also split the pair across themes, where the platform's eye changes shape between
+the classic and new UI and ours would not, so both are drawn in `src/main/resources/icons` on the 16x16
+grid in the platform's own icon greys (`#6C707E` / `#CED0D6`), loaded through `PrismTabsIcons`.
+`PrismTabsIconsTest` asserts they stay on the classpath and that the dark variants remain their light
+siblings with only the stroke colour swapped. Delete uses `AllIcons.Actions.GC` — the platform's
+waste-basket, whatever its field name says — rather than `General.Remove`, a minus sign that means
+"take out of this list", not "destroy".
 
 ### Keeping the tool window in sync: a small message-bus topic, not polling
 

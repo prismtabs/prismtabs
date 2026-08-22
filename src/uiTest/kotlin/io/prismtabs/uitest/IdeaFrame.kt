@@ -1045,7 +1045,7 @@ fun RemoteRobot.contextMenuItemStates(): List<String> {
 
 /**
  * The "Tab Groups" tool-window list rows, as rendered — colour dot aside, this is the group name,
- * member count and any "collapsed" suffix that [io.prismtabs.ui.TabGroupsToolWindow] paints. Opens
+ * member count and any "hidden" suffix that [io.prismtabs.ui.TabGroupsToolWindow] paints. Opens
  * the tool window via its stripe button first if it isn't already showing. Unscoped
  * ([RemoteRobot.find], not [IdeaFrame]'s subtree-scoped find) for the stripe button only; the list
  * itself lives inside the frame.
