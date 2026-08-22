@@ -55,8 +55,8 @@ class TabGroupsToolWindowUiTest {
                 // ...and the group is still listed, now marked collapsed — the whole point of 4b:
                 // a collapsed group must remain reachable somewhere the tab strip cannot show it.
                 assertTrue(
-                    remoteRobot.toolWindowGroupRows().any { it.contains("CollapseMe") && it.contains("collapsed") },
-                    "expected CollapseMe to still be listed and marked collapsed, got ${remoteRobot.toolWindowGroupRows()}",
+                    remoteRobot.toolWindowGroupRows().any { it.contains("CollapseMe") && it.contains("hidden") },
+                    "expected CollapseMe to still be listed and marked hidden, got ${remoteRobot.toolWindowGroupRows()}",
                 )
 
                 setGroupCollapsed("CollapseMe", collapsed = false)
@@ -65,8 +65,8 @@ class TabGroupsToolWindowUiTest {
                 val reopened = openTabNames().filter { it == "Sample.kt" || it == "Second.kt" }
                 assertEquals(listOf("Sample.kt", "Second.kt"), reopened, "expected members to reopen in their recorded order")
                 assertTrue(
-                    remoteRobot.toolWindowGroupRows().none { it.contains("CollapseMe") && it.contains("collapsed") },
-                    "expected CollapseMe to no longer read as collapsed after expanding",
+                    remoteRobot.toolWindowGroupRows().none { it.contains("CollapseMe") && it.contains("hidden") },
+                    "expected CollapseMe to no longer read as hidden after showing it again",
                 )
             } finally {
                 // In a finally, not at the end of the happy path: a failure here would otherwise
@@ -109,6 +109,12 @@ class TabGroupsToolWindowUiTest {
                 assertTrue(
                     remoteRobot.toolWindowGroupList().collectSelectedItems().any { it.contains("RightClickA") },
                     "the right-clicked row must be the selected one, got ${remoteRobot.toolWindowGroupList().collectSelectedItems()}",
+                )
+                // The wording the menu offers, asserted where it is actually rendered: the toggle
+                // reads Hide/Show, not the model's Collapse/Expand, and a visible group offers Hide.
+                assertTrue(
+                    remoteRobot.contextMenuItemStates().any { it.startsWith("Hide Group=") },
+                    "a visible group's menu must offer Hide Group, got ${remoteRobot.contextMenuItemStates()}",
                 )
 
                 // Delete it from that very menu: the selected row is the one that disappears.

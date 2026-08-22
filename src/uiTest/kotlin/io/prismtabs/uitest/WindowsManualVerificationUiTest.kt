@@ -248,7 +248,7 @@ class WindowsManualVerificationUiTest {
                 note("5b. The kept, emptied group is listed by the tool window as \"0 tabs\"")
                 setGroupCollapsed("TeamWindows", collapsed = true)
                 waitFor(ofSeconds(10)) { !openTabNames().contains("Second.kt") }
-                assertTrue(remoteRobot.toolWindowGroupRows().any { it.contains("TeamWindows") && it.contains("collapsed") })
+                assertTrue(remoteRobot.toolWindowGroupRows().any { it.contains("TeamWindows") && it.contains("hidden") })
                 remoteRobot.saveScreenshot("06b-tool-window-collapsed")
                 setGroupCollapsed("TeamWindows", collapsed = false)
                 waitFor(ofSeconds(10)) { openTabNames().containsAll(listOf("Second.kt", "Third.kt")) }

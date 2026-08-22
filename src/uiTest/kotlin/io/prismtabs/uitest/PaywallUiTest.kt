@@ -121,7 +121,7 @@ class PaywallUiTest {
                 showTabGroupsToolWindow()
                 waitFor(ofSeconds(10)) { toolWindowEmptyText().contains("paid feature") }
                 assertTrue(
-                    toolWindowEmptyText().contains("Reopen the tabs of 1 collapsed group"),
+                    toolWindowEmptyText().contains("Reopen the tabs of 1 hidden group"),
                     "a locked window with a collapsed group must offer the escape hatch, got: ${toolWindowEmptyText()}",
                 )
 
