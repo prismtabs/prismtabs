@@ -875,6 +875,97 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     }
 
     /**
+     * Invokes the tool window's *gated* hide/show choke point — the private top-level
+     * `toggleCollapse(project, service, group)` in `TabGroupsToolWindow.kt` that its toolbar button,
+     * its context menu item and its double-click shortcut all land on, and which carries the
+     * `requirePaidFeature` check itself.
+     *
+     * Deliberately **not** [setGroupCollapsed]: that one calls `TabGroupCollapse` directly and so
+     * runs *past* the gate, which is right for tests about collapse behaviour and useless for a test
+     * about the paywall. This is the only helper that exercises the gate on that call site, so
+     * without it the check at `TabGroupsToolWindow.kt`'s `toggleCollapse` could be deleted outright
+     * and the whole suite would still pass — every other path into collapsing either bypasses it
+     * ([setGroupCollapsed]) or is the deliberately-free escape hatch ([expandAllCollapsedGroups]).
+     *
+     * Reached reflectively because the function is `private`; the compiled signature was confirmed
+     * with `javap -p` rather than assumed, per CLAUDE.md. Pair it with [suppressRegisterDialog]: a
+     * refused call raises the registration dialog, and a modal left open wedges robot-server.
+     */
+    fun invokeToggleCollapse(groupName: String) {
+        runJs(
+            """
+            importPackage(com.intellij.openapi.wm.impl)
+            importPackage(com.intellij.ide.plugins)
+            importPackage(com.intellij.openapi.extensions)
+            importClass(com.intellij.openapi.application.ApplicationManager)
+
+            const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+            const project = frameHelper.getProject()
+            const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
+            const serviceClass = java.lang.Class.forName('io.prismtabs.service.TabGroupService', true, pluginLoader)
+            const service = project.getService(serviceClass)
+            const groupClass = java.lang.Class.forName('io.prismtabs.model.TabGroup', true, pluginLoader)
+
+            const groups = service.groups()
+            let target = null
+            for (let i = 0; i < groups.size(); i++) {
+                if (groups.get(i).getName() == '$groupName') target = groups.get(i)
+            }
+            // Named explicitly rather than left to the NPE Kotlin's own null check would raise
+            // inside the invoked function, which surfaces as an opaque IdeaSideException.
+            if (target == null) {
+                throw new java.lang.IllegalStateException('no tab group named $groupName')
+            }
+
+            const facade = java.lang.Class.forName('io.prismtabs.ui.TabGroupsToolWindowKt', true, pluginLoader)
+            const method = facade.getDeclaredMethod(
+                'toggleCollapse', com.intellij.openapi.project.Project, serviceClass, groupClass
+            )
+            method.setAccessible(true)
+
+            const task = new Runnable({ run: function() { method.invoke(null, project, service, target) } })
+            ApplicationManager.getApplication().invokeAndWait(task)
+            """,
+            true,
+        )
+    }
+
+    /**
+     * The `collapsed` flag of the group named [groupName], read from the model.
+     *
+     * The companion assertion to [openTabNames] rather than a replacement for it: tabs staying open
+     * is what the *user* notices when a gated hide is refused, but a hide that flipped the flag and
+     * failed to close anything would still leave the group rendered as "hidden" and un-showable, so
+     * the paywall tests assert both.
+     */
+    fun isGroupCollapsed(groupName: String): Boolean = callJs<Boolean>(
+        """
+        importPackage(com.intellij.openapi.wm.impl)
+        importPackage(com.intellij.ide.plugins)
+        importPackage(com.intellij.openapi.extensions)
+
+        const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+        const project = frameHelper.getProject()
+        const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
+        const service = project.getService(java.lang.Class.forName('io.prismtabs.service.TabGroupService', true, pluginLoader))
+
+        const groups = service.groups()
+        let target = null
+        for (let i = 0; i < groups.size(); i++) {
+            if (groups.get(i).getName() == '$groupName') target = groups.get(i)
+        }
+        // Throws rather than answering `false` for a group that isn't there: every caller asserts on
+        // this in the negative ("must not have been hidden"), so a silent `false` would turn a
+        // vanished or misspelt group into a passing paywall test.
+        if (target == null) {
+            throw new java.lang.IllegalStateException('no tab group named $groupName')
+        }
+        target.getCollapsed()
+        """,
+        true,
+    )
+
+    /**
      * Invokes [io.prismtabs.ui.toggleActiveGroup] on the group named [groupName] — the same choke
      * point the popup's "Mark as Active Group" / "Clear Active Group" item calls, so this covers the
      * gate on that item without mouse-driving a popup (which on a locked build would also fire the

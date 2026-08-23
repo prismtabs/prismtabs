@@ -700,8 +700,11 @@ Done so far, none of it published anywhere:
     build and always will (no `<product-descriptor>` ⇒ the gate is open), so that class simulates an
     unlicensed paid build inside the running sandbox — setting the descriptor's `productCode` and
     installing a stamp-less `LicensingFacade`, both real platform state, no test-only seam in
-    production code — and asserts what a free user actually gets. It is script-driven rather than
-    mouse-driven so it runs on Wayland too (see "These tests need an X11 display").
+    production code — and asserts what a free user actually gets. It covers both directions: that
+    each paid feature is withheld, *and* that the free tier still works — the latter guards against
+    over-gating, which every locked-side assertion in the class would otherwise pass right through.
+    All but that free-tier case are script-driven rather than mouse-driven, so they run on Wayland
+    too (see "These tests need an X11 display").
   - **Nothing is ever held hostage.** *Clearing* an active group stays free even though setting one
     is paid, and the locked tool window still offers a one-click "reopen the tabs of N collapsed
     groups" — otherwise a lapsed subscription would leave tabs closed behind the very window needed
@@ -849,17 +852,28 @@ no matter what the tests say:
   ScreenCast (PipeWire) API — which waits on a portal grant that never comes. See finding 5 below
   for why one such call used to kill an entire run.
 
-**`PaywallUiTest` is the one exception** — verified 2026-08-11 running under a live GNOME Wayland
-session (`$XDG_SESSION_TYPE=wayland`), all 4 tests passing. Every paywall-specific interaction goes
-through `IdeaFrame`'s `runJs`/`callJs` helpers (in-process method calls inside the sandbox IDE, same
-mechanism `resetTabGroups`/`setGroupCollapsed` already used) rather than a popup or dialog click, so
-none of *that* needs `java.awt.Robot`. The one caveat: assertions that read the tool window's
-contents go through `toolWindowGroupRows()`, which opens the window with a real stripe-button
-`.click()` if it isn't already showing — but every `PaywallUiTest` case opens the window itself via
-the script-driven `showTabGroupsToolWindow()` first, so that fallback branch is never actually
-reached in this class; it stays a live Robot dependency for whoever calls `toolWindowGroupRows()`
-without opening the window some other way first. The other three uiTest classes click through real
-popups and dialogs throughout and still need the workaround below.
+**Most of `PaywallUiTest` is the one exception** — its script-driven cases were verified 2026-08-11
+running under a live GNOME Wayland session (`$XDG_SESSION_TYPE=wayland`), all 4 tests of the day
+passing; the class has since grown to 6. Their paywall-specific interactions go through `IdeaFrame`'s
+`runJs`/`callJs` helpers (in-process method calls inside the sandbox IDE, same mechanism
+`resetTabGroups`/`setGroupCollapsed` already used) rather than a popup or dialog click, so none of
+*that* needs `java.awt.Robot`.
+
+**The exception's own exception is the free-tier test**, `the free tier still colours tabs and
+manages groups while the licence is lapsed`, which is mouse-driven and so needs X11 like everything
+else. That is deliberate and load-bearing rather than an oversight: every gate lives in the UI layer
+and never in `TabGroupService`, so a test that the free tier still *works* must click the real popup
+(`createGroupViaPopup`, `clickPopupSubstepItem`, and the modal name prompt). Reflecting into the
+service instead would route past the only layer a `requirePaidFeature` could be added to, and would
+keep passing while an over-gating regression broke the product for every unsubscribed user.
+
+One further caveat for the script-driven cases: assertions that read the tool window's contents go
+through `toolWindowGroupRows()`, which opens the window with a real stripe-button `.click()` if it
+isn't already showing — but each of those cases opens the window itself via the script-driven
+`showTabGroupsToolWindow()` first, so that fallback branch is never actually reached; it stays a live
+Robot dependency for whoever calls `toolWindowGroupRows()` without opening the window some other way
+first. The other three uiTest classes click through real popups and dialogs throughout and still need
+the workaround below.
 
 Check with `echo $XDG_SESSION_TYPE`. If it says `wayland`, either log in to a **GNOME on Xorg**
 session, or run the sandbox IDE on a dedicated X display (`Xvfb`) and point `runIdeForUiTests` at it:
