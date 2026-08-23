@@ -904,7 +904,7 @@ answers for the *Wayland* session rather than the X display the IDE is on, so it
 screen. `RemoteRobotExtension`'s offscreen `Window.paint` capture is unaffected and is what to reach
 for when a popup needs photographing on Linux.
 
-### What it actually took to get working (six real findings, not guesses)
+### What it actually took to get working (seven real findings, not guesses)
 
 Every one of these was hit as a live test failure and fixed by re-running against the actual
 sandbox IDE — none were predicted in advance:
@@ -955,6 +955,23 @@ sandbox IDE — none were predicted in advance:
    frame was never actually raised. **Use `var`, or index inline, inside these scripts' loops** —
    and note that the failure mode is a wrong value, not an error. `log` is also already defined in
    robot-server's scope; declaring it throws "redeclaration of var log".
+7. **A second way to hit finding 5's exact failure mode: any modal at all wedges the one worker
+   thread, not just `Robot.createScreenCapture`.** `EmptyGroupOnDiskDeleteUiTest.createFixtureFile`
+   writes a file into the fixture project, which sits inside this repository's own working copy
+   (`.idea/vcs.xml` maps it) — so Git integration raises its "Add File to Git" modal, blocking the
+   EDT that robot-server dispatches on. `jstack` on the wedged sandbox showed the identical shape as
+   finding 5's, just parked one level up the call stack (`VcsVFSListener.performAddingWithConfirmation`
+   → `ConfirmationDialog.requestForConfirmation` → `Dialog.show`), and with the identical symptom:
+   two real test failures presenting as a suite-wide `SocketTimeoutException` collapse in every class
+   that happened to run afterwards. The earlier fix here was to find the dialog and click Cancel —
+   the wrong shape, since by the time a script can find it the EDT is already blocked, so the click
+   could only land in the gap before the modal loop started. The actual fix is the same shape as
+   finding 5's: don't create the dialog in the first place. `ProjectLevelVcsManager.getInstance
+   (project).getStandardConfirmation(VcsConfiguration.StandardConfirmation.ADD, vcs).setValue
+   (VcsShowConfirmationOption.Value.DO_NOTHING_SILENTLY)`, set for the shared confirmation and every
+   active VCS. **The general lesson: any code path that can raise a modal is a robot-server hazard,
+   not just the ones already known about — a `jstack` of the wedged sandbox is what actually
+   distinguishes "real failure" from "one test's dialog took the whole suite down with it".**
 
 ## Constraints that are not going away
 
