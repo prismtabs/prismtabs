@@ -45,6 +45,7 @@ class EmptyGroupOnDiskDeleteUiTest {
     @Test
     fun `deleting a group's last member from the project view offers to delete the group`(remoteRobot: RemoteRobot) {
         remoteRobot.idea {
+            silenceAddToVcsConfirmation()
             resetTabGroups()
             createFixtureFile("Doomed.kt")
             openFile("Doomed.kt")
@@ -73,6 +74,7 @@ class EmptyGroupOnDiskDeleteUiTest {
     @Test
     fun `deleting one of several members removes its assignment and offers nothing`(remoteRobot: RemoteRobot) {
         remoteRobot.idea {
+            silenceAddToVcsConfirmation()
             resetTabGroups()
             createFixtureFile("Doomed.kt")
             openFile("Sample.kt")
@@ -98,6 +100,7 @@ class EmptyGroupOnDiskDeleteUiTest {
     @Test
     fun `deleting a directory empties several groups and offers them in one dialog`(remoteRobot: RemoteRobot) {
         remoteRobot.idea {
+            silenceAddToVcsConfirmation()
             resetTabGroups()
             createFixtureFile("doomed-dir/First.kt")
             createFixtureFile("doomed-dir/Second.kt")
@@ -231,8 +234,6 @@ private fun IdeaFrame.deleteFromProjectView(remoteRobot: RemoteRobot, label: Str
         true,
     )
 
-    dismissAddToGitPrompt(remoteRobot)
-
     // Matched on the row's rendered text, which is **not** the file name: the Kotlin plugin
     // presents a .kt file holding a single top-level declaration as that declaration's name, so
     // `Doomed.kt` renders as `Doomed`. Waiting for the file name here times out against a tree that
@@ -286,26 +287,53 @@ private fun IdeaFrame.memberCount(groupName: String): Int = callJs(
 )
 
 /**
- * Dismisses the IDE's "Add File to Git" prompt, if it is up.
+ * Stops the IDE's Git integration ever raising its "Add File to Git" prompt in this project.
  *
  * Nothing to do with PrismTabs, and unavoidable here: the fixture project sits inside this
- * repository's own working copy (`.idea/vcs.xml` maps it), so creating a file in it makes the Git
- * integration offer to stage the new file — a **modal**, which then swallows the Delete keystroke
- * the project-view case depends on. Found exactly that way: the delete never happened and the
- * prompt this class is actually testing never appeared, with `Add File to Git` sitting in front of
- * everything.
+ * repository's own working copy (`.idea/vcs.xml` maps it), so every [createFixtureFile] makes the
+ * Git integration offer to stage the new file. That offer is a **modal `DialogWrapper`**, and a
+ * modal on the sandbox is fatal to a scripted run rather than merely inconvenient — it blocks the
+ * EDT, and robot-server dispatches on the EDT, so the whole server stops answering and every
+ * subsequent call in the run dies with `SocketTimeoutException`, in this class and in every class
+ * that runs after it.
  *
- * Cancelled rather than accepted, so a test run never stages anything into the real repository.
- * Absence is not a failure — the prompt only appears for a file Git does not already know about.
+ * Diagnosed from a `jstack` of the wedged sandbox, which parked the EDT in
+ * `VcsVFSListener.performAddingWithConfirmation` → `selectFilesToAdd` →
+ * `ConfirmationDialog.requestForConfirmation` → `Dialog.show`.
+ *
+ * Set to `DO_NOTHING_SILENTLY`, not `DO_ACTION_SILENTLY`: a test run must never stage anything into
+ * the real repository. Applied to the shared confirmation *and* to every active VCS's, because
+ * `VcsVFSListener` reads the one belonging to its own `AbstractVcs` and the two need not be the
+ * same object.
+ *
+ * This replaces a previous "find the dialog and click Cancel" helper. Dismissing after the fact is
+ * the wrong shape for this: the dialog has already blocked the EDT by the time it is visible, so the
+ * click could only ever land in the gap before the modal loop started — a race, and one that also
+ * cost half a second of `Thread.sleep` polling on every call. Not creating the dialog cannot race.
  */
-private fun dismissAddToGitPrompt(remoteRobot: RemoteRobot) {
-    val locator = byXpath("//div[@title='Add File to Git' and @class='MyDialog']")
-    repeat(10) {
-        val prompt = remoteRobot.findAll<DialogFixture>(locator).firstOrNull()
-        if (prompt != null) {
-            prompt.find<JButtonFixture>(JButtonFixture.byText("Cancel")).click()
-            return
+private fun IdeaFrame.silenceAddToVcsConfirmation() {
+    runJs(
+        """
+        importPackage(com.intellij.openapi.wm.impl)
+        importClass(com.intellij.openapi.vcs.ProjectLevelVcsManager)
+        importClass(com.intellij.openapi.vcs.VcsConfiguration)
+        importClass(com.intellij.openapi.vcs.VcsShowConfirmationOption)
+
+        var frameHelper = ProjectFrameHelper.getFrameHelper(component)
+        var project = frameHelper.getProject()
+        var manager = ProjectLevelVcsManager.getInstance(project)
+        var silent = VcsShowConfirmationOption.Value.DO_NOTHING_SILENTLY
+        var add = VcsConfiguration.StandardConfirmation.ADD
+
+        manager.getStandardConfirmation(add, null).setValue(silent)
+
+        // `var` in the loop body, never `const`/`let` — see RemoteRobotExtension's doc comment for
+        // the measured Rhino scoping failure this avoids.
+        var active = manager.getAllActiveVcss()
+        for (var i = 0; i < active.length; i++) {
+            manager.getStandardConfirmation(add, active[i]).setValue(silent)
         }
-        Thread.sleep(500)
-    }
+        """,
+        true,
+    )
 }
