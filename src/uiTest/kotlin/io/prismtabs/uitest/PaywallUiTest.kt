@@ -20,13 +20,22 @@ import java.time.Duration.ofSeconds
  * `<product-descriptor>` — so without [IdeaFrame.simulateUnlicensedPaidBuild] the paywall would
  * have no automated coverage at all, in this suite or any other.
  *
- * Two conventions worth knowing before adding to this class:
+ * Three conventions worth knowing before adding to this class:
  *  - **Every test asserts [IdeaFrame.paidFeaturesEnabled] is `false` before asserting anything
  *    else.** A simulation that silently stopped working would otherwise turn every assertion below
  *    into a re-test of the unlocked path that still passes.
- *  - **Locked features are driven through their own choke points, not clicked.** Same trade-off
- *    [IdeaFrame.setGroupCollapsed] documents — and here it additionally avoids the registration
- *    dialog a gated *click* would open, which is why [IdeaFrame.suppressRegisterDialog] backs it up.
+ *  - **Locked features are driven through their own choke points, not clicked** — and specifically
+ *    through the choke point that *carries the gate*, never past it. [IdeaFrame.setGroupCollapsed]
+ *    reaches `TabGroupCollapse` directly and so proves nothing about the paywall;
+ *    [IdeaFrame.invokeToggleCollapse] is its gated counterpart and is what a hide/show test must
+ *    use. Same trade-off [IdeaFrame.setGroupCollapsed] documents — and here it additionally avoids
+ *    the registration dialog a gated *click* would open, which is why
+ *    [IdeaFrame.suppressRegisterDialog] backs it up.
+ *  - **The free-tier test is the exception to the one above, and must stay that way.** Every gate
+ *    lives in the UI layer, never in `TabGroupService`, so a test that the free tier still *works*
+ *    has to click the real popup: reflecting into the service would route past the only layer a
+ *    `requirePaidFeature` could be added to, and would pass regardless. That one test therefore
+ *    needs a real `java.awt.Robot` and an X11 display; the rest of this class does not.
  */
 @ExtendWith(RemoteRobotExtension::class)
 class PaywallUiTest {
@@ -185,6 +194,154 @@ class PaywallUiTest {
                 // ...whereas re-marking one is refused.
                 toggleActiveGroup("Sticky")
                 assertNull(activeGroupName(), "marking a group active must be refused while unlicensed")
+            } finally {
+                restoreUnpaidBuild()
+                restoreRegisterDialog()
+                closeAllEditors()
+            }
+        }
+    }
+
+    /**
+     * The hide/show gate on its own call site, which nothing else here reaches.
+     *
+     * The scenario is the one that makes that gate necessary rather than redundant with the locked
+     * panel simply not drawing a toolbar: the tool window is left **open on its unlocked rendering**
+     * when the licence lapses. Nothing broadcasts a licence change (see `PrismTabsLicense`), so the
+     * panel keeps its list, its toolbar and its double-click handler until something makes it
+     * refresh — and every one of those routes lands on `toggleCollapse`. This test therefore
+     * deliberately does *not* re-show the tool window after the lapse: re-showing is what the first
+     * test in this class covers, and doing it here would repaint the panel into its locked state and
+     * quietly retire the very reachability being asserted.
+     */
+    @Test
+    fun `hiding and showing are refused from a tool window left open when the licence lapses`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                assignFileToNewGroup("Sample.kt", "Gated")
+                addFileToGroup("Second.kt", "Gated")
+                waitFor(ofSeconds(10)) { groupNameFor("Second.kt") == "Gated" }
+
+                // Shown while still entitled, and left that way for the rest of the test.
+                showTabGroupsToolWindow()
+                waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().any { it.contains("Gated") } }
+
+                simulateUnlicensedPaidBuild()
+                suppressRegisterDialog()
+                assertFalse(paidFeaturesEnabled(), "the simulated paid build should read as unlicensed")
+
+                // Hiding: refused, so the tabs stay open and the group stays shown.
+                invokeToggleCollapse("Gated")
+                assertFalse(isGroupCollapsed("Gated"), "a gated hide must not flip the group to collapsed")
+                assertTrue(
+                    openTabNames().containsAll(listOf("Sample.kt", "Second.kt")),
+                    "a gated hide must not close the group's tabs, got: ${openTabNames()}",
+                )
+
+                // Showing is gated too, and proving it needs a group that is already hidden while
+                // unlicensed. setGroupCollapsed drives TabGroupCollapse directly — past the gate on
+                // purpose — which is exactly the state a lapse mid-collapse leaves behind.
+                setGroupCollapsed("Gated", collapsed = true)
+                waitFor(ofSeconds(10)) { !openTabNames().contains("Sample.kt") && !openTabNames().contains("Second.kt") }
+
+                invokeToggleCollapse("Gated")
+                assertTrue(isGroupCollapsed("Gated"), "a gated show must leave the group collapsed")
+                assertFalse(
+                    openTabNames().contains("Sample.kt"),
+                    "a gated show must not reopen the tabs — that is the escape hatch's job, got: ${openTabNames()}",
+                )
+
+                // The assertions above are all "nothing happened", which a helper that silently did
+                // nothing would also satisfy. Restoring the licence and re-running the *same* call
+                // is what proves they were the paywall refusing rather than the test misfiring.
+                restoreUnpaidBuild()
+                assertTrue(paidFeaturesEnabled(), "restoring the unpaid build should reopen the gate")
+
+                invokeToggleCollapse("Gated")
+                waitFor(ofSeconds(10)) { !isGroupCollapsed("Gated") }
+                waitFor(ofSeconds(10)) { openTabNames().containsAll(listOf("Sample.kt", "Second.kt")) }
+            } finally {
+                restoreUnpaidBuild()
+                expandAllCollapsedGroups()
+                restoreRegisterDialog()
+                hideTabGroupsToolWindow()
+                closeAllEditors()
+            }
+        }
+    }
+
+    /**
+     * The other half of the paywall, and the half a gate-by-gate test can never show: that the
+     * **free tier still works**. Every other test in this class asserts something is withheld, so a
+     * regression that over-gated — a `requirePaidFeature` added to the popup's swatch handler, say —
+     * would make all of them pass harder while breaking the product for every unsubscribed user.
+     *
+     * What it covers is not arbitrary: it is what the README's "Marketplace publishing prep" section
+     * sells as free (manual colouring, unlimited groups), and what the locked tool window's own
+     * upsell promises in as many words — "Colouring tabs and managing groups from a tab's
+     * right-click menu stays free". The first test in this class asserts that sentence is
+     * *displayed*; this one asserts it is *true*.
+     *
+     * **The one mouse-driven test in this class**, and deliberately so — it is the whole point of
+     * it. Every gate lives in the UI layer ([io.prismtabs.ui.TabGroupPopup] and friends), never in
+     * `TabGroupService`, so the script-driven [IdeaFrame.assignFileToNewGroup] shortcut the other
+     * tests use reflects straight past the only layer that *could* be gated: a `requirePaidFeature`
+     * added to the popup would leave it passing. Driving the real popup is therefore load-bearing
+     * here, at the cost of needing an X11 display like the rest of the suite (see README "These
+     * tests need an X11 display") — unlike its Wayland-safe siblings above.
+     *
+     * [IdeaFrame.suppressRegisterDialog] is held for the whole test even though nothing here should
+     * open it: if a free path *has* been gated, the upsell is what a refusal raises, and a modal
+     * left open on the sandbox wedges robot-server. Suppressed, that regression fails as a clean
+     * assertion instead of a hang.
+     */
+    @Test
+    fun `the free tier still colours tabs and manages groups while the licence is lapsed`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                closeAllEditors()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                openFile("Third.kt")
+
+                simulateUnlicensedPaidBuild()
+                suppressRegisterDialog()
+                assertFalse(paidFeaturesEnabled(), "the simulated paid build should read as unlicensed")
+
+                // Creating a group by clicking a colour dot: the popup's own flow, modal name prompt
+                // included, all while unlicensed.
+                remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Green", name = "FreeGroup")
+                assertEquals("FreeGroup", groupNameFor("Sample.kt"), "creating a group must stay free")
+                assertEquals(
+                    0xA8DAB5,
+                    groupLightRgbFor("Sample.kt"),
+                    "the chosen preset's colour must actually be applied — manual colouring is free",
+                )
+
+                // "Unlimited groups" is a free-tier promise, so a *second* group must be creatable:
+                // a quantity-based cap is the most obvious wrong way to build this free tier, and it
+                // would be caught here and nowhere else.
+                remoteRobot.createGroupViaPopup(this, "Second.kt", colour = "Blue", name = "AlsoFree")
+                assertEquals(2, groupCount(), "a lapsed subscriber must still be able to hold multiple groups")
+
+                // "Add to Group…" — the popup's other free choke point, and a separate handler from
+                // the swatch click above, so gating one would not fail the assertions before this.
+                // Third.kt is ungrouped, so nothing is emptied and no "Empty Tab Group" modal opens.
+                remoteRobot.openTabGroupPopupOn(this, "Third.kt")
+                remoteRobot.clickPopupSubstepItem("Add to Group…", "FreeGroup")
+                waitFor(ofSeconds(10)) { groupNameFor("Third.kt") == "FreeGroup" }
+
+                // Nothing the free tier did may have closed a tab: hiding is the paid feature, and
+                // grouping must never imply it.
+                assertTrue(
+                    openTabNames().containsAll(listOf("Sample.kt", "Second.kt", "Third.kt")),
+                    "grouping while locked must leave every tab open, got: ${openTabNames()}",
+                )
+                assertFalse(isGroupCollapsed("FreeGroup"), "a group created while locked must not come up hidden")
             } finally {
                 restoreUnpaidBuild()
                 restoreRegisterDialog()
