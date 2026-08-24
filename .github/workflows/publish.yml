@@ -1,0 +1,50 @@
+name: Publish
+
+# Deliberately separate from build.yml's push/pull_request triggers: publishing to Marketplace is
+# a release action, not a CI check, so it only fires when you push a version tag (e.g. `v1.4.5`)
+# after you've done your usual cross-platform pass — push to GitHub, pull on the Windows and Mac
+# machines, run the UI tests / manual check there. This workflow doesn't try to replicate that; it
+# only packages and uploads what you've already verified by hand.
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # A signed plugin ZIP is the same bytes regardless of which OS built it, so a single Linux
+    # runner is correct here — no matrix needed, unlike build.yml's cross-platform `test` job.
+    #
+    # `environment: marketplace-publish` is a manual approval gate: create this environment once
+    # under Settings > Environments with yourself as a required reviewer. The tag push starts the
+    # job, but it pauses here until you click Approve — your chance to confirm the Windows/Mac
+    # passes are actually done before this uploads to Marketplace.
+    environment: marketplace-publish
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      # Re-run build + verifyPlugin here rather than trusting build.yml's last run: tag pushes
+      # don't necessarily correspond to a commit that workflow has already checked (tags aren't
+      # branches), so this is the safety net that guarantees a green build is what gets signed.
+      - run: ./gradlew build verifyPlugin
+        shell: bash
+      # Blocked until docs/release-readiness-gaps.md item 2 is closed (no certificate chain /
+      # private key exist yet) — these secrets won't be set until then, and this step will fail
+      # with a clear "certificateChain is not set" style error rather than silently no-op.
+      - run: ./gradlew signPlugin
+        shell: bash
+        env:
+          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
+      # Blocked until docs/release-readiness-gaps.md item 4 is closed (no Marketplace vendor
+      # account/token exist yet) — same deliberate "fails clearly, not silently" reasoning as above.
+      - run: ./gradlew publishPlugin
+        shell: bash
+        env:
+          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
