@@ -144,6 +144,22 @@ intellijPlatform {
             VerifyPluginTask.FailureLevel.OVERRIDE_ONLY_API_USAGES,
         )
     }
+
+    // Read from environment variables only — never from Gradle properties, so there's no risk of
+    // a value ending up in gradle.properties and getting committed. Locally these are simply
+    // unset, so `signPlugin`/`publishPlugin` fail with Gradle's own "no value" error if ever run
+    // by hand before the certificate (release-readiness-gaps.md item 2) or Marketplace token
+    // (item 4) exist; .github/workflows/publish.yml supplies the same three names from repo
+    // secrets when it eventually runs signPlugin/publishPlugin.
+    signing {
+        certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
+        privateKey = providers.environmentVariable("PRIVATE_KEY")
+        password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
+    }
+
+    publishing {
+        token = providers.environmentVariable("PUBLISH_TOKEN")
+    }
 }
 
 tasks {

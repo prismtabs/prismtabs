@@ -28,25 +28,33 @@ Each item below is written to be picked up standalone in its own session.
 This is a purely mechanical, low-risk change but it's the one everything else below depends on
 being meaningful — do it first.
 
-## 2. Sign the plugin build
+## 2. Sign the plugin build — code-side wiring done, secrets still need a permanent home
 
-**Current state:** `build.gradle.kts` declares `zipSigner()` as a dependency (the tool), but
-there is no `signing { certificateChain = ...; privateKey = ... }` block anywhere, and no
-`signPlugin` task configuration. No certificate chain or private key exists yet. Grepped the whole
-repo for `certificateChain`, `privateKey`, `CERTIFICATE_CHAIN`, `PRIVATE_KEY` — no hits anywhere,
-including the workflows.
+**Current state (2026-08-24):** `build.gradle.kts`'s `intellijPlatform {}` block now has a
+`signing {}` sub-block (`certificateChain`, `privateKey`, `password`, all read from environment
+variables only — never Gradle properties, so there's no path into a committed file) and a
+`publishing { token = ... }` sub-block for item 3. A self-signed three-tier chain (root CA →
+intermediate CA → leaf plugin-signing cert, `O=Andrzej Piontek`, 3650-day validity on all three,
+root and intermediate correctly carry `basicConstraints CA:TRUE` — the intermediate needed an
+explicit `-extfile` pass to get this; `openssl x509 -req` doesn't copy it from the CSR by default,
+so a first attempt without it failed `openssl verify` with "invalid CA certificate") was generated
+locally and confirmed end-to-end: `openssl verify` passes, the private key's modulus matches the
+leaf cert's, and `CERTIFICATE_CHAIN`/`PRIVATE_KEY`/`PRIVATE_KEY_PASSWORD` set as env vars made
+`./gradlew signPlugin` actually produce `prismtabs-<version>-signed.zip`.
 
-**Why it matters:** JetBrains Marketplace requires every plugin ZIP to be signed before upload.
-Without this, `./gradlew signPlugin` has nothing to sign with and the upload will be rejected.
-
-**To close:**
-- Generate a self-signed certificate chain + private key per JetBrains' plugin-signing docs
-  (`https://plugins.jetbrains.com/docs/intellij/plugin-signing.html`).
-- Wire `signing {}` in `build.gradle.kts`, reading the chain/key/password from environment
-  variables or Gradle properties — **never commit the private key**.
-- Store the secrets in GitHub Actions secrets if CI is going to publish; otherwise this can stay a
-  local-only manual step for the first release.
-- Confirm `./gradlew signPlugin` produces a signed zip before the first Marketplace upload.
+**What's NOT done:** the generated `.pem` files currently live only in a Claude session's scratch
+directory (`/tmp/claude-1000/.../scratchpad/pluginsign/`, files: `chain.pem` — the
+`CERTIFICATE_CHAIN` value; `private_key.pem` + `private_key.pass` — the `PRIVATE_KEY` /
+`PRIVATE_KEY_PASSWORD` values; plus the root/intermediate keys and their passwords, kept in case
+the leaf cert ever needs reissuing off the same root before it expires in 2036). That directory is
+ephemeral. Before it's cleaned up:
+- Copy all of it into permanent, encrypted storage (password manager or equivalent) — losing the
+  root key means starting the whole chain over.
+- Add `CERTIFICATE_CHAIN` (contents of `chain.pem`), `PRIVATE_KEY` (contents of `private_key.pem`),
+  and `PRIVATE_KEY_PASSWORD` (contents of `private_key.pass`) as GitHub Actions repo secrets —
+  Settings → Secrets and variables → Actions. This closes two of `publish.yml`'s three missing
+  secrets (item 3); `PUBLISH_TOKEN` still needs item 4 (vendor account) done first.
+- Once copied out, delete the scratch directory's copies.
 
 ## 3. Wire (or deliberately skip) CI publishing — decided, partially wired
 
@@ -66,13 +74,12 @@ manual-approval gate.
   required reviewer, **before the first tag push**. GitHub auto-creates an environment referenced
   by a workflow that doesn't exist yet, but with no protection rules attached — so skipping this
   step doesn't fail the job, it silently removes the approval gate the whole design relies on.
-- Item 2 (signing) — the workflow expects secrets `CERTIFICATE_CHAIN`, `PRIVATE_KEY`,
-  `PRIVATE_KEY_PASSWORD`, and (this is new, not previously called out in item 2) `build.gradle.kts`
-  also needs a `publishing { token = providers.environmentVariable("PUBLISH_TOKEN") }` block next
-  to the `signing {}` one item 2 already calls for — without it `publishPlugin` has no `PUBLISH_TOKEN`
-  read path even once the secret exists.
+- Item 2 (signing) — `build.gradle.kts` is wired and a chain is generated and verified, but the
+  `CERTIFICATE_CHAIN`/`PRIVATE_KEY`/`PRIVATE_KEY_PASSWORD` repo secrets themselves aren't set yet —
+  see item 2's "What's NOT done" for the exact values and where they currently sit.
 - Item 4 (vendor account) — the workflow expects secret `PUBLISH_TOKEN` (a Marketplace permanent
-  token from Marketplace account → My Tokens).
+  token from Marketplace account → My Tokens). `build.gradle.kts`'s read path for it
+  (`publishing { token = ... }`) is already wired.
 
 Until those secrets exist, `signPlugin`/`publishPlugin` will fail with a clear "not set" style
 error if a tag is ever pushed — which is the deliberate, visible failure mode versus a silent
