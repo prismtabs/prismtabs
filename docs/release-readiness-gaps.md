@@ -109,24 +109,25 @@ These were noticed during the audit but aren't called out anywhere in the README
 block publishing on their own, but each is worth a deliberate decision rather than staying an
 oversight.
 
-## 8. No `LICENSE` file
+## 8. No `LICENSE` file — intentionally N/A
 
-**Current state:** repo root has no `LICENSE` or `LICENSE.md`. Not required by Marketplace for a
-closed-source paid plugin, but currently reads as unaddressed rather than a deliberate "closed
-source, no public licence" choice.
+**Current state:** repo root has no `LICENSE` or `LICENSE.md`.
 
-**To close:** either add a licence file (if any part of the source is meant to be open) or note
-explicitly (e.g. in the README) that the source is proprietary/all-rights-reserved.
+**Status:** This is not a gap. The repo is closed-source and private; the plugin is distributed as
+a binary via JetBrains Marketplace, not as source. A LICENSE file is relevant only for public
+repositories or source-code distribution — neither applies here. "All rights reserved" (the default
+absence of a LICENSE file) is the correct stance for proprietary commercial code.
 
-## 9. No change-notes anywhere
+## 9. No change-notes anywhere — closed
 
-**Current state:** `plugin.xml` has no `<change-notes>` tag, and there's no `CHANGELOG.md`. Not a
-hard blocker — Marketplace lets you type release notes directly in its upload UI per version — but
-there's currently nothing written for the first release, and no established place to keep writing
-them for subsequent ones.
-
-**To close:** decide between an in-`plugin.xml` `<change-notes>` block (versioned with the code) or
-a `CHANGELOG.md`, and write the first entry before or during the first upload.
+**Status:** Closed 2026-08-24. Added the `org.jetbrains.changelog` Gradle plugin (2.5.0) and a
+`CHANGELOG.md` in Keep a Changelog style with the first `[Unreleased]` entry (the free/paid feature
+split from "Marketplace publishing prep" above). `build.gradle.kts`'s `pluginConfiguration` now sets
+`changeNotes` from `changelog.getUnreleased()`, rendered to HTML — so `patchPluginXml` fills
+`plugin.xml`'s `<change-notes>` automatically at build time; confirmed by inspecting
+`build/tmp/patchPluginXml/plugin.xml` after a build. Nothing left to do here beyond ordinary
+upkeep: add entries to `CHANGELOG.md`'s `[Unreleased]` section as features land, and run
+`patchChangelog` to stamp/date a section when cutting a release (item 1's job, not this one's).
 
 ## 10. Privacy policy — checked, not needed
 
