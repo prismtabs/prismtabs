@@ -47,6 +47,34 @@ locally installed Gradle, or let IntelliJ regenerate it.
 See [UI testing](#ui-testing) for `./gradlew uiTest` — the `remote-robot` suite that drives
 `TabGroupPopup` end-to-end in a real sandbox IDE.
 
+### Noisy but harmless log output from `buildPlugin` / `runIde`
+
+`buildPlugin` runs a `buildSearchableOptions` subtask that boots a real headless sandbox IDE
+(the 2024.2 baseline from `platformVersion`) and walks *every* Settings panel — including stock
+JetBrains ones PrismTabs never touches — to index search terms. None of the following indicate a
+problem with PrismTabs itself, and the plugin zip is still produced correctly:
+
+- `Conflicting registry key definition for kotlin.mpp.tests.force.gradle` — duplicate
+  registration inside the bundled Kotlin plugin. Upstream cosmetic bug.
+- `Bundled shared index is not found` — an optional perf feature with no prebuilt stub for this
+  IDE build. Informational only.
+- `Service not supported: com.jetbrains.WindowMove` (with a long stack trace through
+  `AppearanceConfigurable`) — headless Linux JBR doesn't implement native window-move; hit while
+  rendering a stock Appearance settings panel during the search-index walk.
+- `Dark color scheme is missing` — no theme plugins are loaded in the minimal headless sandbox.
+- `Unknown field: CombinedDiff` / `Unknown field: BlockBorder` — theme JSON fields newer than
+  this bundled IDE build recognises. Cosmetic.
+- `JCEF is manually disabled in headless env` — deliberate; headless builds don't need an
+  embedded browser.
+- `SEVERE … GradleJvmSupportMatrix … Caused by: java.lang.IllegalArgumentException: 25` — the
+  bundled Gradle plugin inside the sandbox IDE tries to parse the shell's default `java` (25.x,
+  see "Build" in `CLAUDE.md`) while building the stock *Settings → Build Tools → Gradle*
+  configurable, and its version parser predates JDK 25. Caught and non-fatal; doesn't affect
+  compilation, which correctly uses the JDK 21 toolchain.
+
+If this verbosity ever becomes actually confusing, the only lever is disabling
+`buildSearchableOptions` — not worth doing just to quiet a benign sandbox log.
+
 ## Phase 0 result: PASSED
 
 Verified 2026-08-07 on `IC-242.20224.300` (IntelliJ IDEA 2024.2), New UI, dark theme
@@ -743,6 +771,10 @@ than being held back alongside it.
    started; `plugin.xml`'s `<description>` is a reasonable first draft of the prose but the
    screenshots and tags still need doing.
 5. Submit for review (JetBrains' stated turnaround is about two business days).
+
+For a detailed breakdown of each gap and additional ones discovered during release readiness audit,
+see [docs/release-readiness-gaps.md](docs/release-readiness-gaps.md) — each item is written to be
+tackled standalone in its own session.
 
 Not applicable here: the "inform your users in advance" notice
 ([`inform-your-users-in-advance.html`](https://plugins.jetbrains.com/docs/marketplace/inform-your-users-in-advance.html))
