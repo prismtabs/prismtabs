@@ -845,10 +845,15 @@ skipped rather than failing or being silently left out. `MacSettingsShortcutUiTe
 `-Dprismtabs.manualVerification=true` that neither local dev nor `ui-tests.yml` ever passes (see its
 own doc comment, and `docs/cross-platform-manual-verification.md` for how to run it deliberately).
 
-**Locally this only runs on Linux** — see "These tests need an X11 display" below. In CI it also
-runs on Windows, via a manual-trigger-only workflow
-([`.github/workflows/ui-tests.yml`](.github/workflows/ui-tests.yml), `workflow_dispatch`, not run on
-every push — Windows runner minutes carry a 2x plan-minute multiplier) that boots
+**Locally this runs on Linux and Windows.** Linux needs the X11 workaround below. Windows needs
+none: `runIdeForUiTests` boots the sandbox IDE and `remote-robot`'s mouse/keyboard automation works
+directly against the real desktop, so the same two commands above are all it takes — no manual
+click-through — though it does take over the mouse and keyboard for the run's duration. Verified
+locally on Windows on 2026-08-24: 22 of 25 tests passed, the other 3 skipped as designed
+(`MacSettingsShortcutUiTest` on non-Mac, and `WindowsManualVerificationUiTest`'s two cases without
+`-Dprismtabs.manualVerification=true`). In CI it also runs on Windows, via a manual-trigger-only
+workflow ([`.github/workflows/ui-tests.yml`](.github/workflows/ui-tests.yml), `workflow_dispatch`,
+not run on every push — Windows runner minutes carry a 2x plan-minute multiplier) that boots
 `runIdeForUiTests` and drives it exactly as described above. macOS has no CI path: `remote-robot`
 needs Screen Recording/Accessibility TCC permission that cannot be granted non-interactively on
 GitHub's hosted macOS images (SIP blocks it — see the workflow file for the specifics). The same
