@@ -28,7 +28,7 @@ Each item below is written to be picked up standalone in its own session.
 This is a purely mechanical, low-risk change but it's the one everything else below depends on
 being meaningful — do it first.
 
-## 2. Sign the plugin build — code-side wiring done, secrets still need a permanent home
+## 2. Sign the plugin build — closed, except for the root key's permanent backup
 
 **Current state (2026-08-24):** `build.gradle.kts`'s `intellijPlatform {}` block now has a
 `signing {}` sub-block (`certificateChain`, `privateKey`, `password`, all read from environment
@@ -42,18 +42,21 @@ locally and confirmed end-to-end: `openssl verify` passes, the private key's mod
 leaf cert's, and `CERTIFICATE_CHAIN`/`PRIVATE_KEY`/`PRIVATE_KEY_PASSWORD` set as env vars made
 `./gradlew signPlugin` actually produce `prismtabs-<version>-signed.zip`.
 
-**What's NOT done:** the generated `.pem` files currently live only in a Claude session's scratch
-directory (`/tmp/claude-1000/.../scratchpad/pluginsign/`, files: `chain.pem` — the
-`CERTIFICATE_CHAIN` value; `private_key.pem` + `private_key.pass` — the `PRIVATE_KEY` /
-`PRIVATE_KEY_PASSWORD` values; plus the root/intermediate keys and their passwords, kept in case
-the leaf cert ever needs reissuing off the same root before it expires in 2036). That directory is
-ephemeral. Before it's cleaned up:
+`CERTIFICATE_CHAIN`, `PRIVATE_KEY` and `PRIVATE_KEY_PASSWORD` are now set as GitHub Actions repo
+secrets on `yendrrek/prismtabs` (via `gh secret set`, confirmed present with `gh secret list`) —
+this closes two of `publish.yml`'s three missing secrets (item 3); `PUBLISH_TOKEN` still needs
+item 4 (vendor account) done first.
+
+**What's NOT done:** the source `.pem` files these secrets were read from still live only in a
+Claude session's scratch directory (`/tmp/claude-1000/.../scratchpad/pluginsign/`, files:
+`chain.pem`, `private_key.pem` + `private_key.pass`, plus the root/intermediate keys and their
+passwords, kept in case the leaf cert ever needs reissuing off the same root before it expires in
+2036). That directory is ephemeral and **GitHub does not let you read a secret's value back** once
+set — this scratch copy is the only remaining copy of the root and intermediate keys anywhere.
+Before it's cleaned up (by the session, or by hand):
 - Copy all of it into permanent, encrypted storage (password manager or equivalent) — losing the
-  root key means starting the whole chain over.
-- Add `CERTIFICATE_CHAIN` (contents of `chain.pem`), `PRIVATE_KEY` (contents of `private_key.pem`),
-  and `PRIVATE_KEY_PASSWORD` (contents of `private_key.pass`) as GitHub Actions repo secrets —
-  Settings → Secrets and variables → Actions. This closes two of `publish.yml`'s three missing
-  secrets (item 3); `PUBLISH_TOKEN` still needs item 4 (vendor account) done first.
+  root key means starting the whole chain over, including re-adding the GitHub secrets from a new
+  chain.
 - Once copied out, delete the scratch directory's copies.
 
 ## 3. Wire (or deliberately skip) CI publishing — decided, partially wired
@@ -74,17 +77,18 @@ manual-approval gate.
   required reviewer, **before the first tag push**. GitHub auto-creates an environment referenced
   by a workflow that doesn't exist yet, but with no protection rules attached — so skipping this
   step doesn't fail the job, it silently removes the approval gate the whole design relies on.
-- Item 2 (signing) — `build.gradle.kts` is wired and a chain is generated and verified, but the
-  `CERTIFICATE_CHAIN`/`PRIVATE_KEY`/`PRIVATE_KEY_PASSWORD` repo secrets themselves aren't set yet —
-  see item 2's "What's NOT done" for the exact values and where they currently sit.
+- Item 2 (signing) — closed: `build.gradle.kts` is wired, a chain is generated and verified, and
+  `CERTIFICATE_CHAIN`/`PRIVATE_KEY`/`PRIVATE_KEY_PASSWORD` are set as repo secrets. Only remaining
+  loose end is backing up the source `.pem` files permanently — see item 2's "What's NOT done".
 - Item 4 (vendor account) — the workflow expects secret `PUBLISH_TOKEN` (a Marketplace permanent
   token from Marketplace account → My Tokens). `build.gradle.kts`'s read path for it
   (`publishing { token = ... }`) is already wired.
 
-Until those secrets exist, `signPlugin`/`publishPlugin` will fail with a clear "not set" style
-error if a tag is ever pushed — which is the deliberate, visible failure mode versus a silent
-no-op. The actual first release can still go out by hand via the Marketplace web UI if that's
-reached before this is fully wired; nothing here forces CI to be the first upload path.
+`signPlugin` now has everything it needs — a tag push today would sign successfully. Only
+`publishPlugin` would still fail, with a clear "not set" style error on `PUBLISH_TOKEN`, until item
+4 (vendor account) closes — which is the deliberate, visible failure mode versus a silent no-op.
+The actual first release can still go out by hand via the Marketplace web UI if that's reached
+before `PUBLISH_TOKEN` exists; nothing here forces CI to be the first upload path.
 
 ## 4. JetBrains Marketplace vendor account
 
