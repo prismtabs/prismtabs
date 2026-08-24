@@ -48,21 +48,36 @@ Without this, `./gradlew signPlugin` has nothing to sign with and the upload wil
   local-only manual step for the first release.
 - Confirm `./gradlew signPlugin` produces a signed zip before the first Marketplace upload.
 
-## 3. Wire (or deliberately skip) CI publishing
+## 3. Wire (or deliberately skip) CI publishing — decided, partially wired
 
-**Current state:** `.github/workflows/build.yml` runs `build` and `verifyPlugin` only. There is no
-`publishPlugin` job, no `PUBLISH_TOKEN` secret referenced anywhere.
+**Decision (2026-08-24):** automate, via a tag-triggered workflow, gated behind a manual approval
+so it can't race ahead of the cross-platform testing pass. Reasoning: publishing is a single,
+OS-independent packaging step (the signed ZIP is the same bytes regardless of which OS built it),
+which is orthogonal to the fact that UI testing itself needs three physical machines (Linux, main
+dev box; Windows and Mac, pulled-and-tested separately) — the two don't have to be coupled.
 
-**To close (or explicitly decide against automating):**
-- Decide: publish manually via the Marketplace web UI each release, or add a
-  `publishPlugin`-driven workflow (typically gated on a git tag).
-- If automating: generate a Marketplace permanent token (Marketplace account → My Tokens), store
-  it as a repo secret, add a `release` job to a workflow that runs `./gradlew publishPlugin`.
-- If staying manual: note that decision somewhere (this file or the README) so a future session
-  doesn't assume CI publishing exists and skip the manual upload.
+**Current state:** `.github/workflows/publish.yml` added. Triggers on `v*` tags, runs on a single
+`ubuntu-latest` runner (`build verifyPlugin` as a safety net, then `signPlugin`, then
+`publishPlugin`), and sits behind a `marketplace-publish` GitHub Environment used purely as a
+manual-approval gate.
 
-This can reasonably be deferred past the very first release (do the first upload by hand to learn
-the Marketplace review flow), but should be a deliberate choice, not an oversight.
+**Still to close before this workflow can actually succeed:**
+- Create the `marketplace-publish` environment under Settings → Environments, with yourself as a
+  required reviewer, **before the first tag push**. GitHub auto-creates an environment referenced
+  by a workflow that doesn't exist yet, but with no protection rules attached — so skipping this
+  step doesn't fail the job, it silently removes the approval gate the whole design relies on.
+- Item 2 (signing) — the workflow expects secrets `CERTIFICATE_CHAIN`, `PRIVATE_KEY`,
+  `PRIVATE_KEY_PASSWORD`, and (this is new, not previously called out in item 2) `build.gradle.kts`
+  also needs a `publishing { token = providers.environmentVariable("PUBLISH_TOKEN") }` block next
+  to the `signing {}` one item 2 already calls for — without it `publishPlugin` has no `PUBLISH_TOKEN`
+  read path even once the secret exists.
+- Item 4 (vendor account) — the workflow expects secret `PUBLISH_TOKEN` (a Marketplace permanent
+  token from Marketplace account → My Tokens).
+
+Until those secrets exist, `signPlugin`/`publishPlugin` will fail with a clear "not set" style
+error if a tag is ever pushed — which is the deliberate, visible failure mode versus a silent
+no-op. The actual first release can still go out by hand via the Marketplace web UI if that's
+reached before this is fully wired; nothing here forces CI to be the first upload path.
 
 ## 4. JetBrains Marketplace vendor account
 
