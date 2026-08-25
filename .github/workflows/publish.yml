@@ -16,11 +16,10 @@ jobs:
     # A signed plugin ZIP is the same bytes regardless of which OS built it, so a single Linux
     # runner is correct here — no matrix needed, unlike build.yml's cross-platform `test` job.
     #
-    # `environment: marketplace-publish` is a manual approval gate: create this environment once
-    # under Settings > Environments with yourself as a required reviewer. The tag push starts the
-    # job, but it pauses here until you click Approve — your chance to confirm the Windows/Mac
-    # passes are actually done before this uploads to Marketplace.
-    environment: marketplace-publish
+    # No environment-based approval gate: required reviewers on GitHub Environments need
+    # Team/Enterprise for private repos, and this is a private repo on the free plan. The gate is
+    # the tag push itself — only push a `v*` tag once the Windows/Mac cross-platform pass is done,
+    # and keep tag pushes out of any scripted/automated flow.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
