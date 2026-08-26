@@ -137,7 +137,24 @@ prose but nothing else exists.
   anywhere in the repo.
 - Tags.
 
-## 7. Submit for review
+## 7. Choose and prepare a License/EULA for the paid listing
+
+**Current state (2026-08-26):** not started. Found during an audit against
+[`best-practices-for-listing.html`](https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html),
+which states plainly that a license — either an open-source license or a EULA — is **mandatory to
+publish any plugin on the Marketplace**, selected/uploaded during the listing process. This is
+distinct from the repo's own `LICENSE` file question (item 9 below, correctly closed as N/A):
+that's about the source repo, this is about the terms a paying user of the *binary* agrees to, and
+nothing currently exists for it.
+
+**To close:**
+- Since PrismTabs is closed-source and paid (not open-source), this needs a EULA, not an
+  open-source license — draft one covering at minimum: grant of use tied to an active
+  subscription/trial, no warranty, no redistribution of the binary, governing law.
+- Attach it during item 5's upload step (the license link is added at upload time per the
+  best-practices doc, not via a `plugin.xml` tag).
+
+## 8. Submit for review
 
 **Current state:** blocked on everything above. JetBrains' stated turnaround is about two business
 days once submitted.
@@ -150,7 +167,7 @@ These were noticed during the audit but aren't called out anywhere in the README
 block publishing on their own, but each is worth a deliberate decision rather than staying an
 oversight.
 
-## ~~8. No `LICENSE` file — intentionally N/A~~
+## ~~9. No `LICENSE` file — intentionally N/A~~
 
 **Current state:** repo root has no `LICENSE` or `LICENSE.md`.
 
@@ -159,7 +176,7 @@ a binary via JetBrains Marketplace, not as source. A LICENSE file is relevant on
 repositories or source-code distribution — neither applies here. "All rights reserved" (the default
 absence of a LICENSE file) is the correct stance for proprietary commercial code.
 
-## ~~9. No change-notes anywhere — closed~~
+## ~~10. No change-notes anywhere — closed~~
 
 **Status:** Closed 2026-08-24. Added the `org.jetbrains.changelog` Gradle plugin (2.5.0) and a
 `CHANGELOG.md` in Keep a Changelog style with the first `[Unreleased]` entry (the free/paid feature
@@ -170,7 +187,7 @@ split from "Marketplace publishing prep" above). `build.gradle.kts`'s `pluginCon
 upkeep: add entries to `CHANGELOG.md`'s `[Unreleased]` section as features land, and run
 `patchChangelog` to stamp/date a section when cutting a release (item 1's job, not this one's).
 
-## ~~10. Privacy policy — checked, not needed~~
+## ~~11. Privacy policy — checked, not needed~~
 
 **Current state:** confirmed via `grep` across `src/main/kotlin` that the only network-adjacent
 code is `LicenseSignatureVerification`'s reference to JetBrains' own reference implementation in a
@@ -179,3 +196,20 @@ platform's local `LicensingFacade`. This means JetBrains' privacy-policy-URL req
 plugins that transmit user data) does not apply. No action needed — recorded here so a future
 session doesn't have to re-derive it from scratch, and so it gets re-checked if licence
 verification ever grows a network call.
+
+## ~~12. Vendor URL pointed at a private repo — closed~~
+
+**Status:** Closed 2026-08-26. Found during the same best-practices audit as item 7: `plugin.xml`'s
+`<vendor url="...">` pointed at `github.com/yendrrek/prismtabs`, which is private (item 9), so the
+link was unreachable from the internet — a direct violation of the best-practices page's "external
+links must be reachable" rule. Fixed by pointing `url` at `https://prismtabs.com/` instead — the
+plugin's own public documentation site (confirmed live and reachable before wiring it in).
+
+## ~~13. Description referenced a third-party brand — closed~~
+
+**Status:** Closed 2026-08-26. `plugin.xml`'s `<description>` opened with "Chrome-style colour
+groups…" — the best-practices page explicitly lists "brand references you don't own" as something
+to avoid. Reworded to "Colour-coded tab groups…". While editing, also fixed a second, unrelated
+accuracy issue found the same pass: the description still said the tool window can "collapse … or
+expand" a group, but the shipped UI (Phase 4) uses "Hide/Show Group" wording — the description now
+says "hide … or show" to match what users actually see.

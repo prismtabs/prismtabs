@@ -692,9 +692,13 @@ punish a mid-task user who needs one more, which is exactly the "too limited" ou
 
 Done so far, none of it published anywhere:
 
-- **Vendor metadata.** `plugin.xml`'s `<vendor>` now carries a real email and URL
-  (`yendrrek@protonmail.com`, the GitHub repo) instead of the bare placeholder name — required for
-  the vendor's site/email to show on the Marketplace plugin page.
+- **Vendor metadata.** `plugin.xml`'s `<vendor>` now carries a real email
+  (`yendrrek@protonmail.com`) and URL (`https://prismtabs.com/`, the plugin's own public docs site)
+  instead of the bare placeholder name — required for the vendor's site/email to show on the
+  Marketplace plugin page. It originally pointed at the GitHub repo instead, but that repo is
+  private (see [docs/release-readiness-gaps.md](docs/release-readiness-gaps.md)), and JetBrains'
+  listing guidelines require every external link on a plugin page to be reachable from the
+  internet — `prismtabs.com` is the reachable public replacement.
 - **Plugin icon.** `pluginIcon.svg` / `pluginIcon_dark.svg`, 40×40, reusing the plugin's own
   established colour language rather than inventing a new one: three of the preset swatch colours
   (blue/red/green) from `TabGroupPalette`, light and dark pairs, in the same filled-circle-with-a
