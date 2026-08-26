@@ -1,0 +1,79 @@
+# Verify that the published Agreement on the website still matches this
+# repository's docs/EULA.md, which is the source of truth for the licence.
+#
+# This is the mirror image of the `EULA sync` workflow in prismtabs-website.
+# Both are needed because drift can start on either side, and an edit on one
+# side produces no commit — and so no build — on the other. This job covers
+# the case that matters most: amending the licence here and forgetting that
+# prismtabs.com/eula still serves the old wording.
+#
+# The check itself lives in the website repository (tools/check-eula-sync.py),
+# next to the page it validates, so there is only one copy of it to maintain.
+# Reading that repository needs a credential: a read-only deploy key, chosen
+# over a token because it never expires and is scoped to that one repository.
+name: EULA sync
+
+on:
+  push:
+    branches: [ master ]
+    paths:
+      - docs/EULA.md
+      - .github/workflows/eula-sync.yml
+  pull_request:
+    paths:
+      - docs/EULA.md
+      - .github/workflows/eula-sync.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eula-sync-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Compare EULA.md with the published page
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the plugin
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: docs/EULA.md
+          sparse-checkout-cone-mode: false
+
+      # Fail with something actionable rather than letting the checkout below
+      # die on an opaque authentication error. A missing key must never be
+      # allowed to pass quietly: an unverified legal document is the whole
+      # thing this job exists to prevent.
+      - name: Verify the deploy key is configured
+        env:
+          DEPLOY_KEY: ${{ secrets.WEBSITE_DEPLOY_KEY }}
+        run: |
+          if [ -z "$DEPLOY_KEY" ]; then
+            echo "::error::WEBSITE_DEPLOY_KEY is not set, so the published page cannot be read." \
+                 "Add a read-only deploy key to yendrrek/prismtabs-website and store its private" \
+                 "half in this repository as a secret named WEBSITE_DEPLOY_KEY." \
+                 "See 'Keeping the EULA in sync' in that repository's README."
+            exit 1
+          fi
+
+      # Only the page and the checker are needed, not the whole site.
+      - name: Check out the published page and the checker
+        uses: actions/checkout@v4
+        with:
+          repository: yendrrek/prismtabs-website
+          ssh-key: ${{ secrets.WEBSITE_DEPLOY_KEY }}
+          path: website
+          sparse-checkout: |
+            eula.html
+            tools
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Compare the source with the published Agreement
+        run: |
+          python3 website/tools/check-eula-sync.py \
+            --source docs/EULA.md \
+            --page website/eula.html
