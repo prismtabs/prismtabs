@@ -109,7 +109,8 @@ generated and is now set as the `PUBLISH_TOKEN` repo secret (closes item 3). Acc
 - Upload the plugin as a **first release** (not an update).
 - Under **Sales Info → Add to Marketplace**: confirm/register product code `PPRISMTABS`, choose
   **Freemium**, then the **Yearly Subscription without a Fallback License** scheme, set price to
-  $10/year, leave the trial at its 30-day default.
+  $9/year (matches the website's pricing card as of `fix(pricing)`, 2026-08-26), leave the trial at
+  its 30-day default.
 
 ## 6. Write the actual listing content
 
@@ -126,14 +127,15 @@ prose but nothing else exists.
 
 ## 7. Choose and prepare a License/EULA for the paid listing
 
-**Current state (2026-08-26):** drafted, not yet attached anywhere. Found during an audit against
+**Current state (2026-08-26):** drafted and published; not yet attached to the listing. Found
+during an audit against
 [`best-practices-for-listing.html`](https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html),
 which states plainly that a license — either an open-source license or a EULA — is **mandatory to
 publish any plugin on the Marketplace**, selected/uploaded during the listing process. This is
 distinct from the repo's own `LICENSE` file question (item 9 below, correctly closed as N/A):
 that's about the source repo, this is about the terms a paying user of the *binary* agrees to.
 
-`docs/EULA.md` now has a full draft: grant of use split between always-free features and
+`docs/EULA.md` has a full draft: grant of use split between always-free features and
 subscription/trial-gated paid features, explicit no-fallback-licence behaviour matching item 5's
 "Yearly Subscription without a Fallback License" scheme, no-warranty/limitation-of-liability
 clauses, no-redistribution/no-reverse-engineering restrictions (carved out for UK CDPA 1988
@@ -141,14 +143,18 @@ interoperability rights, since those can't be excluded by contract), a data/priv
 confirming no telemetry (matches item 11's finding), and governing law set to Scots law/Scottish
 courts — Andrzej is Scotland-resident. Not legal advice; hasn't been reviewed by a solicitor.
 
+**Published (2026-08-26):** it now renders at `prismtabs.com/eula` (`eula.html` in
+`prismtabs-website`, verbatim against this file — diffed word for word, not just eyeballed). A
+pair of `eula-sync.yml` GitHub Actions workflows, one in each repository and each reading the other
+over a non-expiring read-only deploy key, re-run that comparison on every relevant push and weekly,
+so an edit to this file that isn't mirrored to the page goes noticed rather than unnoticed; see
+"Keeping the EULA in sync" in the website repo's `README.md` for the full mechanism.
+
 **To close:**
 - Optional: have a solicitor review the draft before it's binding on paying customers.
-- Either paste the `docs/EULA.md` text directly into the Marketplace upload form, or publish it at
-  `prismtabs.com/eula` and link to that URL instead — the latter is more standard (versionable,
-  linkable from in-app licensing UI later) but needs that page built on the website first, which is
-  outside this repo.
-- Attach it during item 5's upload step (the license link/text is added at upload time per the
-  best-practices doc, not via a `plugin.xml` tag).
+- Attach the `prismtabs.com/eula` URL during item 5's upload step (the license link/text is added
+  at upload time per the best-practices doc, not via a `plugin.xml` tag) — pasting the text
+  directly is the fallback if JetBrains' upload form turns out to want a link.
 
 ## 8. Submit for review
 
