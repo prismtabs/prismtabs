@@ -40,19 +40,13 @@ leaf cert's, and `CERTIFICATE_CHAIN`/`PRIVATE_KEY`/`PRIVATE_KEY_PASSWORD` set as
 
 `CERTIFICATE_CHAIN`, `PRIVATE_KEY` and `PRIVATE_KEY_PASSWORD` are now set as GitHub Actions repo secrets on `yendrrek/prismtabs` (via `gh secret set`, confirmed present with `gh secret list`) — this closes two of `publish.yml`'s three missing secrets (item 3); `PUBLISH_TOKEN` still needs item 4 (vendor account) done first.
 
-**What's NOT done:** the source `.pem` files these secrets were read from still live only in a
-Claude session's scratch directory (`/tmp/claude-1000/.../scratchpad/pluginsign/`, files:
-`chain.pem`, `private_key.pem` + `private_key.pass`, plus the root/intermediate keys and their
-passwords, kept in case the leaf cert ever needs reissuing off the same root before it expires in
-2036). That directory is ephemeral and **GitHub does not let you read a secret's value back** once
-set — this scratch copy is the only remaining copy of the root and intermediate keys anywhere.
-Before it's cleaned up (by the session, or by hand):
-- Copy all of it into permanent, encrypted storage (password manager or equivalent) — losing the
-  root key means starting the whole chain over, including re-adding the GitHub secrets from a new
-  chain.
-- Once copied out, delete the scratch directory's copies.
+**Closed (2026-08-26):** the source `.pem` files (`chain.pem`, `private_key.pem` +
+`private_key.pass`, plus the root/intermediate keys and their passwords, kept in case the leaf
+cert ever needs reissuing off the same root before it expires in 2036) have been copied out of the
+now-defunct Claude session scratch directory into permanent, encrypted storage (password manager).
+The scratch copy no longer exists.
 
-## 3. Wire (or deliberately skip) CI publishing — decided, partially wired
+## 3. Wire (or deliberately skip) CI publishing — closed
 
 **Decision (2026-08-24):** automate, via a tag-triggered workflow, gated behind a manual approval
 so it can't race ahead of the cross-platform testing pass. Reasoning: publishing is a single,
@@ -62,28 +56,28 @@ dev box; Windows and Mac, pulled-and-tested separately) — the two don't have t
 
 **Current state:** `.github/workflows/publish.yml` added. Triggers on `v*` tags, runs on a single
 `ubuntu-latest` runner (`build verifyPlugin` as a safety net, then `signPlugin`, then
-`publishPlugin`), and sits behind a `marketplace-publish` GitHub Environment used purely as a
-manual-approval gate.
+`publishPlugin`). No GitHub Environment gate — dropped, see below; the tag push itself is the gate.
 
-**Still to close before this workflow can actually succeed:**
+**Closed:**
 - ~~Create the `marketplace-publish` environment with a required reviewer~~ — dropped. Required
   reviewers on GitHub Environments need Team/Enterprise for private repos (free-plan private repos
   don't get environment protection rules — that's a public-repo-only freebie), and this is a
   private individual repo on the free plan. `publish.yml` no longer references an environment; the
   gate is the tag push itself — only push a `v*` tag once the Windows/Mac cross-platform pass is
   done, and keep tag pushes out of any scripted/automated flow.
-- Item 2 (signing) — closed: `build.gradle.kts` is wired, a chain is generated and verified, and
-  `CERTIFICATE_CHAIN`/`PRIVATE_KEY`/`PRIVATE_KEY_PASSWORD` are set as repo secrets. Only remaining
-  loose end is backing up the source `.pem` files permanently — see item 2's "What's NOT done".
-- Item 4 (vendor account) — the workflow expects secret `PUBLISH_TOKEN` (a Marketplace permanent
-  token from Marketplace account → My Tokens). `build.gradle.kts`'s read path for it
-  (`publishing { token = ... }`) is already wired.
+- Item 2 (signing) — fully closed: `build.gradle.kts` is wired, a chain is generated and verified,
+  `CERTIFICATE_CHAIN`/`PRIVATE_KEY`/`PRIVATE_KEY_PASSWORD` are set as repo secrets, and the source
+  `.pem` files are backed up in permanent, encrypted storage.
+- `PUBLISH_TOKEN` — set as a repo secret 2026-08-26 (confirmed via `gh secret list`), sourced from
+  a Marketplace permanent token created in the vendor account. `build.gradle.kts`'s read path for
+  it (`publishing { token = ... }`) was already wired.
 
-`signPlugin` now has everything it needs — a tag push today would sign successfully. Only
-`publishPlugin` would still fail, with a clear "not set" style error on `PUBLISH_TOKEN`, until item
-4 (vendor account) closes — which is the deliberate, visible failure mode versus a silent no-op.
-The actual first release can still go out by hand via the Marketplace web UI if that's reached
-before `PUBLISH_TOKEN` exists; nothing here forces CI to be the first upload path.
+All three of `publish.yml`'s secrets now exist. `signPlugin` and `publishPlugin` both have
+everything they need — a `v*` tag push today would sign and publish for real. Nothing left to wire
+here; the workflow is fully ready. What's still outstanding is upstream of this workflow: item 4's
+trader status/banking (needed for the *listing* to actually be sellable, not for this token to
+work) and items 5–8 (the listing itself doesn't exist yet, so there's nothing to publish to until
+that's created by hand once).
 
 **How to actually cut a release** (this is the gate — do it deliberately, once the Windows/Mac
 cross-platform pass is done):
@@ -103,8 +97,10 @@ git push origin v1.4.8
 
 ## 4. JetBrains Marketplace vendor account
 
-**Current state (2026-08-25):** vendor profile created. Trader status and banking details are not
-done yet — the Marketplace UI hasn't prompted for banking info at account-creation time; it's
+**Current state (2026-08-26):** vendor profile created; a Marketplace permanent token was also
+generated and is now set as the `PUBLISH_TOKEN` repo secret (closes item 3). Trader status and
+banking details are not done yet — the Marketplace UI hasn't prompted for banking info at
+account-creation time; it's
 expected to ask for it later, likely when actually setting the plugin up for a paid listing (item
 5's Sales Info step). External to this repo — only Andrzej can do this.
 
