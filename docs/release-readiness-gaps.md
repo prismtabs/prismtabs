@@ -24,7 +24,7 @@ Each item below is written to be picked up standalone in its own session.
 This is a purely mechanical, low-risk change but it's the one everything else below depends on
 being meaningful — do it first.
 
-## ~~2. Sign the plugin build — closed, except for the root key's permanent backup~~
+## ~~2. Sign the plugin build — closed~~
 
 **Current state (2026-08-24):** `build.gradle.kts`'s `intellijPlatform {}` block now has a
 `signing {}` sub-block (`certificateChain`, `privateKey`, `password`, all read from environment
@@ -46,7 +46,7 @@ cert ever needs reissuing off the same root before it expires in 2036) have been
 now-defunct Claude session scratch directory into permanent, encrypted storage (password manager).
 The scratch copy no longer exists.
 
-## 3. Wire (or deliberately skip) CI publishing — closed
+## ~~3. Wire (or deliberately skip) CI publishing — closed~~
 
 **Decision (2026-08-24):** automate, via a tag-triggered workflow, gated behind a manual approval
 so it can't race ahead of the cross-platform testing pass. Reasoning: publishing is a single,
@@ -95,20 +95,11 @@ git push origin v1.4.8
 - To undo an accidental push: `git push origin :refs/tags/v1.4.8` then `git tag -d v1.4.8` — but
   the workflow may already be running by the time you do this, since there's no approval pause.
 
-## 4. JetBrains Marketplace vendor account
+## ~~4. JetBrains Marketplace vendor account — closed~~
 
 **Current state (2026-08-26):** vendor profile created; a Marketplace permanent token was also
-generated and is now set as the `PUBLISH_TOKEN` repo secret (closes item 3). Trader status and
-banking details are not done yet — the Marketplace UI hasn't prompted for banking info at
-account-creation time; it's
-expected to ask for it later, likely when actually setting the plugin up for a paid listing (item
-5's Sales Info step). External to this repo — only Andrzej can do this.
-
-**To close:**
-- Set the profile to **trader** status (required for a paid listing) — check whether this is
-  offered directly on the vendor profile or only surfaces once Sales Info / Add to Marketplace is
-  reached in item 5.
-- Submit banking details under Sales Info, whenever JetBrains actually prompts for them.
+generated and is now set as the `PUBLISH_TOKEN` repo secret (closes item 3). Account is set to
+**trader** status and banking details have been submitted. Item closed.
 
 ## 5. Upload and configure the product listing
 
@@ -135,19 +126,28 @@ prose but nothing else exists.
 
 ## 7. Choose and prepare a License/EULA for the paid listing
 
-**Current state (2026-08-26):** not started. Found during an audit against
+**Current state (2026-08-26):** drafted, not yet attached anywhere. Found during an audit against
 [`best-practices-for-listing.html`](https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html),
 which states plainly that a license — either an open-source license or a EULA — is **mandatory to
 publish any plugin on the Marketplace**, selected/uploaded during the listing process. This is
 distinct from the repo's own `LICENSE` file question (item 9 below, correctly closed as N/A):
-that's about the source repo, this is about the terms a paying user of the *binary* agrees to, and
-nothing currently exists for it.
+that's about the source repo, this is about the terms a paying user of the *binary* agrees to.
+
+`docs/EULA.md` now has a full draft: grant of use split between always-free features and
+subscription/trial-gated paid features, explicit no-fallback-licence behaviour matching item 5's
+"Yearly Subscription without a Fallback License" scheme, no-warranty/limitation-of-liability
+clauses, no-redistribution/no-reverse-engineering restrictions (carved out for UK CDPA 1988
+interoperability rights, since those can't be excluded by contract), a data/privacy section
+confirming no telemetry (matches item 11's finding), and governing law set to Scots law/Scottish
+courts — Andrzej is Scotland-resident. Not legal advice; hasn't been reviewed by a solicitor.
 
 **To close:**
-- Since PrismTabs is closed-source and paid (not open-source), this needs a EULA, not an
-  open-source license — draft one covering at minimum: grant of use tied to an active
-  subscription/trial, no warranty, no redistribution of the binary, governing law.
-- Attach it during item 5's upload step (the license link is added at upload time per the
+- Optional: have a solicitor review the draft before it's binding on paying customers.
+- Either paste the `docs/EULA.md` text directly into the Marketplace upload form, or publish it at
+  `prismtabs.com/eula` and link to that URL instead — the latter is more standard (versionable,
+  linkable from in-app licensing UI later) but needs that page built on the website first, which is
+  outside this repo.
+- Attach it during item 5's upload step (the license link/text is added at upload time per the
   best-practices doc, not via a `plugin.xml` tag).
 
 ## 8. Submit for review
