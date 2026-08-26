@@ -653,7 +653,7 @@ how the check was driven, not evidence of a problem in the plugin being checked.
 ## Marketplace publishing prep
 
 **Decision:** PrismTabs will be sold under JetBrains Marketplace's **Freemium** model, priced as a
-**Yearly Subscription without a Fallback License** at **$10/year**, with the standard **30-day
+**Yearly Subscription without a Fallback License** at **$9/year**, with the standard **30-day
 trial** of the paid features. This supersedes an earlier Perpetual License decision (see git
 history) — reasoning below.
 
@@ -769,7 +769,7 @@ than being held back alongside it.
    details (Sales Info tab) — external, account-level, only Andrzej can do this.
 3. Upload the plugin (first release, not an update), then in **Sales Info → Add to Marketplace**:
    confirm/register product code `PPRISMTABS`, choose **Freemium**, then the **Yearly Subscription
-   without a Fallback License** scheme, set the price to $10/year, leave the trial at its 30-day
+   without a Fallback License** scheme, set the price to $9/year, leave the trial at its 30-day
    default.
 4. Write the actual listing content — tagline, full description, ≥1200×760 screenshots, tags. Not
    started; `plugin.xml`'s `<description>` is a reasonable first draft of the prose but the
