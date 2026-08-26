@@ -2,7 +2,7 @@
 
 Colour-coded tab groups for IntelliJ editor tabs.
 
-**Status: Phase 5 (hardening) in progress.** Features are complete through Phase 4: a **Tab Groups
+**Status: Phase 5 (hardening) in progress.** Features are complete through Phase 4: a **PrismTabs
 tool window** (right-hand stripe) lists every group with its colour dot, member count and hidden
 state, and can rename, recolour, delete, or **hide/show** a group. Hiding is "close and
 remember" — IntelliJ has no collapsible in-strip chip and no API to build one, so hiding closes
@@ -500,7 +500,7 @@ group and reopens each via `openFile(file, focusEditor = false)`, in the same or
 `openFile(VirtualFile, boolean)` are declared on the public `FileEditorManager` interface itself
 (verified via `javap` on 2024.2) — no impl-class cast needed here.
 
-**4b — the "Tab Groups" tool window.** `io.prismtabs.ui.TabGroupsToolWindow` (a `ToolWindowFactory`
+**4b — the "PrismTabs" tool window.** `io.prismtabs.ui.TabGroupsToolWindow` (a `ToolWindowFactory`
 + `DumbAware`, registered `anchor="right"`) is the plan's stated substitute for Chrome's in-strip
 chip: a `JBList<TabGroup>` showing each group's swatch, name, member count and — new this phase — a
 "hidden" suffix, with a toolbar (and matching context menu) for Hide/Show Group, Rename…,
@@ -593,7 +593,7 @@ sitting closer to several real races than their prior green runs suggested:
    group and clears the active one, so runs don't accumulate duplicate-named groups either — the
    fixture project's `.idea/tabGroups.xml` isn't reset between separate `uiTest` invocations) now
    also closes every editor via `IdeaFrame.closeAllEditors()`, for exactly this reason.
-3. **The tool window narrows the tab strip while it's open.** With "Tab Groups" showing, editor
+3. **The tool window narrows the tab strip while it's open.** With "PrismTabs" showing, editor
    tabs can clip enough that a `rightClick()` at the tab's *stale* on-screen position misses
    entirely. The tool window test hides it again in a `finally`, and — belt and braces, since
    `remote-robot` clicks are real OS-level clicks that can race a still-settling layout regardless —
@@ -681,7 +681,7 @@ punish a mid-task user who needs one more, which is exactly the "too limited" ou
 - **Free forever:** assigning tabs to the 8 preset colours, unlimited groups, create/rename/recolour
   (Phase 1–3 core), persistence across restarts, and rename/move remapping — the last one is a
   correctness feature (your assignments survive a rename), not a premium one, so it stays free.
-- **Paid** (active subscription, or during the 30-day trial): the Tab Groups tool window,
+- **Paid** (active subscription, or during the 30-day trial): the PrismTabs tool window,
   collapse/expand, active/sticky-group auto-join on newly opened files (Phase 4's tool window +
   Phase 3's inheritance rule), and custom palette editing (Phase 5's settings page). These are the
   workflow-multiplier features a daily user builds a habit around, not ones a casual tab-colourer
@@ -723,7 +723,7 @@ Done so far, none of it published anywhere:
   this from what the plan originally described: it is no longer a single gate.
   `AssignTabGroupAction` (the [Phase 2 result](#phase-2-result) entry point) stays *ungated* — it is
   the free-tier action — and instead `PrismTabsLicense.paidFeaturesEnabled()` /
-  `requirePaidFeature()` are called from four places: the Tab Groups tool window (`TabGroupsPanel`
+  `requirePaidFeature()` are called from four places: the PrismTabs tool window (`TabGroupsPanel`
   shows an upsell empty-state instead of the list), `toggleCollapse` (the one choke point all three
   collapse/expand entry points funnel through), the popup's "Mark as Active Group" action, and
   `TabGroupPaletteConfigurable`. A `false` there means "fall back to the free tier", never "block
@@ -826,7 +826,7 @@ rather than argued. That class also covers the batch case a single directory del
 
 ## UI testing
 
-`TabGroupPopup`, the Tab Groups tool window, the VFS deletion path (`EmptyGroupOnDiskDeleteUiTest`,
+`TabGroupPopup`, the PrismTabs tool window, the VFS deletion path (`EmptyGroupOnDiskDeleteUiTest`,
 see "Empty groups" above) and the free/paid paywall (`PaywallUiTest`, see
 "Marketplace publishing prep" above) are covered end-to-end by
 [`remote-robot`](https://github.com/JetBrains/intellij-ui-test-robot) tests (`src/uiTest/`), not
@@ -1024,7 +1024,7 @@ Read these before designing anything. They are platform limits, not TODOs.
    `ColorKey`; tab text colour follows file status. Design for background only.
 3. **There is no in-strip group chip.** Chrome's collapsible coloured label spanning several tabs
    has no public API. Reproducing it means custom-painting `JBEditorTabs` — internal and unstable.
-   The substitute is a "Tab Groups" tool window (Phase 4).
+   The substitute is a "PrismTabs" tool window (Phase 4).
 4. **Theme risk.** Tab tinting is not equally visible under every theme, and **unselected tabs
    render tints at roughly half strength** — the platform blends them against
    `EditorTabs.inactiveColoredFileBackground`. Measured in Phase 0; see

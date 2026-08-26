@@ -11,7 +11,7 @@
         Groups…" lets you rename, recolour, delete, or mark a group active — files opened while a
         group is active join it automatically.
         <br/><br/>
-        The "Tab Groups" tool window lists every group with its colour and member count, and can
+        The "PrismTabs" tool window lists every group with its colour and member count, and can
         hide a group (closing its tabs, remembering them) or show it again. Assignments and
         hidden state persist across restarts. The preset palette itself is editable under
         <b>Settings | Tools | PrismTabs</b>.
@@ -37,7 +37,10 @@
         <!-- Phase 4b: the stable home for everything the tab strip can't show (no in-strip group
              chip — see README §"Constraints that are not going away"). Also where collapse/expand
              ("close and remember", Phase 4a) is driven from. -->
-        <toolWindow id="Tab Groups" anchor="right" icon="AllIcons.Toolwindows.ToolWindowPalette"
+        <!-- id doubles as the stripe button's label and its "View | Tool Windows" entry (ToolWindowEP
+             has no separate display-name attribute), so it carries the plugin's brand name rather than
+             a description of its contents — that is the name users search the toolbar/menu for. -->
+        <toolWindow id="PrismTabs" anchor="right" icon="AllIcons.Toolwindows.ToolWindowPalette"
                     factoryClass="io.prismtabs.ui.TabGroupsToolWindowFactory"/>
 
         <!-- Phase 5: editing the preset palette. Application-level (see TabGroupPaletteService's

@@ -231,7 +231,7 @@ class WindowsManualVerificationUiTest {
                 }
                 note("5. Remove from Group cleared Sample.kt back to the platform default, and offered to delete the group it emptied; kept it")
 
-                // --- 6. Tab Groups tool window: listing, collapse, expand, HiDPI check ------
+                // --- 6. PrismTabs tool window: listing, collapse, expand, HiDPI check ------
                 waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().any { it.contains("TeamWindows") } }
                 remoteRobot.saveScreenshot("06-tool-window-listing")
                 assertTrue(

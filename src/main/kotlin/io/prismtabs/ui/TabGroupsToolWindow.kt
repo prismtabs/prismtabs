@@ -162,7 +162,7 @@ private class TabGroupsPanel(
         // "Nothing to show"), and a by-type search picks one of those up instead.
         panel.name = LOCKED_PANEL_NAME
         val statusText = panel.emptyText
-        statusText.setText("The Tab Groups tool window is a PrismTabs paid feature.")
+        statusText.setText("The PrismTabs tool window is a paid feature.")
         statusText.appendLine(
             "Colouring tabs and managing groups from a tab's right-click menu stays free.",
             SimpleTextAttributes.GRAYED_ATTRIBUTES,
@@ -172,7 +172,7 @@ private class TabGroupsPanel(
             "Start the free trial or activate a subscription",
             SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES,
         ) {
-            PrismTabsLicense.requestLicense("The Tab Groups tool window needs an active PrismTabs subscription.")
+            PrismTabsLicense.requestLicense("The PrismTabs tool window needs an active PrismTabs subscription.")
         }
         val collapsedCount = service.groups().count { it.collapsed }
         if (collapsedCount > 0) {
@@ -227,7 +227,7 @@ private fun installRowSelectingPopupMenu(list: JBList<TabGroup>, actions: Action
 private const val POPUP_PLACE = "PrismTabs.TabGroupsToolWindow.Popup"
 
 /** Must match `plugin.xml`'s `<toolWindow id="">`. */
-private const val TOOL_WINDOW_ID = "Tab Groups"
+private const val TOOL_WINDOW_ID = "PrismTabs"
 
 /**
  * `Component.name` of the locked (unsubscribed) tool window panel. The paywall uiTest looks the

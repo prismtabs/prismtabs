@@ -75,7 +75,7 @@ already covered continuously by local development.
    confirm every member tab picks up both changes, and that opening a new file while a group is
    marked active colours it automatically.
 5. **Remove from Group** — clears the tint back to the platform default.
-6. **Tab Groups tool window** — opens from its stripe button; lists every group with member count;
+6. **PrismTabs tool window** — opens from its stripe button; lists every group with member count;
    collapsing closes member tabs and marks the row "collapsed"; expanding reopens them in their
    original order. Confirm the stripe icon and swatch icons aren't blurry at this OS's default
    scaling.
@@ -380,7 +380,7 @@ Result:      PASS — all 8 checklist items confirmed. Swatch popup shows all 8 
              by reading the live on-screen pixel, not just a screenshot (see finding above); New
              Group's name field has focus immediately (typed and Enter-submitted with no prior
              click); rename/recolour propagate to every member and active-group inheritance works;
-             Remove from Group clears the tint; the Tab Groups tool window lists membership,
+             Remove from Group clears the tint; the PrismTabs tool window lists membership,
              collapse/expand works, and its icons and colour dots are crisp at 125% scaling; Settings
              | Tools | PrismTabs is reachable, renders correctly, and Restore Defaults reverts a
              renamed preset; group name/colour/membership all survived a real IDE restart (process
