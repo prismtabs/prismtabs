@@ -1,10 +1,10 @@
 <idea-plugin>
     <id>io.prismtabs</id>
     <name>PrismTabs</name>
-    <vendor email="yendrrek@protonmail.com" url="https://github.com/yendrrek/prismtabs">Andrzej Piontek</vendor>
+    <vendor email="yendrrek@protonmail.com" url="https://prismtabs.com/">Andrzej Piontek</vendor>
 
     <description><![CDATA[
-        Chrome-style colour groups for IntelliJ editor tabs.
+        Colour-coded tab groups for IntelliJ editor tabs.
         <br/><br/>
         Right-click a tab for the colour swatch popup: pick one of 8 preset colours to start a new
         group and name it, or "Add to Group…" to put the tab in a group you already have. "Manage
@@ -12,8 +12,8 @@
         group is active join it automatically.
         <br/><br/>
         The "Tab Groups" tool window lists every group with its colour and member count, and can
-        collapse a group (closing its tabs, remembering them) or expand it again. Assignments and
-        collapsed state persist across restarts. The preset palette itself is editable under
+        hide a group (closing its tabs, remembering them) or show it again. Assignments and
+        hidden state persist across restarts. The preset palette itself is editable under
         <b>Settings | Tools | PrismTabs</b>.
     ]]></description>
 
