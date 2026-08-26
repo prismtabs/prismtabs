@@ -4,7 +4,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.util.messages.Topic
 
 /**
- * Fired after any [TabGroupService] mutation that Phase 4b's "Tab Groups" tool window needs to
+ * Fired after any [TabGroupService] mutation that Phase 4b's "PrismTabs" tool window needs to
  * reflect — a group created, renamed, recoloured, deleted, collapsed or expanded. [TabGroupService]
  * itself stays platform-free (see its doc comment), so publishing is each call site's job, the same
  * split already used for [TabRepaint].

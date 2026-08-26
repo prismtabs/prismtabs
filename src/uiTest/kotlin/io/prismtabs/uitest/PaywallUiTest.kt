@@ -72,7 +72,7 @@ class PaywallUiTest {
 
                 val locked = toolWindowEmptyText()
                 assertTrue(
-                    locked.contains("Tab Groups tool window is a PrismTabs paid feature"),
+                    locked.contains("The PrismTabs tool window is a paid feature"),
                     "expected the locked empty state to name the feature, got: $locked",
                 )
                 assertTrue(

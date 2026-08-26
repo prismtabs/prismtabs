@@ -329,7 +329,7 @@ private class GroupActionsStep(
 /**
  * "Recolour…"'s step: applies immediately and repaints every member — no name prompt needed.
  * `internal`, not `private`: also opened directly (not just nested off [GroupActionsStep]) by the
- * Tab Groups tool window's own "Recolour…" toolbar action, rather than duplicating this.
+ * PrismTabs tool window's own "Recolour…" toolbar action, rather than duplicating this.
  */
 internal class RecolorStep(
     private val project: Project,

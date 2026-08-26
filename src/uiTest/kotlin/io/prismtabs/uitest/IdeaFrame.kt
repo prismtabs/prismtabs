@@ -183,7 +183,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     }
 
     /**
-     * Hides the "Tab Groups" tool window. Not cosmetic cleanup: while it is open it takes width
+     * Hides the "PrismTabs" tool window. Not cosmetic cleanup: while it is open it takes width
      * from the editor, which narrows the tab strip enough that `EditorTabLabel`s clip and a
      * `rightClick()` on one lands somewhere that never opens the context menu — confirmed live by
      * two unrelated tests starting to time out on their tab right-click as soon as a previous test
@@ -200,7 +200,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
             const project = frameHelper.getProject()
             const task = new Runnable({
                 run: function() {
-                    const tw = ToolWindowManager.getInstance(project).getToolWindow('Tab Groups')
+                    const tw = ToolWindowManager.getInstance(project).getToolWindow('PrismTabs')
                     if (tw != null) tw.hide(null)
                 }
             })
@@ -760,7 +760,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     }
 
     /**
-     * The "Tab Groups" tool window's rendered empty-state text — the locked panel's
+     * The "PrismTabs" tool window's rendered empty-state text — the locked panel's
      * [com.intellij.ui.components.JBPanelWithEmptyText] message, its every appended line joined by
      * `|`. Empty when the tool window is showing the real group list instead, which is what makes
      * this a usable "is it locked?" assertion in both directions.
@@ -781,7 +781,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
         const result = new java.util.concurrent.atomic.AtomicReference('')
         const task = new Runnable({
             run: function() {
-                const tw = ToolWindowManager.getInstance(project).getToolWindow('Tab Groups')
+                const tw = ToolWindowManager.getInstance(project).getToolWindow('PrismTabs')
                 if (tw == null) return
                 const cm = tw.getContentManagerIfCreated()
                 if (cm == null || cm.getContentCount() == 0) return
@@ -818,7 +818,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     )
 
     /**
-     * Shows the "Tab Groups" tool window via `ToolWindowManager`, not by clicking its stripe button
+     * Shows the "PrismTabs" tool window via `ToolWindowManager`, not by clicking its stripe button
      * as [toolWindowGroupRows] does. Two reasons: a locked tool window has no `JBList` for that
      * helper's locator to wait for, and `ToolWindow.show()` is what fires `toolWindowShown` — the
      * listener [io.prismtabs.ui.TabGroupsToolWindowFactory]'s panel re-reads the licence on, so this
@@ -835,7 +835,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
             const project = frameHelper.getProject()
             const task = new Runnable({
                 run: function() {
-                    const tw = ToolWindowManager.getInstance(project).getToolWindow('Tab Groups')
+                    const tw = ToolWindowManager.getInstance(project).getToolWindow('PrismTabs')
                     if (tw != null) tw.show(null)
                 }
             })
@@ -1112,7 +1112,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
 }
 
 /**
- * The "Tab Groups" tool-window list itself, for the tests that need more of it than
+ * The "PrismTabs" tool-window list itself, for the tests that need more of it than
  * [toolWindowGroupRows]' rendered rows — its live selection, or a right-click on one row. Opens the
  * tool window first if it isn't already showing, exactly as [toolWindowGroupRows] does.
  */
@@ -1135,7 +1135,7 @@ fun RemoteRobot.contextMenuItemStates(): List<String> {
 }
 
 /**
- * The "Tab Groups" tool-window list rows, as rendered — colour dot aside, this is the group name,
+ * The "PrismTabs" tool-window list rows, as rendered — colour dot aside, this is the group name,
  * member count and any "hidden" suffix that [io.prismtabs.ui.TabGroupsToolWindow] paints. Opens
  * the tool window via its stripe button first if it isn't already showing. Unscoped
  * ([RemoteRobot.find], not [IdeaFrame]'s subtree-scoped find) for the stripe button only; the list
@@ -1143,7 +1143,7 @@ fun RemoteRobot.contextMenuItemStates(): List<String> {
  */
 fun RemoteRobot.toolWindowGroupRows(): List<String> {
     val stripe = findAll<ComponentFixture>(
-        byXpath("//div[@accessiblename='Tab Groups' and @class='SquareStripeButton']"),
+        byXpath("//div[@accessiblename='PrismTabs' and @class='SquareStripeButton']"),
     )
     if (findAll<JListFixture>(byXpath("//div[@class='JBList']")).isEmpty()) {
         stripe.firstOrNull()?.click()
