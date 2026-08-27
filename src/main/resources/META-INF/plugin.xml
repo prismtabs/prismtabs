@@ -15,6 +15,11 @@
         hide a group (closing its tabs, remembering them) or show it again. Assignments and
         hidden state persist across restarts. The preset palette itself is editable under
         <b>Settings | Tools | PrismTabs</b>.
+        <br/><br/>
+        <a href="https://prismtabs.com">prismtabs.com</a> has the manual, the tier breakdown and
+        the licence agreement. Bugs and feature requests, for every edition, go to the
+        <a href="https://github.com/yendrrek/prismtabs-feedback">public feedback tracker</a> —
+        anything touching a purchase should be emailed instead, as that tracker is public.
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
