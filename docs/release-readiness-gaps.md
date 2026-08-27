@@ -115,11 +115,24 @@ generated and is now set as the `PUBLISH_TOKEN` repo secret (closes item 3). Acc
 ## 6. Write the actual listing content
 
 **Current state:** not started. `plugin.xml`'s `<description>` is a reasonable first draft of the
-prose but nothing else exists.
+prose but nothing else exists. It now ends with a links block pointing at `prismtabs.com` and the
+public feedback tracker (see item 14) — the description is the only listing surface the *IDE's own*
+Plugins panel renders, so those two links have to live in the prose rather than only in the
+Marketplace link fields below.
 
 **To close:**
 - Tagline.
-- Full description (can start from `plugin.xml`'s `<description>` and expand).
+- Full description (can start from `plugin.xml`'s `<description>` and expand). Note the Marketplace
+  defaults to the `plugin.xml` description; editing it in the admin UI instead detaches it from the
+  archive, and you are then asked whether future uploads should keep using the UI copy or go back to
+  `plugin.xml`. Prefer leaving it sourced from `plugin.xml` so there is one copy, not two.
+- Under **Technical Information**, fill the dedicated link fields — they render in the listing's
+  *Additional Information* section, and are the correct home for these rather than the prose:
+  - *Issue tracker* → `https://github.com/yendrrek/prismtabs-feedback`
+  - *Documentation* → `https://prismtabs.com/docs`
+  - *Website* → `https://prismtabs.com`
+  - *Source code* → leave empty; the repository is private (item 9), and the best-practices page
+    requires external links to be reachable.
 - At least one screenshot, ≥1200×760 — a good candidate set: the swatch popup mid-flow, the Tab
   Groups tool window with a few groups, and the palette settings page. None currently exist
   anywhere in the repo.
@@ -215,3 +228,35 @@ to avoid. Reworded to "Colour-coded tab groups…". While editing, also fixed a 
 accuracy issue found the same pass: the description still said the tool window can "collapse … or
 expand" a group, but the shipped UI (Phase 4) uses "Hide/Show Group" wording — the description now
 says "hide … or show" to match what users actually see.
+
+## ~~14. No public place for users to report bugs — closed~~
+
+**Status:** Closed 2026-08-27. The source repository is private (item 9), so a user who hit a bug
+had nowhere to report it but the vendor email — and a Marketplace listing with an empty *Issue
+tracker* field gives a prospective buyer no evidence the plugin is maintained.
+
+`github.com/yendrrek/prismtabs-feedback` is now public and holds no code, only issues: a README, a
+`SECURITY.md`, and two YAML issue forms. Design decisions worth not re-litigating:
+
+- **One tracker for every edition.** Free, Pro and trial reports all land in the same place. It
+  keeps the support links to a single URL and makes active development on the paid tier visible to
+  free users, who are also the source of a good share of the feature ideas.
+- **Which edition the reporter runs is a form field, not a label.** Labels record triage decisions
+  and are applied by the maintainer; a self-reported fact belongs in the issue body, where it stays
+  searchable without implying it has been verified.
+- **`planned` and `pro` are separate labels, not one `planned-pro`.** They are orthogonal, so
+  composing them allows filtering on either axis; a compound label would need a `planned-free`
+  twin to answer the mirror question.
+- **`blank_issues_enabled: false`, with `config.yml` routing purchases to email.** Licensing,
+  billing and refund questions carry order IDs and email addresses, and this tracker is public and
+  indexed. This is the one thing here that would be genuinely hard to undo after the fact, so the
+  route is closed off before an issue can be opened rather than moderated afterwards.
+- **Discussions, wiki and projects are off.** A single surface is less to keep up with for a solo
+  maintainer, and a stale public board reads worse than no board.
+
+Issue #1 is pinned and locked: it carries the roadmap filters, a table of where to send what, and
+the three most-requested things the platform cannot do (README §"Constraints that are not going
+away" 1–3), so those get answered before they are asked.
+
+Still to do here is item 6's Technical Information step — pointing the listing's *Issue tracker*
+field at the repository — which cannot happen until the listing exists.
