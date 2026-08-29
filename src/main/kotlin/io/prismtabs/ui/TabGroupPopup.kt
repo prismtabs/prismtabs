@@ -390,10 +390,14 @@ internal fun promptForRenameAndApply(project: Project, group: TabGroup, service:
  * Project view's own file-delete confirmation) and its guidance that an irreversible default
  * action needs an unambiguous label, not a bare affirmative.
  *
+ * The message itself is [deleteConfirmationMessage], split out so the hidden-group warning it
+ * carries is unit-testable without a platform harness — the same trade
+ * [io.prismtabs.license.PrismTabsLicense.decide] makes for the licence gate.
+ *
  * `internal`, not `private`: reused directly by the tool window's own "Delete Group" action.
  */
 internal fun confirmAndDelete(project: Project, group: TabGroup, service: TabGroupService) {
-    val confirmed = MessageDialogBuilder.yesNo("Delete Tab Group", "Delete \"${group.name}\"? Its files will be unassigned.")
+    val confirmed = MessageDialogBuilder.yesNo("Delete Tab Group", deleteConfirmationMessage(group))
         .yesText("Delete")
         .noText("Cancel")
         .icon(Messages.getWarningIcon())
@@ -404,6 +408,31 @@ internal fun confirmAndDelete(project: Project, group: TabGroup, service: TabGro
     service.delete(group.id)
     repaintFiles(project, members)
     TabGroupNotifier.notifyChanged(project)
+}
+
+/**
+ * [confirmAndDelete]'s prompt.
+ *
+ * A hidden group gets a second line, because deleting one destroys more than the first sentence
+ * admits: [TabGroupService.delete] drops the whole group, and with it the
+ * [TabGroup.collapsedFileUrls] record of what hiding closed — so those tabs are never reopened and
+ * nothing is left to reopen them from. This path is reachable without a subscription ("Manage
+ * Groups…" is free, and [ManageGroupsStep] lists hidden groups like any other), which is what earns
+ * the line its space: it is the one way a lapsed user can lose the locked tool window's "reopen the
+ * tabs" escape hatch ([expandAllCollapsedGroups]), and this dialog is the last point where they
+ * could still say no.
+ *
+ * Both conditions are checked, not just [TabGroup.collapsed]: hiding a group none of whose files
+ * were open records nothing, and a warning about zero tabs would be noise.
+ */
+internal fun deleteConfirmationMessage(group: TabGroup): String = buildString {
+    append("Delete \"${group.name}\"? Its files will be unassigned.")
+    val rememberedTabs = group.collapsedFileUrls.size
+    if (group.collapsed && rememberedTabs > 0) {
+        append("\n\nThis group is hidden. The ")
+        append(if (rememberedTabs == 1) "tab it closed" else "$rememberedTabs tabs it closed")
+        append(" will not be reopened.")
+    }
 }
 
 /** "Remove from Group"'s handler: unassign, repaint, and offer to delete a group left empty. */
