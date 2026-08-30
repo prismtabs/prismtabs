@@ -112,4 +112,4 @@ provision of this Agreement is held unenforceable, the remaining provisions rema
 
 ## Contact
 
-Andrzej Piontek — yendrrek@protonmail.com — https://prismtabs.com/
+Andrzej Piontek — contact@prismtabs.com — https://prismtabs.com/
