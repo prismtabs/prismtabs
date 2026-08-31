@@ -1,6 +1,6 @@
 # PrismTabs End-User Licence Agreement
 
-**Last updated: 26 August 2026**
+**Last updated: 31 August 2026**
 
 This End-User Licence Agreement ("Agreement") is a legal agreement between you (either an
 individual or a single entity, "you" or "Licensee") and Andrzej Piontek, an individual trader
@@ -33,6 +33,22 @@ previously-generated data or settings are deleted as a result of a lapsed subscr
 A free trial period, as configured on the JetBrains Marketplace listing at the time of your
 activation, may be offered for the paid features. The Licensor may change or withdraw trial terms
 for future users at any time; this does not affect a trial you have already activated.
+
+### 1.5 Fees and Renewal
+Paid features are sold and billed through the JetBrains Marketplace, which acts as the seller of
+record. The price is the one shown on the Marketplace listing at the time you purchase or renew,
+and it applies for the whole of the billing period it covers; it does not change during that
+period.
+
+The Licensor may change the price of the paid features for future billing periods, both for new
+subscribers on first purchase and for existing subscribers on renewal. If you do not wish to renew
+at the new price, you may cancel before your renewal date. Cancelling does not end your current
+subscription early — the paid features remain available until the end of the period you have
+already paid for, after which the Software reverts to the free features described in §1.1.
+
+Billing, renewal, cancellation, and refunds are handled by JetBrains under its own terms and
+refund policy, which apply in addition to this Agreement. Nothing in this section affects your
+statutory rights as a consumer.
 
 ## 2. Restrictions
 
