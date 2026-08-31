@@ -1,16 +1,17 @@
-# Verify that the published Agreement on the website still matches this
-# repository's docs/EULA.md, which is the source of truth for the licence.
+# Verify that this repository's docs/EULA.md mirror still matches the canonical
+# Agreement, eula.html, published from prismtabs-website.
 #
 # This is the mirror image of the `EULA sync` workflow in prismtabs-website.
 # Both are needed because drift can start on either side, and an edit on one
 # side produces no commit — and so no build — on the other. This job covers
-# the case that matters most: amending the licence here and forgetting that
-# prismtabs.com/eula still serves the old wording.
+# the case where docs/EULA.md is edited directly and left out of step with the
+# canonical page.
 #
 # The check itself lives in the website repository (tools/check-eula-sync.py),
-# next to the page it validates, so there is only one copy of it to maintain.
-# Reading that repository needs a credential: a read-only deploy key, chosen
-# over a token because it never expires and is scoped to that one repository.
+# next to the canonical page it validates, so there is only one copy of it to
+# maintain. Reading that repository needs a credential: a read-only deploy key,
+# chosen over a token because it never expires and is scoped to that one
+# repository.
 name: EULA sync
 
 on:
@@ -34,7 +35,7 @@ concurrency:
 
 jobs:
   check:
-    name: Compare EULA.md with the published page
+    name: Compare docs/EULA.md with the canonical page
     runs-on: ubuntu-latest
     steps:
       - name: Check out the plugin
@@ -72,8 +73,8 @@ jobs:
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
-      - name: Compare the source with the published Agreement
+      - name: Compare the mirror with the canonical Agreement
         run: |
           python3 website/tools/check-eula-sync.py \
-            --source docs/EULA.md \
+            --mirror docs/EULA.md \
             --page website/eula.html

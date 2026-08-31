@@ -157,11 +157,12 @@ confirming no telemetry (matches item 11's finding), and governing law set to Sc
 courts — Andrzej is Scotland-resident. Not legal advice; hasn't been reviewed by a solicitor.
 
 **Published (2026-08-26):** it now renders at `prismtabs.com/eula` (`eula.html` in
-`prismtabs-website`, verbatim against this file — diffed word for word, not just eyeballed). A
-pair of `eula-sync.yml` GitHub Actions workflows, one in each repository and each reading the other
-over a non-expiring read-only deploy key, re-run that comparison on every relevant push and weekly,
-so an edit to this file that isn't mirrored to the page goes noticed rather than unnoticed; see
-"Keeping the EULA in sync" in the website repo's `README.md` for the full mechanism.
+`prismtabs-website`, which is the canonical copy; this file is a mirror kept verbatim against it —
+diffed word for word, not just eyeballed). A pair of `eula-sync.yml` GitHub Actions workflows, one
+in each repository and each reading the other over a non-expiring read-only deploy key, re-run that
+comparison on every relevant push and weekly, so an edit on either side that isn't carried across
+goes noticed rather than unnoticed; see "Keeping the EULA in sync" in the website repo's
+`README.md` for the full mechanism.
 
 **To close:**
 - Optional: have a solicitor review the draft before it's binding on paying customers.

@@ -1,3 +1,11 @@
+<!--
+  This file is a mirror. The canonical End-User Licence Agreement is eula.html
+  in the prismtabs-website repository, published at https://prismtabs.com/eula.
+  Edit that page first, then update this file to match; the EULA sync check
+  (tools/check-eula-sync.py there, plus a workflow in each repository) enforces
+  that the prose is identical.
+-->
+
 # PrismTabs End-User Licence Agreement
 
 **Last updated: 31 August 2026**

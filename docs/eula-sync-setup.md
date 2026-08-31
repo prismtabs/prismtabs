@@ -1,12 +1,12 @@
 # Setting up the EULA sync check on a new machine (macOS / Windows)
 
 This guide configures the local `pre-commit` hook in a **`prismtabs-website`**
-checkout. It lives in this repository because `docs/EULA.md` here is the source
-of truth the hook checks against, and because this repo is private — but the
-steps are all run in the `prismtabs-website` clone.
+checkout. It lives in this (private) repository because the hook needs a
+checkout of `docs/EULA.md` from here to compare against — the steps themselves
+are all run in the `prismtabs-website` clone.
 
-`prismtabs-website` keeps `eula.html` in lockstep with `docs/EULA.md` here. Two
-safety nets do that:
+`eula.html` in `prismtabs-website` is the canonical Agreement; `docs/EULA.md`
+here is a mirror kept in lockstep with it. Two safety nets do that:
 
 1. **CI** — `.github/workflows/eula-sync.yml` in `prismtabs-website` and its
    counterpart in this repository. This works on every machine because it runs on
@@ -14,7 +14,8 @@ safety nets do that:
    working.**
 2. **A local `pre-commit` hook** — `tools/git-hooks/pre-commit` in
    `prismtabs-website`, which runs `tools/check-eula-sync.py` before each commit
-   and blocks a commit that stages a drifted `eula.html`.
+   and prints a reminder (it does not block) when `eula.html` and this mirror
+   disagree.
 
 The local hook is **per-clone opt-in** and has environmental requirements. This
 guide is the checklist for enabling it on a macOS or Windows checkout of
@@ -30,7 +31,7 @@ All four of these are true in the `prismtabs-website` checkout:
 - `python3 --version` prints a Python 3.x version.
 - A checkout of this repository exists at `../prismtabs` (sibling of
   `prismtabs-website`), **or** `PRISMTABS_EULA` points at its `docs/EULA.md`.
-- `tools/check-eula-sync.py` prints `EULA in sync: eula.html matches …`.
+- `tools/check-eula-sync.py` prints `EULA in sync: EULA.md matches …`.
 - `git config --get core.hooksPath` prints `tools/git-hooks`.
 
 ---
@@ -42,8 +43,8 @@ siblings:
 
 ```
 dev/
-├── prismtabs/            # this repository (source of truth: docs/EULA.md)
-└── prismtabs-website/    # the site that publishes eula.html
+├── prismtabs/            # this repository (mirror: docs/EULA.md)
+└── prismtabs-website/    # canonical Agreement: eula.html
 ```
 
 If you keep them somewhere else, skip the sibling clone below and use the
@@ -79,9 +80,9 @@ cd ~/dev/prismtabs-website
 tools/check-eula-sync.py
 ```
 
-Expected: `EULA in sync: eula.html matches /Users/…/dev/prismtabs/docs/EULA.md`.
+Expected: `EULA in sync: EULA.md matches /Users/…/dev/prismtabs-website/eula.html`.
 
-- `error: EULA source not found …` → the plugin repo is not at `../prismtabs`.
+- `error: EULA mirror not found …` → the plugin repo is not at `../prismtabs`.
   Fix the layout or use `PRISMTABS_EULA`.
 - `command not found` / permission denied → run it explicitly:
   `python3 tools/check-eula-sync.py`, and check the file is executable
@@ -103,9 +104,9 @@ tools/check-eula-sync.py && echo "check OK"
 ```
 
 Expected: the `EULA in sync …` message, then `check OK`. The hook wraps this same
-check, so from here on it runs automatically on `git commit` — silently when it
-passes, printing a sentence-level diff and blocking the commit when `eula.html`
-has drifted.
+check, so from here on it runs automatically on `git commit` — silently when the
+mirror matches, printing a sentence-level diff and a reminder (never blocking)
+when it has drifted.
 
 ---
 
@@ -166,7 +167,7 @@ cd ~/dev/prismtabs-website
 python3 tools/check-eula-sync.py
 ```
 
-Expected: `EULA in sync: eula.html matches …/dev/prismtabs/docs/EULA.md`.
+Expected: `EULA in sync: EULA.md matches …/dev/prismtabs-website/eula.html`.
 
 Same failure modes as macOS step 3.
 
@@ -198,7 +199,7 @@ If this repository lives somewhere other than `../prismtabs` relative to
 **Per-command:**
 
 ```bash
-tools/check-eula-sync.py --source /path/to/prismtabs/docs/EULA.md
+tools/check-eula-sync.py --mirror /path/to/prismtabs/docs/EULA.md
 ```
 
 **Persistently (so the hook picks it up too):**
@@ -217,14 +218,16 @@ tools/check-eula-sync.py --source /path/to/prismtabs/docs/EULA.md
 
 ## How the hook behaves once installed
 
-- Commit **stages `eula.html`** and it has drifted → commit is **blocked** with a
-  sentence-level diff.
-- Commit stages `eula.html` and it matches → commit proceeds.
-- Commit **does not touch `eula.html`**, source available, drift present → commit
-  is **blocked** (drift is drift).
-- Commit does not touch `eula.html`, **no source available** → prints
-  `warning: skipping the EULA sync check` and proceeds.
-- `git commit --no-verify` bypasses the hook entirely — CI still catches it.
+- Commit **stages `eula.html`** and it has drifted from the mirror → commit
+  proceeds, with a sentence-level diff and a reminder to update `docs/EULA.md`
+  in this repository.
+- Commit stages `eula.html` and it matches the mirror → commit proceeds
+  silently.
+- Commit **does not touch `eula.html`** but the two disagree → commit proceeds,
+  with a warning.
+- No mirror checkout available → the check is skipped silently (a one-line note
+  only if `eula.html` is staged).
+- `git commit --no-verify` bypasses the hook entirely — CI still catches drift.
 
 ---
 
@@ -232,7 +235,7 @@ tools/check-eula-sync.py --source /path/to/prismtabs/docs/EULA.md
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `error: EULA source not found at …` | Plugin repo not at `../prismtabs` | Clone it as a sibling, or set `PRISMTABS_EULA` |
+| `error: EULA mirror not found at …` | Plugin repo not at `../prismtabs` | Clone it as a sibling, or set `PRISMTABS_EULA` |
 | `env: python3: No such file or directory` | No `python3` on `PATH` (common on Windows) | Install Store Python 3, or add a `python3` shim/alias |
 | Hook never runs on `git commit` | `core.hooksPath` not set in this clone | `git config core.hooksPath tools/git-hooks` |
 | Hook not run by a GUI client on Windows | Client cannot execute `/bin/sh` scripts | Commit from Git Bash |
