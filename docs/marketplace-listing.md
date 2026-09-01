@@ -54,7 +54,7 @@ start a new group and name it, or "Add to Group…" to put the tab in a group yo
 already have. "Manage Groups…" lets you rename, recolour, delete, or mark a group
 active — files opened while a group is active join it automatically.
 
-The "PrismTabs" tool window lists every group with its colour and member count,
+The PrismTabs tool window lists every group with its colour and member count,
 and can hide a group (closing its tabs, remembering them) or show it again.
 Assignments and hidden state persist across restarts and follow a file through a
 rename or move. The preset palette itself is editable under
@@ -67,7 +67,7 @@ Free forever
   • Assignments persist across restarts and survive file renames and moves
 
 Paid — a 30-day free trial on every new install, then a subscription
-  • The "PrismTabs" tool window for managing every group at a glance
+  • The PrismTabs tool window for managing every group at a glance
   • Hide a group to close its tabs and remember them, then show it to reopen them
     together
   • Mark a group active so newly opened files join it automatically
@@ -89,7 +89,8 @@ anything touching a purchase should be emailed instead, as that tracker is publi
 Sourced from `CHANGELOG.md` `[Unreleased]`. Reworded during this pass to match
 `naming-and-terminology.md`: "Chrome-style colour groups" → "Colour-coded tab
 groups" (item 13 already made this fix in `plugin.xml`; the changelog had drifted),
-and "the \"Tab Groups\" tool window" → "the \"PrismTabs\" tool window".
+and "the \"Tab Groups\" tool window" → "the PrismTabs tool window" (unquoted, per
+`naming-and-terminology.md` §1).
 
 ## Technical Information links
 
