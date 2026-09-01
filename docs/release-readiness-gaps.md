@@ -9,8 +9,10 @@ Each item below is written to be picked up standalone in its own session.
 ## 1. Arm the paid-feature gate
 
 **Current state:** `plugin.xml` has no `<product-descriptor>` tag. `gradle.properties`'
-`pluginVersion` is `1.4.2-SNAPSHOT`. `PrismTabsLicense.paidFeaturesEnabled()` already returns
-`true` unconditionally while `getProductCode()` is null, so every gate is wired but inert.
+`pluginVersion` is `1.4.14-SNAPSHOT` (as of 2026-09-01). `PrismTabsLicense.paidFeaturesEnabled()`
+already returns `true` unconditionally while `getProductCode()` is null, so every gate is wired but
+inert. The `optional="true"` requirement in the first "To close" bullet was verified live this
+session — a bare `<product-descriptor>` was confirmed to disable the plugin outright under `runIde`.
 
 **To close:**
 - Pick the actual release date.
