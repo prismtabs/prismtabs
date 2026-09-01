@@ -122,6 +122,9 @@ generated and is now set as the `PUBLISH_TOKEN` repo secret (closes item 3). Acc
   **Freemium**, then the **Yearly Subscription without a Fallback License** scheme, set price to
   $9/year (matches the website's pricing card as of `fix(pricing)`, 2026-08-26), leave the trial at
   its 30-day default.
+- Attach the licence (item 7): paste the `prismtabs.com/eula` URL into the licence field at upload
+  time (per the best-practices doc it's added here, not via a `plugin.xml` tag); paste the full
+  EULA text as the fallback if the form wants text rather than a link.
 
 ## 6. Write the actual listing content
 
@@ -157,7 +160,19 @@ pass:
   order: `01-swatch-popup-and-tabs-dark.png`, `02-tool-window-and-tabs-dark.png`,
   `03-palette-settings-dark.png`, `04-tool-window-and-tabs-light.png`.
 
-## 7. Choose and prepare a License/EULA for the paid listing
+## ~~7. Choose and prepare a License/EULA for the paid listing — closed~~
+
+**Closed (2026-09-01):** the EULA is drafted, published, and mirror-synced; the solicitor review
+in the first "To close" bullet was always optional and has been deliberately declined (no solicitor
+being engaged). The only remaining action — pasting the `prismtabs.com/eula` URL into the licence
+field — is a step *inside* item 5's upload, not separate work here, and is recorded there. Nothing
+left in this item.
+
+Two non-blocking checks to run before the upload, noted so they aren't missed: the
+`contact@prismtabs.com` mailbox (the only contact route in the agreement, and where §2's
+interoperability requests must go) must actually receive mail; and if `EULA.md` is edited before
+the listing goes live, bump its "Last updated" date and let the sync check confirm the website
+copy matches.
 
 **Current state (2026-08-26):** drafted and published; not yet attached to the listing. Found
 during an audit against
@@ -183,11 +198,13 @@ comparison on every relevant push and weekly, so an edit on either side that isn
 goes noticed rather than unnoticed; see "Keeping the EULA in sync" in the website repo's
 `README.md` for the full mechanism.
 
-**To close:**
-- Optional: have a solicitor review the draft before it's binding on paying customers.
-- Attach the `prismtabs.com/eula` URL during item 5's upload step (the license link/text is added
-  at upload time per the best-practices doc, not via a `plugin.xml` tag) — pasting the text
-  directly is the fallback if JetBrains' upload form turns out to want a link.
+**Resolved:**
+- Solicitor review — declined. It was always an optional bullet; no solicitor is being engaged.
+  The draft is not legal advice and hasn't been reviewed by one.
+- Attaching the `prismtabs.com/eula` URL during item 5's upload step (the license link/text is
+  added at upload time per the best-practices doc, not via a `plugin.xml` tag; pasting the text
+  directly is the fallback if the form wants a link) — carried into item 5 as the place it
+  actually happens.
 
 ## 8. Submit for review
 
