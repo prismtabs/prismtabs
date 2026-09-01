@@ -11,7 +11,7 @@
         Groups…" lets you rename, recolour, delete, or mark a group active — files opened while a
         group is active join it automatically.
         <br/><br/>
-        The "PrismTabs" tool window lists every group with its colour and member count, and can
+        The PrismTabs tool window lists every group with its colour and member count, and can
         hide a group (closing its tabs, remembering them) or show it again. Assignments and
         hidden state persist across restarts and follow a file through a rename or move. The preset
         palette itself is editable under <b>Settings | Tools | PrismTabs</b>.
@@ -25,7 +25,7 @@
         </ul>
         <b>Paid — a 30-day free trial on every new install, then a subscription</b>
         <ul>
-            <li>The "PrismTabs" tool window for managing every group at a glance</li>
+            <li>The PrismTabs tool window for managing every group at a glance</li>
             <li>Hide a group to close its tabs and remember them, then show it to reopen them
                 together</li>
             <li>Mark a group active so newly opened files join it automatically</li>
