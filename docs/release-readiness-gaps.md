@@ -114,29 +114,37 @@ generated and is now set as the `PUBLISH_TOKEN` repo secret (closes item 3). Acc
 
 ## 6. Write the actual listing content
 
-**Current state:** not started. `plugin.xml`'s `<description>` is a reasonable first draft of the
-prose but nothing else exists. It now ends with a links block pointing at `prismtabs.com` and the
-public feedback tracker (see item 14) — the description is the only listing surface the *IDE's own*
-Plugins panel renders, so those two links have to live in the prose rather than only in the
-Marketplace link fields below.
+**Current state (2026-09-01):** copy, metadata, and all four screenshots are done. The drafting is
+captured in
+[`marketplace-listing.md`](marketplace-listing.md) — tagline, description, change notes, Technical
+Information link values, and tags — so the upload step (item 5) is a paste job. What changed this
+pass:
+
+- `plugin.xml`'s `<description>` was expanded from its first-draft prose to the full listing body:
+  the same overview, plus an explicit **Free forever** / **Paid** feature split (matching the
+  README's "Marketplace publishing prep" section and the website) as two `<ul>` lists, then the
+  existing links block last. No price string in it deliberately — the archive for a version is
+  frozen, the EULA carries a price-change clause, and the Marketplace has its own pricing field;
+  "a subscription" in the copy, the number lives only on the Sales Info scheme and the website.
+  Kept sourced from `plugin.xml` (one copy) — do **not** detach it by editing in the admin UI.
+- `CHANGELOG.md`'s `[Unreleased]` entry — which becomes `<change-notes>` at build time — was
+  reworded to `naming-and-terminology.md` house style: "Chrome-style colour groups" →
+  "Colour-coded tab groups" (item 13 had already fixed this in `plugin.xml`; the changelog had
+  drifted) and the "Tab Groups" tool window → the "PrismTabs" tool window.
+- **Tagline:** there is no dedicated field — Marketplace and the IDE Plugins panel both show the
+  description's first line as the summary. That line ("Colour-coded tab groups for IntelliJ editor
+  tabs.") is fit for purpose as-is.
 
 **To close:**
-- Tagline.
-- Full description (can start from `plugin.xml`'s `<description>` and expand). Note the Marketplace
-  defaults to the `plugin.xml` description; editing it in the admin UI instead detaches it from the
-  archive, and you are then asked whether future uploads should keep using the UI copy or go back to
-  `plugin.xml`. Prefer leaving it sourced from `plugin.xml` so there is one copy, not two.
-- Under **Technical Information**, fill the dedicated link fields — they render in the listing's
-  *Additional Information* section, and are the correct home for these rather than the prose:
-  - *Issue tracker* → `https://github.com/yendrrek/prismtabs-feedback`
-  - *Documentation* → `https://prismtabs.com/docs`
-  - *Website* → `https://prismtabs.com`
-  - *Source code* → leave empty; the repository is private (item 9), and the best-practices page
-    requires external links to be reachable.
-- At least one screenshot, ≥1200×760 — a good candidate set: the swatch popup mid-flow, the Tab
-  Groups tool window with a few groups, and the palette settings page. None currently exist
-  anywhere in the repo.
-- Tags.
+- Under **Technical Information**, fill the dedicated link fields (values in `marketplace-listing.md`):
+  *Issue tracker* → the feedback repo, *Documentation* → `prismtabs.com/docs`, *Website* →
+  `prismtabs.com`, *Source code* → leave empty (repo is private, item 9; best-practices requires
+  external links to be reachable).
+- Tags — proposed set (`User Interface`, `Editor`, `Productivity`) in `marketplace-listing.md`;
+  JetBrains maps free text onto their controlled list at review.
+- **Screenshots.** All four shots (≥1200×760) are in `docs/marketplace/`, upload in filename
+  order: `01-swatch-popup-and-tabs-dark.png`, `02-tool-window-and-tabs-dark.png`,
+  `03-palette-settings-dark.png`, `04-tool-window-and-tabs-light.png`.
 
 ## 7. Choose and prepare a License/EULA for the paid listing
 
