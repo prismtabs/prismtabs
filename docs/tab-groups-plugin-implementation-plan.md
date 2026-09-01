@@ -222,8 +222,13 @@ tinting is invisible (§2.4).
   Subscription without a Fallback License — see the README's [Marketplace publishing
   prep](../README.md#marketplace-publishing-prep)). Vendor metadata, plugin icon, a tested
   licence-verification module and its call sites (one per paid feature, not a single gate) are done;
-  the gates stay inert until `plugin.xml` gains a `<product-descriptor>`, which is deliberately
-  deferred until the actual release date is known. The cross-platform manual verification pass is
+  the gates stay inert until `plugin.xml` gains a `<product-descriptor code="PPRISMTABS"
+  release-date="…" release-version="…" optional="true"/>`, which is deliberately deferred until the
+  actual release date is known. The `optional="true"` is required, not optional: it sets
+  `IdeaPluginDescriptorImpl.isLicenseOptional` (verified in the 2024.2 bytecode) and is what lets
+  the plugin load unlicensed for the freemium free tier — a bare `<product-descriptor>` makes the
+  platform disable the whole plugin for a non-subscriber. See the README's [Marketplace publishing
+  prep](../README.md#marketplace-publishing-prep). The cross-platform manual verification pass is
   now done on macOS and Windows; see
   [cross-platform manual verification](cross-platform-manual-verification.md)'s sign-off log.
 

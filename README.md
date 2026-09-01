@@ -748,6 +748,13 @@ Done so far, none of it published anywhere:
     `runIde`, `uiTest` — would lock its own paid features, since `LicensingFacade` has no product to
     issue a stamp for and `isLicensed()` answers `false` for everyone. With it, the gates go live by
     themselves on the day the tag lands.
+  - **That tag must be `<product-descriptor … optional="true"/>`, not a bare one.** `optional="true"`
+    sets `IdeaPluginDescriptorImpl.isLicenseOptional` (verified in the 2024.2 bytecode), which is
+    what permits the plugin to load and run unlicensed so these gates can do their free-tier
+    fallback. A bare `<product-descriptor>` marks PrismTabs as fully paid: the platform disables the
+    whole plugin for an unlicensed user the moment they dismiss the register dialog, and none of the
+    gating above ever executes. Confirmed live under `runIde` on 2026-09-01 (the plugin dropped into
+    `config/disabled_plugins.txt`).
 
 **Deliberately not done yet, and why:** `plugin.xml` has **no `<product-descriptor>`** tag.
 `<product-descriptor release-date="">` has to be the actual date this version ships, which doesn't
@@ -762,9 +769,15 @@ than being held back alongside it.
 
 1. Pick the real release date, bump `pluginVersion` off `-SNAPSHOT` (currently `1.2.1-SNAPSHOT`) to
    the first paid release's version, and add `<product-descriptor code="PPRISMTABS"
-   release-date="YYYYMMDD" release-version="10"/>` to `plugin.xml` — which is also what arms the
-   already-wired gating call sites. Re-run `runIde` once afterwards to see the free tier as an
-   unsubscribed user would, since that's the first build where the gates do anything.
+   release-date="YYYYMMDD" release-version="10" optional="true"/>` to `plugin.xml` — which is also
+   what arms the already-wired gating call sites. **`optional="true"` is mandatory for the freemium
+   model** (it sets `IdeaPluginDescriptorImpl.isLicenseOptional`, verified in the 2024.2 bytecode):
+   without it the platform treats PrismTabs as fully paid and disables the entire plugin for an
+   unlicensed user once they dismiss the register dialog, so the free tier never loads and
+   `PrismTabsLicense.decide()`'s free-tier branch is dead code in production. Reproduced live under
+   `runIde` on 2026-09-01. Re-run `runIde` once afterwards to see the free tier as an unsubscribed
+   user would, since that's the first build where the gates do anything — and confirm the plugin
+   **stays loaded** (upsell panel, not a missing plugin).
 2. Create the JetBrains Marketplace vendor profile, set it to **trader** status, and submit banking
    details (Sales Info tab) — external, account-level, only Andrzej can do this.
 3. Upload the plugin (first release, not an update), then in **Sales Info → Add to Marketplace**:
