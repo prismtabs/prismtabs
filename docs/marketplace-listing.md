@@ -125,13 +125,14 @@ listing (three dark, one light):
    "New Group" caption above the 8 preset dots, "Add to Group…" / "Manage Groups…"
    / "Remove from Group" below the separator, tinted tabs and code behind. The
    one-right-click pitch; it goes first.
-2. **`02-tool-window-and-tabs-dark.png`** (1840 × 902) — the PrismTabs tool window
+2. **`02-tool-window-and-tabs-dark.png`** (1853 × 885) — the PrismTabs tool window
    docked right, listing Tests / Backend / Docs with colour dots and member
-   counts, "Docs 3 tabs · hidden" showing the hide feature, editor tabs behind it
-   tinted to match. The paid tier's home.
+   counts, "Backend 1 tab · active" showing the active-group marker (pin toggle
+   pressed in the stripe), "Docs 3 tabs · hidden" showing the hide feature, editor
+   tabs behind it tinted to match. The paid tier's home.
 3. **`03-palette-settings-dark.png`** (1794 × 1045) — the full `Settings | Tools |
    PrismTabs` dialog, all eight presets renamed to a consistent scheme, the light
    and dark `ColorPanel` per row visible.
-4. **`04-tool-window-and-tabs-light.png`** (1856 × 933) — the same tool window and
+4. **`04-tool-window-and-tabs-light.png`** (1853 × 885) — the same tool window and
    tinted tab strip as shot 2, in the light theme, no popup. Proves the
    light-theme palette work the README documents.
