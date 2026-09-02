@@ -141,6 +141,15 @@ private class CaptionedListPopup(project: Project, step: ListPopupStep<*>) : Lis
  */
 private fun effectivePresets(): List<PresetColor> = service<TabGroupPaletteService>().presets()
 
+/**
+ * A group's label in a list step, suffixed with "(active)" when it is the active group.
+ *
+ * Shared by [AddToGroupStep] and [ManageGroupsStep] so the marker cannot drift between the two
+ * places a group is listed by name.
+ */
+private fun labelFor(group: TabGroup, service: TabGroupService): String =
+    if (group.id == service.activeGroupId()) "${group.name} (active)" else group.name
+
 private sealed class Entry {
     class Preset(val preset: PresetColor) : Entry()
     data object AddToGroup : Entry()
@@ -227,7 +236,7 @@ private class AddToGroupStep(
 
     private var finalRunnable: Runnable? = null
 
-    override fun getTextFor(value: TabGroup): String = value.name
+    override fun getTextFor(value: TabGroup): String = labelFor(value, service)
 
     override fun getIconFor(value: TabGroup): Icon =
         ColorSwatchIcon(JBColor(Color(value.lightRgb), Color(value.darkRgb)))
@@ -258,7 +267,7 @@ private class ManageGroupsStep(
 ) : BaseListPopupStep<TabGroup>("Manage Groups", service.groups()) {
 
     override fun getTextFor(value: TabGroup): String =
-        if (value.id == service.activeGroupId()) "${value.name} (active)" else value.name
+        labelFor(value, service)
 
     override fun getIconFor(value: TabGroup): Icon =
         ColorSwatchIcon(JBColor(Color(value.lightRgb), Color(value.darkRgb)))
