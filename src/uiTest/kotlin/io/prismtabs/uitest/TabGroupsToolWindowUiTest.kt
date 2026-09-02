@@ -140,4 +140,46 @@ class TabGroupsToolWindowUiTest {
             }
         }
     }
+
+    /**
+     * The gap this closes: marking a group active used to be reachable only from a tab's
+     * right-click menu, two levels down (Tab Group… → Manage Groups… → the group), even though the
+     * tool window is where a subscriber otherwise manages groups. Driven the way a user would —
+     * right-click the row, click the toggle — and asserted on the behaviour it buys (a newly opened
+     * file joins the group), not just on the service field, so a toggle wired to the wrong row
+     * would fail here.
+     */
+    @Test
+    fun `the tool window's Active Group toggle marks the right-clicked group, and clears it again`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                assignFileToNewGroup("Sample.kt", "StickyA")
+                waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().size == 1 }
+
+                remoteRobot.toolWindowGroupList().findText("StickyA").rightClick()
+                remoteRobot.actionMenuItem("Active Group").click()
+                waitFor(ofSeconds(10)) { activeGroupName() == "StickyA" }
+                assertTrue(
+                    remoteRobot.toolWindowGroupRows().any { it.contains("StickyA") && it.contains("active") },
+                    "the marked row must say so, got ${remoteRobot.toolWindowGroupRows()}",
+                )
+
+                // What "active" is for: the next file opened joins the group without being assigned.
+                openFile("Second.kt")
+                waitFor(ofSeconds(10)) { groupNameFor("Second.kt") == "StickyA" }
+
+                // The same item clears it — the toggle reads its state from the selected row.
+                remoteRobot.toolWindowGroupList().findText("StickyA").rightClick()
+                remoteRobot.actionMenuItem("Active Group").click()
+                waitFor(ofSeconds(10)) { activeGroupName() == null }
+                assertTrue(
+                    remoteRobot.toolWindowGroupRows().none { it.contains("active") },
+                    "clearing must drop the row's suffix, got ${remoteRobot.toolWindowGroupRows()}",
+                )
+            } finally {
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
 }

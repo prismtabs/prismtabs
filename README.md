@@ -4,7 +4,7 @@ Colour-coded tab groups for IntelliJ editor tabs.
 
 **Status: Phase 5 (hardening) in progress.** Features are complete through Phase 4: a **PrismTabs
 tool window** (right-hand stripe) lists every group with its colour dot, member count and hidden
-state, and can rename, recolour, delete, or **hide/show** a group. Hiding is "close and
+state, and can rename, recolour, delete, mark **active**, or **hide/show** a group. Hiding is "close and
 remember" — IntelliJ has no collapsible in-strip chip and no API to build one, so hiding closes
 the group's open tabs and records them, and showing reopens them in order; see
 [Phase 4 result](#phase-4-result). Everything is covered end-to-end by real UI tests
@@ -446,8 +446,10 @@ auto-join the active group until it's deactivated." `TabGroupService.activeGroup
 explicitly made; "active" is closer to a recording toggle — a session-scoped mode, not a fact about
 a file. Silently resuming it after a restart the user has likely forgotten about would auto-colour
 files they never asked to group, with no visible cause. The active group is instead surfaced
-in-popup: `ManageGroupsStep` and `AddToGroupStep` both suffix the active group's label with
-"(active)".
+in-popup — `ManageGroupsStep` and `AddToGroupStep` both suffix the active group's label with
+"(active)" — and in the tool window, whose row renderer carries the same "active" suffix and whose
+toolbar/context menu carry the `Active Group` toggle. Marking a group active from either surface
+publishes a change so the other one repaints.
 
 ### Checked against the JetBrains UI Guidelines before writing the popup tree
 
@@ -456,7 +458,7 @@ every new menu entry, not just assumed:
 
 - **Ellipsis only when the action needs further input.** "Rename…" and "Recolour…" both open a
   further step requiring a choice, so both get one; "Mark as Active Group", "Clear Active Group",
-  and "Delete Group" complete immediately (a confirmation dialog doesn't count — IntelliJ's own
+  "Active Group", and "Delete Group" complete immediately (a confirmation dialog doesn't count — IntelliJ's own
   file-delete confirmation follows the same rule), so none of the three do.
 - **A destructive default action needs a concrete label, not a bare affirmative.** Delete Group's
   confirmation uses `MessageDialogBuilder.yesNo(...).yesText("Delete").noText("Cancel")` rather than
@@ -503,8 +505,8 @@ group and reopens each via `openFile(file, focusEditor = false)`, in the same or
 **4b — the "PrismTabs" tool window.** `io.prismtabs.ui.TabGroupsToolWindow` (a `ToolWindowFactory`
 + `DumbAware`, registered `anchor="right"`) is the plan's stated substitute for Chrome's in-strip
 chip: a `JBList<TabGroup>` showing each group's swatch, name, member count and — new this phase — a
-"hidden" suffix, with a toolbar (and matching context menu) for Hide/Show Group, Rename…,
-Recolour…, and Delete Group. Rename, Recolour and Delete don't duplicate `TabGroupPopup`'s logic —
+"hidden" (and "active") suffix, with a toolbar (and matching context menu) for Active Group,
+Hide/Show Group, Rename…, Recolour…, and Delete Group. Rename, Recolour and Delete don't duplicate `TabGroupPopup`'s logic —
 `promptForRenameAndApply`, `confirmAndDelete` and `RecolorStep` were widened from `private` to
 `internal` and are invoked directly from here.
 
@@ -725,7 +727,8 @@ Done so far, none of it published anywhere:
   the free-tier action — and instead `PrismTabsLicense.paidFeaturesEnabled()` /
   `requirePaidFeature()` are called from four places: the PrismTabs tool window (`TabGroupsPanel`
   shows an upsell empty-state instead of the list), `toggleCollapse` (the one choke point all three
-  collapse/expand entry points funnel through), the popup's "Mark as Active Group" action, and
+  collapse/expand entry points funnel through), `toggleActiveGroup` (which both the popup's "Mark
+  as Active Group" item and the tool window's `Active Group` toggle call), and
   `TabGroupPaletteConfigurable`. A `false` there means "fall back to the free tier", never "block
   the plugin". Two consequences worth knowing:
   - **The locked side is covered by `PaywallUiTest`.** Every other test runs against an unlocked
@@ -957,6 +960,14 @@ used from this desktop even with the IDE on `:99` — JDK 21 routes it to the xd
 answers for the *Wayland* session rather than the X display the IDE is on, so it returns the wrong
 screen. `RemoteRobotExtension`'s offscreen `Window.paint` capture is unaffected and is what to reach
 for when a popup needs photographing on Linux.
+
+Re-verified 2026-09-02 on the same Xvfb setup, after the tool window gained its `Active Group`
+toggle (see [Phase 4 result](#phase-4-result)): the whole suite twice in a row, 26 tests, 23 run and
+green, 3 skipped by their own `assumeTrue` gates (`MacSettingsShortcutUiTest` is macOS-only, the two
+`WindowsManualVerificationUiTest` cases need `-Dprismtabs.manualVerification=true`). The new
+`the tool window's Active Group toggle marks the right-clicked group, and clears it again` (6.959s)
+is mouse-driven throughout — a real right-click on the list row, then a real click on the
+`ActionMenuItem` — so it exercises exactly the path Wayland cannot.
 
 ### What it actually took to get working (seven real findings, not guesses)
 

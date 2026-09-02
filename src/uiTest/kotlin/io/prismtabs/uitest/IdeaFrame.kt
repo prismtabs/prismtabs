@@ -967,8 +967,8 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
 
     /**
      * Invokes [io.prismtabs.ui.toggleActiveGroup] on the group named [groupName] — the same choke
-     * point the popup's "Mark as Active Group" / "Clear Active Group" item calls, so this covers the
-     * gate on that item without mouse-driving a popup (which on a locked build would also fire the
+     * point the popup's "Mark as Active Group" / "Clear Active Group" item and the tool window's
+     * "Active Group" toggle both call, so this covers the gate without mouse-driving a popup (which on a locked build would also fire the
      * registration dialog — see [suppressRegisterDialog]).
      */
     fun toggleActiveGroup(groupName: String) {
@@ -993,10 +993,12 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
             }
 
             const facade = java.lang.Class.forName('io.prismtabs.ui.TabGroupPopupKt', true, pluginLoader)
-            const method = facade.getDeclaredMethod('toggleActiveGroup', groupClass, serviceClass)
+            const method = facade.getDeclaredMethod(
+                'toggleActiveGroup', com.intellij.openapi.project.Project, groupClass, serviceClass
+            )
             method.setAccessible(true)
 
-            const task = new Runnable({ run: function() { method.invoke(null, target, service) } })
+            const task = new Runnable({ run: function() { method.invoke(null, project, target, service) } })
             ApplicationManager.getApplication().invokeAndWait(task)
             """,
             true,

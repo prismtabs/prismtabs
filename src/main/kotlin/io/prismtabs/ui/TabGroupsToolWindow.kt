@@ -8,6 +8,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
+import com.intellij.openapi.actionSystem.ToggleAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
@@ -78,6 +79,7 @@ private class TabGroupsPanel(
 
     init {
         val actions = DefaultActionGroup(
+            ToggleActiveAction(project, service, list),
             ToggleCollapseAction(project, service, list),
             RenameAction(project, service, list),
             RecolorAction(project, service, list),
@@ -271,6 +273,8 @@ private class GroupCellRenderer(private val service: TabGroupService) : ColoredL
         val count = service.membersOf(value.id).size
         append("  $count ${if (count == 1) "tab" else "tabs"}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
         if (value.collapsed) append("  ·  hidden", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+        // Same suffix wording the tab popup's group list uses, so the two views name the state alike.
+        if (value.id == service.activeGroupId()) append("  ·  active", SimpleTextAttributes.GRAYED_ATTRIBUTES)
     }
 }
 
@@ -291,6 +295,46 @@ private abstract class SelectionAction(
 
     override fun update(e: AnActionEvent) {
         e.presentation.isEnabled = list.selectedValue != null
+    }
+}
+
+/**
+ * Marking the selected group active — the same toggle the tab popup's "Mark as Active Group" item
+ * drives, brought here because the tool window is where a subscriber manages groups and having to
+ * go back to a tab's right-click menu for this one operation was the gap.
+ *
+ * A [ToggleAction] rather than a text-swapping [AnAction] like [ToggleCollapseAction]: "active" is
+ * a state one group is in at a time, and the platform renders a toggle as a checked item in the
+ * context menu and a pressed button in the toolbar — both of which say "this group is the active
+ * one" while the menu is open, which a Mark/Clear label pair cannot. The gate lives in
+ * [toggleActiveGroup], so clearing stays free for a lapsed subscriber here too.
+ */
+private class ToggleActiveAction(
+    private val project: Project,
+    private val service: TabGroupService,
+    private val list: JBList<TabGroup>,
+) : ToggleAction("Active Group", "Newly opened files join this group", AllIcons.General.Pin_tab) {
+
+    // Same EDT/selection contract as [SelectionAction], repeated rather than inherited: a
+    // ToggleAction cannot also extend it, and the two lines are cheaper than a shared interface.
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+    override fun update(e: AnActionEvent) {
+        super.update(e)
+        e.presentation.isEnabled = list.selectedValue != null
+    }
+
+    override fun isSelected(e: AnActionEvent): Boolean {
+        val selected = list.selectedValue ?: return false
+        return selected.id == service.activeGroupId()
+    }
+
+    // `state` is ignored on purpose: it is always the negation of [isSelected], which is exactly
+    // what toggleActiveGroup recomputes — and going through that one helper is what keeps the
+    // licence gate (and the change notification) identical to the tab popup's route.
+    override fun setSelected(e: AnActionEvent, state: Boolean) {
+        val group = list.selectedValue ?: return
+        toggleActiveGroup(project, group, service)
     }
 }
 
