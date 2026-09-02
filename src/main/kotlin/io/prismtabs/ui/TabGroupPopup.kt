@@ -314,7 +314,7 @@ private class GroupActionsStep(
             }
             GroupAction.Recolor -> RecolorStep(project, group, service)
             GroupAction.ToggleActive -> {
-                toggleActiveGroup(group, service)
+                toggleActiveGroup(project, group, service)
                 PopupStep.FINAL_CHOICE
             }
             GroupAction.Delete -> {
@@ -362,16 +362,16 @@ internal class RecolorStep(
  * `internal`, not `private`: the paywall uiTest drives this directly, for the same reason
  * [expandAllCollapsedGroups] is internal.
  *
- * No [TabGroupNotifier.notifyChanged] here, unlike every other mutating helper in this file — and
- * that is deliberate, not an omission. Nothing renders the active group *persistently*: the tool
- * window's row renderer shows name, count and collapsed-ness only, and [ManageGroupsStep] is
- * rebuilt on every popup open, so its `" (active)"` suffix is computed fresh each time it's shown.
- * There is no stale view for a notification to refresh.
+ * [TabGroupNotifier.notifyChanged] because the tool window's row renderer marks the active group
+ * and its list is long-lived: without this, marking a group active from a tab's popup would leave
+ * an already-open tool window showing the previous group as active until something else changed.
+ * ([ManageGroupsStep] needs no such refresh — it is rebuilt on every popup open.)
  */
-internal fun toggleActiveGroup(group: TabGroup, service: TabGroupService) {
+internal fun toggleActiveGroup(project: Project, group: TabGroup, service: TabGroupService) {
     val clearing = service.activeGroupId() == group.id
     if (clearing || PrismTabsLicense.requirePaidFeature("Marking a tab group active")) {
         service.setActiveGroup(if (clearing) null else group.id)
+        TabGroupNotifier.notifyChanged(project)
     }
 }
 
