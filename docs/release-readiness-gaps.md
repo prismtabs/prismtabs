@@ -128,8 +128,11 @@ generated and is now set as the `PUBLISH_TOKEN` repo secret (closes item 3). Acc
 
 ## 6. Write the actual listing content
 
-**Current state (2026-09-01):** copy, metadata, and all four screenshots are done. The drafting is
-captured in
+**Current state (2026-09-02):** copy and metadata are done. The two tool-window screenshots
+(`02-tool-window-and-tabs-dark.png`, `04-tool-window-and-tabs-light.png`) now need re-shooting:
+the group right-click context menu in the tool window has gained an "active group" entry, and
+there is a new pin icon on the group. Re-capture both shots so the listing reflects the current
+UI before upload. The drafting is captured in
 [`marketplace-listing.md`](marketplace-listing.md) — tagline, description, change notes, Technical
 Information link values, and tags — so the upload step (item 5) is a paste job. What changed this
 pass:
@@ -156,9 +159,12 @@ pass:
   external links to be reachable).
 - Tags — proposed set (`User Interface`, `Editor`, `Productivity`) in `marketplace-listing.md`;
   JetBrains maps free text onto their controlled list at review.
-- **Screenshots.** All four shots (≥1200×760) are in `docs/marketplace/`, upload in filename
+- **Screenshots.** All four shots (≥1200×760) live in `docs/marketplace/`, upload in filename
   order: `01-swatch-popup-and-tabs-dark.png`, `02-tool-window-and-tabs-dark.png`,
-  `03-palette-settings-dark.png`, `04-tool-window-and-tabs-light.png`.
+  `03-palette-settings-dark.png`, `04-tool-window-and-tabs-light.png`. **Blocked:** the two
+  tool-window shots (`02-…` and `04-…`) are stale — the group right-click context menu now shows
+  an "active group" entry and the group has a new pin icon. Re-shoot both before upload so the
+  listing matches the shipped UI.
 
 ## ~~7. Choose and prepare a License/EULA for the paid listing — closed~~
 
