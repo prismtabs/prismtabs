@@ -30,6 +30,7 @@ import io.prismtabs.model.TabGroup
 import io.prismtabs.service.TabGroupNotifier
 import io.prismtabs.service.TabGroupPaletteService
 import io.prismtabs.service.TabGroupService
+import io.prismtabs.service.TabGroupVisibility
 import io.prismtabs.service.TabRepaint
 import java.awt.Color
 import java.awt.Component
@@ -684,7 +685,8 @@ internal fun promptForRenameAndApply(project: Project, group: TabGroup, service:
  * `internal`, not `private`: reused directly by the tool window's own "Delete Group" action.
  */
 internal fun confirmAndDelete(project: Project, group: TabGroup, service: TabGroupService) {
-    val confirmed = MessageDialogBuilder.yesNo("Delete Tab Group", deleteConfirmationMessage(group))
+    val hidden = TabGroupVisibility.isHidden(project, service, group)
+    val confirmed = MessageDialogBuilder.yesNo("Delete Tab Group", deleteConfirmationMessage(group, hidden))
         .yesText("Delete")
         .noText("Cancel")
         .icon(Messages.getWarningIcon())
@@ -698,27 +700,30 @@ internal fun confirmAndDelete(project: Project, group: TabGroup, service: TabGro
 }
 
 /**
- * [confirmAndDelete]'s prompt.
+ * [confirmAndDelete]'s prompt. [hidden] is [TabGroupVisibility.isHidden] for the same group, passed
+ * in rather than derived here so this stays a pure function of what it prints — the same trade
+ * [currentGroupCaption] and [memberFileRows] make.
  *
  * A hidden group gets a second line, because deleting one destroys more than the first sentence
  * admits: [TabGroupService.delete] drops the whole group, and with it the
- * [TabGroup.collapsedFileUrls] record of what hiding closed — so those tabs are never reopened and
- * nothing is left to reopen them from. This path is reachable without a subscription ("Manage
- * Groups…" is free, and [ManageGroupsStep] lists hidden groups like any other), which is what earns
- * the line its space: it is the one way a lapsed user can lose the locked tool window's "reopen the
- * tabs" escape hatch ([expandAllCollapsedGroups]), and this dialog is the last point where they
- * could still say no.
+ * [TabGroup.rememberedTabUrls] record of what its tabs were — so nothing is left to reopen them
+ * from. This path is reachable without a subscription ("Manage Groups…" is free, and
+ * [ManageGroupsStep] lists hidden groups like any other), which is what earns the line its space: it
+ * is the one way a lapsed user can lose the locked tool window's "reopen the tabs" escape hatch
+ * ([showAllHiddenGroups]), and this dialog is the last point where they could still say no.
  *
- * Both conditions are checked, not just [TabGroup.collapsed]: hiding a group none of whose files
- * were open records nothing, and a warning about zero tabs would be noise.
+ * Both conditions are checked, not [hidden] alone: a group hidden with nothing remembered — one
+ * whose files have simply never been opened — has no tabs to lose, and a warning about zero tabs
+ * would be noise. "Would reopen", not "closed", because the memory now outlives the act of hiding
+ * and is just as likely to have been filled by closing those tabs one at a time.
  */
-internal fun deleteConfirmationMessage(group: TabGroup): String = buildString {
+internal fun deleteConfirmationMessage(group: TabGroup, hidden: Boolean): String = buildString {
     append("Delete \"${group.name}\"? Its files will be unassigned.")
-    val rememberedTabs = group.collapsedFileUrls.size
-    if (group.collapsed && rememberedTabs > 0) {
+    val rememberedTabs = group.rememberedTabUrls.size
+    if (hidden && rememberedTabs > 0) {
         append("\n\nThis group is hidden. The ")
-        append(if (rememberedTabs == 1) "tab it closed" else "$rememberedTabs tabs it closed")
-        append(" will not be reopened.")
+        append(if (rememberedTabs == 1) "tab it would reopen" else "$rememberedTabs tabs it would reopen")
+        append(" will be forgotten.")
     }
 }
 
@@ -763,7 +768,7 @@ private fun removeFromGroup(project: Project, file: VirtualFile, service: TabGro
  * decoration, and the removal that emptied it may have been a misclick.
  *
  * Deliberately *not* driven by closing tabs: a group's members are files, not open editors, so a
- * group whose every tab is closed — which includes every collapsed group — is not empty. See
+ * group whose every tab is closed — which is to say every hidden group — is not empty. See
  * [io.prismtabs.service.AssignmentRemoval].
  *
  * One dialog for the whole batch, not one per group: deleting a directory can empty several groups

@@ -25,10 +25,10 @@ import java.time.Duration.ofSeconds
  *    else.** A simulation that silently stopped working would otherwise turn every assertion below
  *    into a re-test of the unlocked path that still passes.
  *  - **Locked features are driven through their own choke points, not clicked** — and specifically
- *    through the choke point that *carries the gate*, never past it. [IdeaFrame.setGroupCollapsed]
- *    reaches `TabGroupCollapse` directly and so proves nothing about the paywall;
- *    [IdeaFrame.invokeToggleCollapse] is its gated counterpart and is what a hide/show test must
- *    use. Same trade-off [IdeaFrame.setGroupCollapsed] documents — and here it additionally avoids
+ *    through the choke point that *carries the gate*, never past it. [IdeaFrame.setGroupHidden]
+ *    reaches `TabGroupVisibility` directly and so proves nothing about the paywall;
+ *    [IdeaFrame.invokeToggleVisibility] is its gated counterpart and is what a hide/show test must
+ *    use. Same trade-off [IdeaFrame.setGroupHidden] documents — and here it additionally avoids
  *    the registration dialog a gated *click* would open, which is why
  *    [IdeaFrame.suppressRegisterDialog] backs it up.
  *  - **The free-tier test is the exception to the one above, and must stay that way.** Every gate
@@ -104,12 +104,12 @@ class PaywallUiTest {
     }
 
     /**
-     * The one paywall behaviour that isn't about withholding anything: collapsing closes tabs and
-     * only the tool window can reopen them, so a lapse with a group still collapsed must not leave
+     * The one paywall behaviour that isn't about withholding anything: hiding closes tabs and
+     * only the tool window can reopen them, so a lapse with a group still hidden must not leave
      * those tabs shut behind the very window that closed them.
      */
     @Test
-    fun `a lapsed subscription can still reopen the tabs of a collapsed group`(remoteRobot: RemoteRobot) {
+    fun `a lapsed subscription can still reopen the tabs of a hidden group`(remoteRobot: RemoteRobot) {
         remoteRobot.idea {
             try {
                 resetTabGroups()
@@ -119,9 +119,9 @@ class PaywallUiTest {
                 addFileToGroup("Second.kt", "Stranded")
                 waitFor(ofSeconds(10)) { groupNameFor("Second.kt") == "Stranded" }
 
-                // Collapse while still entitled to, then lose the entitlement — the exact sequence
+                // Hide while still entitled to, then lose the entitlement — the exact sequence
                 // that strands tabs.
-                setGroupCollapsed("Stranded", collapsed = true)
+                setGroupHidden("Stranded", hidden = true)
                 waitFor(ofSeconds(10)) { !openTabNames().contains("Sample.kt") && !openTabNames().contains("Second.kt") }
 
                 simulateUnlicensedPaidBuild()
@@ -131,10 +131,10 @@ class PaywallUiTest {
                 waitFor(ofSeconds(10)) { toolWindowEmptyText().contains("paid feature") }
                 assertTrue(
                     toolWindowEmptyText().contains("Reopen the tabs of 1 hidden group"),
-                    "a locked window with a collapsed group must offer the escape hatch, got: ${toolWindowEmptyText()}",
+                    "a locked window with a hidden group must offer the escape hatch, got: ${toolWindowEmptyText()}",
                 )
 
-                expandAllCollapsedGroups()
+                showAllHiddenGroups()
 
                 waitFor(ofSeconds(10)) { openTabNames().containsAll(listOf("Sample.kt", "Second.kt")) }
                 assertEquals(
@@ -209,7 +209,7 @@ class PaywallUiTest {
      * panel simply not drawing a toolbar: the tool window is left **open on its unlocked rendering**
      * when the licence lapses. Nothing broadcasts a licence change (see `PrismTabsLicense`), so the
      * panel keeps its list, its toolbar and its double-click handler until something makes it
-     * refresh — and every one of those routes lands on `toggleCollapse`. This test therefore
+     * refresh — and every one of those routes lands on `toggleVisibility`. This test therefore
      * deliberately does *not* re-show the tool window after the lapse: re-showing is what the first
      * test in this class covers, and doing it here would repaint the panel into its locked state and
      * quietly retire the very reachability being asserted.
@@ -234,21 +234,21 @@ class PaywallUiTest {
                 assertFalse(paidFeaturesEnabled(), "the simulated paid build should read as unlicensed")
 
                 // Hiding: refused, so the tabs stay open and the group stays shown.
-                invokeToggleCollapse("Gated")
-                assertFalse(isGroupCollapsed("Gated"), "a gated hide must not flip the group to collapsed")
+                invokeToggleVisibility("Gated")
+                assertFalse(isGroupHidden("Gated"), "a gated hide must not leave the group reading as hidden")
                 assertTrue(
                     openTabNames().containsAll(listOf("Sample.kt", "Second.kt")),
                     "a gated hide must not close the group's tabs, got: ${openTabNames()}",
                 )
 
                 // Showing is gated too, and proving it needs a group that is already hidden while
-                // unlicensed. setGroupCollapsed drives TabGroupCollapse directly — past the gate on
+                // unlicensed. setGroupHidden drives TabGroupVisibility directly — past the gate on
                 // purpose — which is exactly the state a lapse mid-collapse leaves behind.
-                setGroupCollapsed("Gated", collapsed = true)
+                setGroupHidden("Gated", hidden = true)
                 waitFor(ofSeconds(10)) { !openTabNames().contains("Sample.kt") && !openTabNames().contains("Second.kt") }
 
-                invokeToggleCollapse("Gated")
-                assertTrue(isGroupCollapsed("Gated"), "a gated show must leave the group collapsed")
+                invokeToggleVisibility("Gated")
+                assertTrue(isGroupHidden("Gated"), "a gated show must leave the group hidden")
                 assertFalse(
                     openTabNames().contains("Sample.kt"),
                     "a gated show must not reopen the tabs — that is the escape hatch's job, got: ${openTabNames()}",
@@ -260,12 +260,12 @@ class PaywallUiTest {
                 restoreUnpaidBuild()
                 assertTrue(paidFeaturesEnabled(), "restoring the unpaid build should reopen the gate")
 
-                invokeToggleCollapse("Gated")
-                waitFor(ofSeconds(10)) { !isGroupCollapsed("Gated") }
+                invokeToggleVisibility("Gated")
+                waitFor(ofSeconds(10)) { !isGroupHidden("Gated") }
                 waitFor(ofSeconds(10)) { openTabNames().containsAll(listOf("Sample.kt", "Second.kt")) }
             } finally {
                 restoreUnpaidBuild()
-                expandAllCollapsedGroups()
+                showAllHiddenGroups()
                 restoreRegisterDialog()
                 hideTabGroupsToolWindow()
                 closeAllEditors()
@@ -341,7 +341,7 @@ class PaywallUiTest {
                     openTabNames().containsAll(listOf("Sample.kt", "Second.kt", "Third.kt")),
                     "grouping while locked must leave every tab open, got: ${openTabNames()}",
                 )
-                assertFalse(isGroupCollapsed("FreeGroup"), "a group created while locked must not come up hidden")
+                assertFalse(isGroupHidden("FreeGroup"), "a group created while locked must not come up hidden")
             } finally {
                 restoreUnpaidBuild()
                 restoreRegisterDialog()

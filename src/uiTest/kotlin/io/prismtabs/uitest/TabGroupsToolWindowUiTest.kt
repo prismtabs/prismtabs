@@ -11,11 +11,12 @@ import org.junit.jupiter.api.extension.ExtendWith
 import java.time.Duration.ofSeconds
 
 /**
- * Phases 4 and 6a, end-to-end against a real sandbox IDE — see README "UI testing" for how to
- * launch `runIdeForUiTests` first. Covers both phases' stated acceptance criteria verbatim:
- * collapse a group, see its tabs leave the strip while the group stays listed in the tool window,
- * then expand and see the tabs return in order; and expand a group *row* to the files it holds,
- * with every tab closed, and open one from there.
+ * Phases 4, 6a and 7, end-to-end against a real sandbox IDE — see README "UI testing" for how to
+ * launch `runIdeForUiTests` first. Covers each phase's stated acceptance criteria verbatim: hide a
+ * group, see its tabs leave the strip while the group stays listed in the tool window, then show it
+ * and see the tabs return in order; expand a group *row* to the files it holds, with every tab
+ * closed, and open one from there; and watch the `hidden` suffix follow the tab strip as members are
+ * reopened and closed one at a time.
  */
 @ExtendWith(RemoteRobotExtension::class)
 class TabGroupsToolWindowUiTest {
@@ -24,55 +25,127 @@ class TabGroupsToolWindowUiTest {
     }
 
     @Test
-    fun `collapsing a group closes its tabs and keeps it listed, expanding restores them in order`(remoteRobot: RemoteRobot) {
+    fun `hiding a group closes its tabs and keeps it listed, showing restores them in order`(remoteRobot: RemoteRobot) {
         remoteRobot.idea {
             try {
                 resetTabGroups()
                 openFile("Sample.kt")
                 openFile("Second.kt")
 
-                remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Green", name = "CollapseMe")
+                remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Green", name = "HideMe")
                 remoteRobot.openTabGroupPopupOn(this, "Second.kt")
                 remoteRobot.clickPopupItem("Add to Group…")
-                remoteRobot.clickPopupItem("CollapseMe")
-                waitFor(ofSeconds(10)) { groupNameFor("Second.kt") == "CollapseMe" }
+                remoteRobot.clickPopupItem("HideMe")
+                waitFor(ofSeconds(10)) { groupNameFor("Second.kt") == "HideMe" }
 
                 openFile("Third.kt")
                 waitFor(ofSeconds(10)) { openTabNames().containsAll(listOf("Sample.kt", "Second.kt", "Third.kt")) }
 
                 // The tool window lists the group with its member count before anything collapses.
-                waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().any { it.contains("CollapseMe") } }
+                waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().any { it.contains("HideMe") } }
                 assertTrue(
-                    remoteRobot.toolWindowGroupRows().any { it.contains("CollapseMe") && it.contains("2 files") },
-                    "expected the tool window to list CollapseMe with 2 members, got ${remoteRobot.toolWindowGroupRows()}",
+                    remoteRobot.toolWindowGroupRows().any { it.contains("HideMe") && it.contains("2 files") },
+                    "expected the tool window to list HideMe with 2 members, got ${remoteRobot.toolWindowGroupRows()}",
                 )
 
-                setGroupCollapsed("CollapseMe", collapsed = true)
+                setGroupHidden("HideMe", hidden = true)
 
-                // Collapse closes exactly the group's members; the unrelated tab stays put.
+                // Hiding closes exactly the group's members; the unrelated tab stays put.
                 waitFor(ofSeconds(10)) { !openTabNames().contains("Sample.kt") && !openTabNames().contains("Second.kt") }
                 assertEquals(listOf("Third.kt"), openTabNames())
 
-                // ...and the group is still listed, now marked collapsed — the whole point of 4b:
-                // a collapsed group must remain reachable somewhere the tab strip cannot show it.
+                // ...and the group is still listed, now marked hidden — the whole point of 4b:
+                // a hidden group must remain reachable somewhere the tab strip cannot show it.
                 assertTrue(
-                    remoteRobot.toolWindowGroupRows().any { it.contains("CollapseMe") && it.contains("hidden") },
-                    "expected CollapseMe to still be listed and marked hidden, got ${remoteRobot.toolWindowGroupRows()}",
+                    remoteRobot.toolWindowGroupRows().any { it.contains("HideMe") && it.contains("hidden") },
+                    "expected HideMe to still be listed and marked hidden, got ${remoteRobot.toolWindowGroupRows()}",
                 )
 
-                setGroupCollapsed("CollapseMe", collapsed = false)
+                setGroupHidden("HideMe", hidden = false)
 
                 waitFor(ofSeconds(10)) { openTabNames().containsAll(listOf("Sample.kt", "Second.kt")) }
                 val reopened = openTabNames().filter { it == "Sample.kt" || it == "Second.kt" }
                 assertEquals(listOf("Sample.kt", "Second.kt"), reopened, "expected members to reopen in their recorded order")
                 assertTrue(
-                    remoteRobot.toolWindowGroupRows().none { it.contains("CollapseMe") && it.contains("hidden") },
-                    "expected CollapseMe to no longer read as hidden after showing it again",
+                    remoteRobot.toolWindowGroupRows().none { it.contains("HideMe") && it.contains("hidden") },
+                    "expected HideMe to no longer read as hidden after showing it again",
                 )
             } finally {
                 // In a finally, not at the end of the happy path: a failure here would otherwise
                 // leave the tool window open and break the *next* test's tab right-click. See
                 // IdeaFrame.hideTabGroupsToolWindow.
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
+     * "Hidden" follows the tab strip, not a flag — the Phase 7 amendment, driven exactly the way the
+     * bug was found: hide a group, then reopen one of its files from the tree, which is what that
+     * tree is *for*.
+     *
+     * All three of the symptoms a stored `collapsed` produced are asserted in one sequence, because
+     * they were one defect: the row kept saying `hidden` beside a tab plainly on the strip; the
+     * toggle kept offering Show for a group with nothing left to show; and closing the last tab by
+     * hand never made the row say `hidden` at all. The last step pins the other half of the design —
+     * the memory is maintained continuously, so Show reopens the file that was *last* open, not the
+     * pair that was open when the group was first hidden.
+     */
+    @Test
+    fun `hidden follows the tab strip — reopening a member un-hides a group, closing the last tab hides it`(
+        remoteRobot: RemoteRobot,
+    ) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                assignFileToNewGroup("Sample.kt", "Derived")
+                addFileToGroup("Second.kt", "Derived")
+                waitFor(ofSeconds(10)) {
+                    remoteRobot.toolWindowGroupRows().any { it.contains("Derived") && it.contains("2 files") }
+                }
+
+                setGroupHidden("Derived", hidden = true)
+                waitFor(ofSeconds(10)) { openTabNames().isEmpty() }
+                waitFor(ofSeconds(10)) {
+                    remoteRobot.toolWindowGroupRows().any { it.contains("Derived") && it.contains("hidden") }
+                }
+
+                // The gesture a stored flag could not see: reopen one member from the tree.
+                remoteRobot.expandToolWindowGroup("Derived")
+                remoteRobot.toolWindowGroupTree().doubleClickRowWithText("Sample.kt", false)
+                waitFor(ofSeconds(10)) { openTabNames() == listOf("Sample.kt") }
+                waitFor(ofSeconds(10)) {
+                    remoteRobot.toolWindowGroupRows().none { it.contains("Derived") && it.contains("hidden") }
+                }
+                assertTrue(
+                    remoteRobot.toolWindowGroupRows().any { it.contains("Derived") },
+                    "the group must still be listed, just no longer hidden, got ${remoteRobot.toolWindowGroupRows()}",
+                )
+
+                // And the toggle follows the same reading: there is something to hide again.
+                remoteRobot.toolWindowGroupTree().findText("Derived").rightClick()
+                assertTrue(
+                    remoteRobot.contextMenuItemStates().any { it.startsWith("Hide Group=") },
+                    "a group with a tab back on the strip must offer Hide, got ${remoteRobot.contextMenuItemStates()}",
+                )
+                Keyboard(remoteRobot).escape()
+
+                // Closing that last tab — no PrismTabs action involved — hides it again.
+                closeAllEditors()
+                waitFor(ofSeconds(10)) { openTabNames().isEmpty() }
+                waitFor(ofSeconds(10)) {
+                    remoteRobot.toolWindowGroupRows().any { it.contains("Derived") && it.contains("hidden") }
+                }
+
+                // Show restores what was last open — Sample.kt alone. Second.kt was open when the
+                // group was first hidden and is deliberately not resurrected: the memory tracks the
+                // strip, and the user closed it.
+                setGroupHidden("Derived", hidden = false)
+                waitFor(ofSeconds(10)) { openTabNames() == listOf("Sample.kt") }
+                assertEquals(listOf("Sample.kt"), openTabNames())
+            } finally {
                 hideTabGroupsToolWindow()
             }
         }
@@ -95,6 +168,11 @@ class TabGroupsToolWindowUiTest {
         remoteRobot.idea {
             try {
                 resetTabGroups()
+                // Both members open, and stated rather than inherited from whatever ran before:
+                // the Hide/Show assertion below turns on it, since a group with no open tab reads
+                // as hidden and offers Show (see TabGroupVisibility).
+                openFile("Sample.kt")
+                openFile("Second.kt")
                 assignFileToNewGroup("Sample.kt", "RightClickA")
                 assignFileToNewGroup("Second.kt", "RightClickB")
                 waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().size == 2 }
@@ -112,10 +190,10 @@ class TabGroupsToolWindowUiTest {
                     "the right-clicked row must be the selected one, got ${remoteRobot.selectedToolWindowRows()}",
                 )
                 // The wording the menu offers, asserted where it is actually rendered: the toggle
-                // reads Hide/Show, not the model's Collapse/Expand, and a visible group offers Hide.
+                // reads Hide/Show, never Collapse/Expand, and a group with tabs open offers Hide.
                 assertTrue(
                     remoteRobot.contextMenuItemStates().any { it.startsWith("Hide Group=") },
-                    "a visible group's menu must offer Hide Group, got ${remoteRobot.contextMenuItemStates()}",
+                    "a group with tabs open must offer Hide Group, got ${remoteRobot.contextMenuItemStates()}",
                 )
 
                 // Delete it from that very menu: the selected row is the one that disappears.
@@ -230,8 +308,11 @@ class TabGroupsToolWindowUiTest {
                     remoteRobot.contextMenuItemStates().all { it.endsWith("=true") },
                     "a right-click on a member row must enable its group's actions, got ${remoteRobot.contextMenuItemStates()}",
                 )
+                // Show, not Hide: every tab is closed, so the group *is* hidden and the toggle
+                // says the only useful thing it could. That the wording follows the strip rather
+                // than a stored flag is the point — see TabGroupVisibility.
                 assertTrue(
-                    remoteRobot.contextMenuItemStates().any { it.startsWith("Hide Group=") },
+                    remoteRobot.contextMenuItemStates().any { it.startsWith("Show Group=") },
                     "and they must be the parent group's, got ${remoteRobot.contextMenuItemStates()}",
                 )
                 Keyboard(remoteRobot).escape()
@@ -253,9 +334,9 @@ class TabGroupsToolWindowUiTest {
                 )
             } finally {
                 // Hidden groups keep their tabs closed, so unhide before leaving: the next test
-                // starts from resetTabGroups, but a stray collapsed group would still be holding
+                // starts from resetTabGroups, but a stray hidden group would still be holding
                 // this one's members shut if that ever changed.
-                setGroupCollapsed("Members", collapsed = false)
+                setGroupHidden("Members", hidden = false)
                 hideTabGroupsToolWindow()
             }
         }

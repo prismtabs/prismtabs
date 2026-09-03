@@ -206,7 +206,7 @@ Model, persistence and a real colour provider now exist (`TabGroup`, `TabGroupSt
 Assignments are keyed by `VirtualFile.url` and persist to `.idea/tabGroups.xml` via
 `@Storage("tabGroups.xml")`, so a rename or move would silently drop the assignment — accepted per
 the plan for Phase 1, then fixed ahead of the rest of Phase 5 by `TabGroupVfsListener`, a
-`BulkFileListener` that remaps assignments (and collapsed-file records) on rename or move,
+`BulkFileListener` that remaps assignments (and remembered-tab records) on rename or move,
 including every file nested under a renamed/moved directory. See its doc comment for why
 `BulkFileListener` and not the (deprecated) `VirtualFileListener` the plan originally named.
 
@@ -487,17 +487,20 @@ every new menu entry, not just assumed:
 
 ## Phase 4 result
 
-Two mechanisms, as the plan's Phase 4 section asks for, both built on the same collapsed state now
-carried on `TabGroup` (`collapsed: Boolean`, `collapsedFileUrls: List<String>` — the second one new
-this phase, persisted through `TabGroupState.GroupEntry` the same way everything else is).
+Two mechanisms, as the plan's Phase 4 section asks for. (This section describes Phase 4 as it
+shipped, when a `collapsed: Boolean` sat on `TabGroup` alongside the recorded file list. That flag
+is gone — see [Hidden is derived](#hidden-is-derived-from-the-strip-not-stored) — and the names
+below have moved with it: `TabGroupCollapse.collapse`/`expand` are now
+`TabGroupVisibility.hide`/`show`, and `collapsedFileUrls` is `rememberedTabUrls`. Everything else
+here still holds.)
 
-**4a — collapse = close-and-remember.** `io.prismtabs.service.TabGroupCollapse` is a small
+**4a — hide = close-and-remember.** `io.prismtabs.service.TabGroupVisibility` is a small
 IDE-side object next to `TabRepaint`, for the same reason: `FileEditorManager` access only makes
-sense from a live IDE, and `TabGroupService` stays plain-JUnit testable. `collapse()` reads
-`FileEditorManager.getOpenFiles()`, keeps only the files belonging to the target group, records
-that list on the group via `TabGroupService.collapse`, then closes each one
-(`FileEditorManager.closeFile`). `expand()` reads the recorded list back off the (pre-mutation)
-group and reopens each via `openFile(file, focusEditor = false)`, in the same order. Unlike
+sense from a live IDE, and `TabGroupService` stays plain-JUnit testable. `hide()` reads
+`FileEditorManager.getOpenFiles()`, keeps only the files belonging to the target group, closes each
+one (`FileEditorManager.closeFile`), then records that list on the group via
+`TabGroupService.rememberOpenTabs`. `show()` reads the recorded list back and reopens each via
+`openFile(file, focusEditor = false)`, in the same order. Unlike
 `TabRepaint`'s `queueUpdateFile` finding from Phase 0, both `closeFile(VirtualFile)` and
 `openFile(VirtualFile, boolean)` are declared on the public `FileEditorManager` interface itself
 (verified via `javap` on 2024.2) — no impl-class cast needed here.
@@ -528,6 +531,39 @@ siblings with only the stroke colour swapped. Delete uses `AllIcons.Actions.GC` 
 waste-basket, whatever its field name says — rather than `General.Remove`, a minus sign that means
 "take out of this list", not "destroy".
 
+### Hidden is derived from the strip, not stored
+
+Phase 4 stored `collapsed: Boolean` on `TabGroup`, and Phase 6a's tree — which lets you reopen a
+closed member by double-clicking its row — turned that flag into a liar. Three symptoms, one cause:
+reopening one member left the group row still reading `· hidden` beside a tab plainly on the strip;
+"Show Group" on a group whose tabs were all back was a no-op that cleared a word and did nothing
+else; and closing a group's tabs one at a time never made it read as hidden at all. A fourth was
+latent: a restart that didn't restore editors left every group unhidden with nothing open.
+
+The flag is now gone. `TabGroupVisibility.isHidden` derives it — *the group has members and none of
+them is open* — and every surface reads that: the tool window's `hidden` suffix (off the tree rows
+it just built, so the group row can never contradict the bold member rows under it), the Hide/Show
+toggle's text and icon, the delete confirmation's warning line, and the locked window's escape
+hatch. Reopening one member un-hides the group on the same refresh; closing the last tab hides it;
+"Show Group" is never dead.
+
+What that costs is the restore memory, which a derived state cannot hold. `rememberedTabUrls` (the
+old `collapsedFileUrls`) is therefore maintained **continuously** by `TabGroupFileListener` — on
+every editor open and close, the group's currently-open members are recorded, *unless* that set is
+empty. Skipping the empty case is the whole trick: the last close leaves the memory holding the
+arrangement as it stood a moment earlier, whether that close came from Hide or from the user's own
+Ctrl+W. `hide()` records **after** closing rather than before, so the listener's own upkeep can't
+overwrite it mid-loop with whatever was still open. `show()` re-reads the memory from the service,
+filters it against current membership (a file may have moved to another group since), and falls back
+to opening all of the group's files when nothing is remembered — otherwise Show on a group whose
+files have never been opened this session would be another dead gesture.
+
+Rejected: wording that reconciled the flag with reality — `group hidden, 1 tab visible` — which
+narrates a state machine the user should never have to know exists. Also rejected: a per-file `S`/`H`
+badge or eye icon in the tree. Bold-for-open is already the emphasis those rows carry, single letters
+read as file-type badges next to the actual file-type icon, and an eye on a row promises a per-file
+toggle that doesn't exist.
+
 ### Keeping the tool window in sync: a small message-bus topic, not polling
 
 The tool window has to reflect changes made from *outside* it — a group created via the swatch
@@ -535,14 +571,14 @@ popup while the tool window is already open, say. `TabGroupService` stays free o
 dependencies (see its doc comment), so it doesn't publish anything itself; a new
 `io.prismtabs.service.TabGroupsChangedListener` / `TabGroupNotifier` pair follows the same split
 `TabRepaint` already established, and every mutating call site in `TabGroupPopup` and
-`TabGroupCollapse` calls `TabGroupNotifier.notifyChanged(project)` right after mutating the service.
+`TabGroupVisibility` calls `TabGroupNotifier.notifyChanged(project)` right after mutating the service.
 The tool window subscribes once, in its panel's `init`, via
 `project.messageBus.connect(toolWindow.disposable)`.
 
 **Acceptance: passed**, verified live in `runIdeForUiTests` (`IC-242.20224.300`) by a new
-`remote-robot` UI test matching the plan's stated criterion verbatim: collapse a group and see its
-tabs disappear from the strip while it stays listed (now marked collapsed) in the tool window;
-expand it and see the tabs return in their recorded order. `./gradlew test` and all five
+`remote-robot` UI test matching the plan's stated criterion verbatim: hide a group and see its
+tabs disappear from the strip while it stays listed (now marked hidden) in the tool window;
+show it and see the tabs return in their recorded order. `./gradlew test` and all five
 `./gradlew uiTest` tests pass, repeatably (run three times in a row with no failures).
 
 ### Selection: right-click acts on the row you clicked, and a delete doesn't empty the selection
@@ -564,7 +600,7 @@ multi-selection list and would only make this one deader.
 **Deleting the selected group falls the selection onto the row that took its place** (`refresh`),
 rather than leaving the list with no selection at all — an empty selection disables the toolbar too,
 which reads as a dead panel right after a delete. Only when something *was* selected: a list nobody
-has touched must not select a row on its own. Group ids survive rename, recolour and collapse, so
+has touched must not select a row on its own. Group ids survive rename, recolour and hide/show, so
 this branch is only ever reached by an actual deletion, whether made here or from a tab's popup.
 
 Both rules come from a bug reported on Linux on 2026-08-21: right-clicking a group straight after
@@ -689,7 +725,7 @@ punish a mid-task user who needs one more, which is exactly the "too limited" ou
   (your assignments survive a rename; what is in a group is knowable at all), not premium ones, so
   they stay free.
 - **Paid** (active subscription, or during the 30-day trial): the PrismTabs tool window,
-  collapse/expand, active/sticky-group auto-join on newly opened files (Phase 4's tool window +
+  hide/show, active/sticky-group auto-join on newly opened files (Phase 4's tool window +
   Phase 3's inheritance rule), and custom palette editing (Phase 5's settings page). These are the
   workflow-multiplier features a daily user builds a habit around, not ones a casual tab-colourer
   misses.
@@ -731,8 +767,8 @@ Done so far, none of it published anywhere:
   `AssignTabGroupAction` (the [Phase 2 result](#phase-2-result) entry point) stays *ungated* — it is
   the free-tier action — and instead `PrismTabsLicense.paidFeaturesEnabled()` /
   `requirePaidFeature()` are called from four places: the PrismTabs tool window (`TabGroupsPanel`
-  shows an upsell empty-state instead of the list), `toggleCollapse` (the one choke point all three
-  collapse/expand entry points funnel through), `toggleActiveGroup` (which both the popup's "Mark
+  shows an upsell empty-state instead of the list), `toggleVisibility` (the one choke point all three
+  hide/show entry points funnel through), `toggleActiveGroup` (which both the popup's "Mark
   as Active Group" item and the tool window's `Active Group` toggle call), and
   `TabGroupPaletteConfigurable`. A `false` there means "fall back to the free tier", never "block
   the plugin". Two consequences worth knowing:
@@ -746,7 +782,7 @@ Done so far, none of it published anywhere:
     All but that free-tier case are script-driven rather than mouse-driven, so they run on Wayland
     too (see "These tests need an X11 display").
   - **Nothing is ever held hostage.** *Clearing* an active group stays free even though setting one
-    is paid, and the locked tool window still offers a one-click "reopen the tabs of N collapsed
+    is paid, and the locked tool window still offers a one-click "reopen the tabs of N hidden
     groups" — otherwise a lapsed subscription would leave tabs closed behind the very window needed
     to reopen them. `TabGroupFileListener` re-checks per file open, so auto-join stops the moment a
     subscription lapses rather than at the next restart.
@@ -913,9 +949,9 @@ group row hiding it — with the expansion still standing afterwards.
 
 A group is **empty** when it has no assigned files. Closing tabs has nothing to do with it: group
 membership is a file URL -> group id assignment persisted in `.idea/tabGroups.xml`, so a file stays
-in its group with every editor closed and across restarts — and `collapse` deliberately closes
-every one of a group's tabs while keeping its members. There is no `fileClosed` handling anywhere
-in the plugin, by design.
+in its group with every editor closed and across restarts — and `hide` deliberately closes
+every one of a group's tabs while keeping its members. `TabGroupFileListener.fileClosed` exists, but
+only to keep `rememberedTabUrls` current; it never touches an assignment.
 
 Three removals can genuinely empty a group, and each one reports it so the UI can offer to delete
 the group ([`promptToDeleteEmptied`](src/main/kotlin/io/prismtabs/ui/TabGroupPopup.kt)):
@@ -1021,7 +1057,7 @@ no matter what the tests say:
 running under a live GNOME Wayland session (`$XDG_SESSION_TYPE=wayland`), all 4 tests of the day
 passing; the class has since grown to 6. Their paywall-specific interactions go through `IdeaFrame`'s
 `runJs`/`callJs` helpers (in-process method calls inside the sandbox IDE, same mechanism
-`resetTabGroups`/`setGroupCollapsed` already used) rather than a popup or dialog click, so none of
+`resetTabGroups`/`setGroupHidden` already used) rather than a popup or dialog click, so none of
 *that* needs `java.awt.Robot`.
 
 **The exception's own exception is the free-tier test**, `the free tier still colours tabs and

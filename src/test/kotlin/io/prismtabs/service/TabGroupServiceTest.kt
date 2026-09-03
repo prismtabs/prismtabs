@@ -166,42 +166,47 @@ class TabGroupServiceTest {
     }
 
     @Test
-    fun `collapsing a group records it as collapsed with the given open files`() {
+    fun `remembering open tabs records them in the given order`() {
         val service = TabGroupService()
         service.assign("file:///A.kt", red)
         service.assign("file:///B.kt", red)
 
-        service.collapse("red", listOf("file:///A.kt", "file:///B.kt"))
+        service.rememberOpenTabs("red", listOf("file:///B.kt", "file:///A.kt"))
 
-        val group = service.groupFor("file:///A.kt")
-        assertEquals(true, group?.collapsed)
-        assertEquals(listOf("file:///A.kt", "file:///B.kt"), group?.collapsedFileUrls)
+        assertEquals(listOf("file:///B.kt", "file:///A.kt"), service.groupFor("file:///A.kt")?.rememberedTabUrls)
     }
 
     @Test
-    fun `expanding a collapsed group clears collapsed and its recorded files`() {
+    fun `remembering open tabs replaces what was remembered before`() {
         val service = TabGroupService()
         service.assign("file:///A.kt", red)
-        service.collapse("red", listOf("file:///A.kt"))
+        service.rememberOpenTabs("red", listOf("file:///A.kt", "file:///B.kt"))
 
-        service.expand("red")
+        service.rememberOpenTabs("red", listOf("file:///A.kt"))
 
-        val group = service.groupFor("file:///A.kt")
-        assertEquals(false, group?.collapsed)
-        assertEquals(emptyList<String>(), group?.collapsedFileUrls)
+        assertEquals(listOf("file:///A.kt"), service.groupFor("file:///A.kt")?.rememberedTabUrls)
+    }
+
+    /**
+     * The memory survives a show, which is what lets a group be hidden and shown repeatedly without
+     * the second Show having forgotten what the first one reopened.
+     */
+    @Test
+    fun `remembering open tabs is never cleared by anything else`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+        service.rememberOpenTabs("red", listOf("file:///A.kt"))
+
+        service.rename("red", "Crimson")
+        service.recolor("red", 0x000001, 0x000002)
+
+        assertEquals(listOf("file:///A.kt"), service.groupFor("file:///A.kt")?.rememberedTabUrls)
     }
 
     @Test
-    fun `collapsing an unknown group is a no-op`() {
+    fun `remembering open tabs for an unknown group is a no-op`() {
         val service = TabGroupService()
-        service.collapse("no-such-group", listOf("file:///A.kt"))
-        assertEquals(emptyList<String>(), service.groups())
-    }
-
-    @Test
-    fun `expanding an unknown group is a no-op`() {
-        val service = TabGroupService()
-        service.expand("no-such-group")
+        service.rememberOpenTabs("no-such-group", listOf("file:///A.kt"))
         assertEquals(emptyList<String>(), service.groups())
     }
 
@@ -271,30 +276,33 @@ class TabGroupServiceTest {
     }
 
     @Test
-    fun `remapping a collapsed group's file also updates its recorded collapsedFileUrls`() {
+    fun `remapping a remembered tab's file also updates the group's rememberedTabUrls`() {
         val service = TabGroupService()
         service.assign("file:///old/A.kt", red)
-        service.collapse("red", listOf("file:///old/A.kt"))
+        service.rememberOpenTabs("red", listOf("file:///old/A.kt"))
 
         service.remapUrl("file:///old/A.kt", "file:///new/A.kt")
 
         val group = service.groupFor("file:///new/A.kt")
-        assertEquals(listOf("file:///new/A.kt"), group?.collapsedFileUrls)
+        assertEquals(listOf("file:///new/A.kt"), group?.rememberedTabUrls)
     }
 
+    /**
+     * The memory is the one piece of hide/show state that persists — "hidden" itself is derived from
+     * the tab strip (see `TabGroupVisibility`), and after a restart a group with nothing open reads
+     * as hidden on its own. What has to survive is *what to reopen*.
+     */
     @Test
-    fun `collapsed state and recorded files round-trip through getState and loadState`() {
+    fun `remembered tabs round-trip through getState and loadState`() {
         val original = TabGroupService()
         original.assign("file:///A.kt", red)
         original.assign("file:///B.kt", red)
-        original.collapse("red", listOf("file:///A.kt", "file:///B.kt"))
+        original.rememberOpenTabs("red", listOf("file:///A.kt", "file:///B.kt"))
 
         val restored = TabGroupService()
         restored.loadState(original.state)
 
-        val group = restored.groupFor("file:///A.kt")
-        assertEquals(true, group?.collapsed)
-        assertEquals(listOf("file:///A.kt", "file:///B.kt"), group?.collapsedFileUrls)
+        assertEquals(listOf("file:///A.kt", "file:///B.kt"), restored.groupFor("file:///A.kt")?.rememberedTabUrls)
     }
 
     @Test
@@ -426,14 +434,14 @@ class TabGroupServiceTest {
     }
 
     @Test
-    fun `clearTree drops a deleted file from a collapsed group's recorded files`() {
+    fun `clearTree drops a deleted file from a group's remembered tabs`() {
         val service = TabGroupService()
         service.assign("file:///A.kt", red)
         service.assign("file:///B.kt", red)
-        service.collapse("red", listOf("file:///A.kt", "file:///B.kt"))
+        service.rememberOpenTabs("red", listOf("file:///A.kt", "file:///B.kt"))
 
         service.clearTree("file:///A.kt")
 
-        assertEquals(listOf("file:///B.kt"), service.groupFor("file:///B.kt")?.collapsedFileUrls)
+        assertEquals(listOf("file:///B.kt"), service.groupFor("file:///B.kt")?.rememberedTabUrls)
     }
 }

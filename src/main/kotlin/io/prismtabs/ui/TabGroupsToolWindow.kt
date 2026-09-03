@@ -37,8 +37,8 @@ import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.treeStructure.Tree
 import io.prismtabs.license.PrismTabsLicense
 import io.prismtabs.model.TabGroup
-import io.prismtabs.service.TabGroupCollapse
 import io.prismtabs.service.TabGroupService
+import io.prismtabs.service.TabGroupVisibility
 import io.prismtabs.service.TabGroupsChangedListener
 import java.awt.Color
 import java.awt.Component
@@ -65,7 +65,7 @@ import javax.swing.tree.TreeSelectionModel
  * question — Bookmarks, Changes, the Project view all answer it that way — rather than an
  * invention, and it is what makes a group's membership knowable once its tabs are closed.
  *
- * This whole tool window — and with it collapse/expand, which is only driven from here — is a paid
+ * This whole tool window — and with it hide/show, which is only driven from here — is a paid
  * feature (see the README's "Marketplace publishing prep"). It is gated inside [TabGroupsPanel]
  * rather than by declining to register the tool window at all: a subscription can be activated
  * while the IDE is running, and a stripe button that only appears after a restart would read as the
@@ -111,7 +111,7 @@ private class TabGroupsPanel(
     init {
         val actions = DefaultActionGroup(
             ToggleActiveAction(project, service, ::selectedGroup),
-            ToggleCollapseAction(project, service, ::selectedGroup),
+            ToggleVisibilityAction(project, service, ::selectedGroup),
             RenameAction(project, service, ::selectedGroup),
             RecolorAction(project, service, ::selectedGroup),
             DeleteAction(project, service, ::selectedGroup),
@@ -230,6 +230,11 @@ private class TabGroupsPanel(
                 ),
             )
         }
+        // Off the children this tree just built, not a second trip through
+        // [TabGroupVisibility.isHidden]: the two answer the same question ("is any member open?"),
+        // and taking it from the rows means the group row can never contradict the bold ones under
+        // it — no member bold, and only then, the word "hidden".
+        node.hidden = node.childCount > 0 && node.members.none { it.openInEditor }
         return node
     }
 
@@ -247,7 +252,7 @@ private class TabGroupsPanel(
      */
     private fun doubleClickOn(path: TreePath) {
         when (val node = path.lastPathComponent) {
-            is GroupNode -> toggleCollapse(project, service, node.group)
+            is GroupNode -> toggleVisibility(project, service, node.group)
             is MemberNode -> chooseMemberFile(project, node.group, service, node.row)
         }
     }
@@ -332,11 +337,11 @@ private class TabGroupsPanel(
      * and a way to subscribe — the platform's own empty-state idiom, so it reads as a locked feature
      * rather than a failure.
      *
-     * The "expand everything" line is not an upsell, it's the escape hatch: collapsing closes tabs
-     * and only this window can reopen them, so a subscription lapsing while a group is collapsed
-     * would otherwise hold those tabs hostage behind the paywall. Offered only when something is
-     * actually collapsed, and it expands rather than re-locking — a lapsed user gets their tabs
-     * back, but no ongoing collapse/expand.
+     * The "reopen the tabs" line is not an upsell, it's the escape hatch: hiding a group closes its
+     * tabs and only this window can reopen them, so a subscription lapsing while a group is hidden
+     * would otherwise hold those tabs hostage behind the paywall. Offered only when there is
+     * something to reopen, and it shows the groups rather than re-locking — a lapsed user gets their
+     * tabs back, but no ongoing hide/show.
      */
     private fun upsellPanel(): JComponent {
         val panel = JBPanelWithEmptyText()
@@ -357,13 +362,13 @@ private class TabGroupsPanel(
         ) {
             PrismTabsLicense.requestLicense("The PrismTabs tool window needs an active PrismTabs subscription.")
         }
-        val collapsedCount = service.groups().count { it.collapsed }
-        if (collapsedCount > 0) {
+        val strandedCount = strandedGroups(project, service).size
+        if (strandedCount > 0) {
             statusText.appendLine(
-                "Reopen the tabs of $collapsedCount hidden group${if (collapsedCount == 1) "" else "s"}",
+                "Reopen the tabs of $strandedCount hidden group${if (strandedCount == 1) "" else "s"}",
                 SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES,
             ) {
-                expandAllCollapsedGroups(project, service)
+                showAllHiddenGroups(project, service)
             }
         }
         return panel
@@ -381,7 +386,14 @@ private sealed class TabGroupsNode(userObject: Any, allowsChildren: Boolean) :
     abstract val group: TabGroup
 }
 
+/**
+ * One group row. [hidden] is *derived* — the group has members and none of them is open — and is
+ * set once the children are in place rather than read from the model, because there is no stored
+ * flag to read: see [TabGroupVisibility] for why. A `var` for that reason alone; nothing mutates it
+ * after [TabGroupsPanel.groupNode] returns.
+ */
 private class GroupNode(override val group: TabGroup) : TabGroupsNode(group, true) {
+    var hidden: Boolean = false
     val members: List<MemberNode> get() = (0 until childCount).map { getChildAt(it) as MemberNode }
 }
 
@@ -462,22 +474,30 @@ internal const val LOCKED_PANEL_NAME = "PrismTabs.LockedToolWindow"
 internal const val GROUP_TREE_NAME = "PrismTabs.GroupTree"
 
 /**
- * The locked tool window's escape hatch: reopen the tabs of every collapsed group. Deliberately
- * *not* gated — see [TabGroupsPanel.upsellPanel] for why a lapsed subscription must never leave
- * tabs closed behind the paywall that closed them.
+ * The groups the paywall would strand: hidden, with tabs recorded that only this window can reopen.
+ *
+ * Both halves are needed. Hidden alone would count a group whose files the user has simply never
+ * opened, offering to "reopen" tabs that were never there; a recorded set alone would count every
+ * group in the project, since the memory is kept current for all of them and outlives a show.
+ */
+private fun strandedGroups(project: Project, service: TabGroupService): List<TabGroup> =
+    service.groups().filter { it.rememberedTabUrls.isNotEmpty() && TabGroupVisibility.isHidden(project, service, it) }
+
+/**
+ * The locked tool window's escape hatch: reopen the tabs of every hidden group. Deliberately *not*
+ * gated — see [TabGroupsPanel.upsellPanel] for why a lapsed subscription must never leave tabs
+ * closed behind the paywall that closed them.
  *
  * `internal`, not `private`: the paywall uiTest drives this directly rather than clicking a
  * `StatusText` link at computed coordinates, the same trade-off (and for the same reason)
- * `IdeaFrame.setGroupCollapsed` already makes for collapse/expand.
+ * `IdeaFrame.setGroupHidden` already makes for hide/show.
  *
- * The group list is read once and filtered before iterating, not re-read per iteration: each
- * [TabGroupCollapse.expand] republishes a change, and `expand` needs the *pre-expand* [TabGroup]
- * (its `collapsedFileUrls` is what says which tabs to reopen — see [TabGroupService.expand]).
- * Expanding one group doesn't affect the others' snapshots, so one read is both correct and the
- * only thing that keeps each group's recorded URLs intact.
+ * The list is resolved once before iterating rather than re-tested per iteration: showing one group
+ * reopens tabs, which changes nothing about whether the *others* are hidden, but it does republish a
+ * change — and re-reading mid-loop would make the result depend on notification timing for no gain.
  */
-internal fun expandAllCollapsedGroups(project: Project, service: TabGroupService) {
-    service.groups().filter { it.collapsed }.forEach { TabGroupCollapse.expand(project, service, it) }
+internal fun showAllHiddenGroups(project: Project, service: TabGroupService) {
+    strandedGroups(project, service).forEach { TabGroupVisibility.show(project, service, it) }
 }
 
 /**
@@ -514,7 +534,10 @@ private class TabGroupsTreeRenderer(private val service: TabGroupService) : Colo
                 // construction and keeps the paint path free of service calls.
                 val count = value.childCount
                 append("  $count ${if (count == 1) "file" else "files"}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
-                if (group.collapsed) append("  ·  hidden", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+                // Derived, and so always true of the strip right now: reopening one member from the
+                // tree drops the word on that same refresh, and closing the last tab of a group puts
+                // it back. See [TabGroupVisibility].
+                if (value.hidden) append("  ·  hidden", SimpleTextAttributes.GRAYED_ATTRIBUTES)
                 // Same suffix wording the tab popup's group list uses, so the views name the state alike.
                 if (group.id == service.activeGroupId()) {
                     append("  ·  active", SimpleTextAttributes.GRAYED_ATTRIBUTES)
@@ -601,25 +624,33 @@ private class ToggleActiveAction(
 }
 
 /**
- * Presented as Hide/Show, not Collapse/Expand: the action closes a group's tabs and reopens them,
- * with nothing left behind in their place, so the eye pair is what users read it as. The model
- * keeps saying `collapsed` — that name is persisted state and is not worth churning for wording.
+ * Hide/Show, never Collapse/Expand: the action closes a group's tabs and reopens them, with nothing
+ * left behind in their place, so the eye pair is what users read it as — and *expanding a tree row*,
+ * a gesture this very tree also has, shows a group's files and touches no tabs.
  *
- * Not to be confused with *expanding a tree row*, which shows a group's files and touches no tabs.
+ * Which of the two it offers comes from [TabGroupVisibility.isHidden], so a group whose tabs are all
+ * back on the strip offers Hide even if they were reopened one by one from the tree. Reading a
+ * stored flag here was what made showing such a group a no-op that cleared a word and did nothing
+ * else.
  */
-private class ToggleCollapseAction(project: Project, service: TabGroupService, selectedGroup: () -> TabGroup?) :
+private class ToggleVisibilityAction(project: Project, service: TabGroupService, selectedGroup: () -> TabGroup?) :
     SelectionAction("Hide Group", PrismTabsIcons.Hide, project, service, selectedGroup) {
 
     override fun update(e: AnActionEvent) {
         super.update(e)
-        val collapsed = selectedGroup()?.collapsed == true
-        e.presentation.text = if (collapsed) "Show Group" else "Hide Group"
-        e.presentation.icon = if (collapsed) PrismTabsIcons.Show else PrismTabsIcons.Hide
+        val group = selectedGroup()
+        // Disabled for a group with no files: there is nothing to close and nothing to reopen, so
+        // both halves of the toggle would be no-ops. The stored flag used to let one through, and an
+        // empty group could sit there reading "0 files · hidden".
+        e.presentation.isEnabled = group != null && service.membersOf(group.id).isNotEmpty()
+        val hidden = group != null && TabGroupVisibility.isHidden(project, service, group)
+        e.presentation.text = if (hidden) "Show Group" else "Hide Group"
+        e.presentation.icon = if (hidden) PrismTabsIcons.Show else PrismTabsIcons.Hide
     }
 
     override fun actionPerformed(e: AnActionEvent) {
         val group = selectedGroup() ?: return
-        toggleCollapse(project, service, group)
+        toggleVisibility(project, service, group)
     }
 }
 
@@ -656,16 +687,16 @@ private class DeleteAction(project: Project, service: TabGroupService, selectedG
 }
 
 /**
- * The single place collapse/expand is driven from — the toolbar action, the context menu and the
+ * The single place hide/show is driven from — the toolbar action, the context menu and the
  * double-click shortcut all land here — so it carries the paid-feature gate itself rather than
  * relying on the locked panel simply not showing the tree. The one deliberate way past it is the
- * locked panel's own "reopen the tabs" escape hatch, which calls [TabGroupCollapse.expand] direct.
+ * locked panel's own "reopen the tabs" escape hatch, which calls [TabGroupVisibility.show] direct.
  */
-private fun toggleCollapse(project: Project, service: TabGroupService, group: TabGroup) {
+private fun toggleVisibility(project: Project, service: TabGroupService, group: TabGroup) {
     if (!PrismTabsLicense.requirePaidFeature("Hiding and showing tab groups")) return
-    if (group.collapsed) {
-        TabGroupCollapse.expand(project, service, group)
+    if (TabGroupVisibility.isHidden(project, service, group)) {
+        TabGroupVisibility.show(project, service, group)
     } else {
-        TabGroupCollapse.collapse(project, service, group)
+        TabGroupVisibility.hide(project, service, group)
     }
 }
