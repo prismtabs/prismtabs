@@ -71,12 +71,16 @@ already covered continuously by local development.
    label. Confirm the text field has focus immediately and that both Enter and clicking OK submit
    it; cancelling creates no group. (No sheet check — see "Checklist item 3's 'sheet' question is
    obsolete" below.)
-4. **Rename / Recolour / active group** — via **Manage Groups…**, rename a group and recolour it;
-   confirm every member tab picks up both changes, and that opening a new file while a group is
-   marked active colours it automatically.
+4. **Rename / Recolour / active group / Files…** — via **Manage Groups…**, rename a group and
+   recolour it; confirm every member tab picks up both changes, and that opening a new file while a
+   group is marked active colours it automatically. Then, on a group with a *closed* member,
+   **Files…**: the chooser opens centred with a `Files in <name>` title bar, lists that member by
+   name with its greyed directory, and clicking it reopens the file. (Kept inside item 4 rather
+   than numbered separately: the sign-off logs below refer to these checks by number, and
+   renumbering them would falsify that record.)
 5. **Remove from Group** — clears the tint back to the platform default.
 6. **PrismTabs tool window** — opens from its stripe button; lists every group with member count;
-   collapsing closes member tabs and marks the row "collapsed"; expanding reopens them in their
+   hiding closes member tabs and marks the row "hidden"; showing reopens them in their
    original order. Confirm the stripe icon and swatch icons aren't blurry at this OS's default
    scaling.
 7. **Settings | Tools | PrismTabs** — reachable both via the Settings/Preferences menu item and

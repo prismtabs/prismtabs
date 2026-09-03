@@ -51,8 +51,9 @@ Colour-coded tab groups for IntelliJ editor tabs.
 
 Right-click a tab for the colour swatch popup: pick one of 8 preset colours to
 start a new group and name it, or "Add to Group…" to put the tab in a group you
-already have. "Manage Groups…" lets you rename, recolour, delete, or mark a group
-active — files opened while a group is active join it automatically.
+already have. "Manage Groups…" lets you list a group's files, rename, recolour,
+delete, or mark a group active — files opened while a group is active join it
+automatically.
 
 The PrismTabs tool window lists every group with its colour and member count,
 and can hide a group (closing its tabs, remembering them) or show it again.
@@ -64,6 +65,7 @@ Free forever
   • Assign tabs to 8 preset colours, each measured for contrast on both light and
     dark editor tabs
   • Unlimited named groups — create, rename, recolour, delete
+  • "Files…" lists everything in a group, open tab or not, and reopens any of it
   • Assignments persist across restarts and survive file renames and moves
 
 Paid — a 30-day free trial on every new install, then a subscription

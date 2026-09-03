@@ -589,6 +589,40 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     }
 
     /**
+     * Assigns a file URL under the project that **no file exists at** to the group named
+     * [groupName] — the one state a uiTest cannot reach by deleting something.
+     *
+     * Deleting a file while the IDE is running fires a VFS event, and
+     * [io.prismtabs.listener.TabGroupVfsListener] answers it by clearing the assignment, so a
+     * *missing member* only ever arises from a deletion that happened while the IDE was closed:
+     * no event, nothing to clear, and the assignment outlives the file (see the plan's risk
+     * register). Fabricating the URL is what stands in for that closed-IDE deletion; the
+     * assignment it produces is byte-for-byte the one that survives it.
+     */
+    fun assignMissingFileToGroup(fileName: String, groupName: String) {
+        runJs(
+            """
+            importPackage(com.intellij.openapi.wm.impl)
+            importPackage(com.intellij.ide.plugins)
+            importPackage(com.intellij.openapi.extensions)
+
+            const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+            const project = frameHelper.getProject()
+            const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
+            const service = project.getService(java.lang.Class.forName('io.prismtabs.service.TabGroupService', true, pluginLoader))
+
+            const groups = service.groups()
+            let target = null
+            for (let i = 0; i < groups.size(); i++) {
+                if (groups.get(i).getName() == '$groupName') target = groups.get(i)
+            }
+            service.assign('file://' + project.getBasePath() + '/$fileName', target)
+            """,
+            true,
+        )
+    }
+
+    /**
      * Makes the running sandbox behave as an **unlicensed paid build**, which is the only way to
      * reach the paywall paths at all: `PrismTabsLicense.paidFeaturesEnabled()` is unconditionally
      * `true` while `plugin.xml` has no `<product-descriptor>` (see that function's doc, and the

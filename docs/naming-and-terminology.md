@@ -68,11 +68,13 @@ keep it in sync with the source string.
 | `Tab Group…` (editor-tab right-click menu) | `plugin.xml`, `<action id="PrismTabs.AssignTabGroup" text="Tab Group…">` |
 | `New Group` (caption over the swatch row) | `TabGroupPopup.kt`, `ListSeparator("New Group")` |
 | `Add to Group…`, `Manage Groups…`, `Remove from Group` | `TabGroupPopup.kt`, `textFor(entry)` |
+| `Files…` (a group's file list, in `Manage Groups…`) | `TabGroupPopup.kt`, `GroupActionsStep.getTextFor` |
+| `Files in <name>` (that list's own title), `missing` (its suffix on a member whose file is gone) | `TabGroupPopup.kt`, `showGroupFiles`, `MemberFileRenderer` |
 | `Mark as Active Group` / `Clear Active Group`, `Delete Group`, `Hide Group` / `Show Group` | `TabGroupPopup.kt`, `TabGroupsToolWindow.kt` |
 | `Active Group` (tool window toolbar/context-menu toggle) | `TabGroupsToolWindow.kt`, `ToggleActiveAction` |
 | `N files` / `1 file` (tool window row member count) | `TabGroupsToolWindow.kt`, `GroupCellRenderer` |
 | `In group: <name>` (caption over `Remove from Group`) | `TabGroupPopup.kt`, `currentGroupCaption` |
-| `New Tab Group`, `Rename Tab Group` (dialog titles) | `TabGroupPopup.kt`, `RenameGroupDialog.kt` |
+| `New Tab Group`, `Rename Tab Group`, `Missing File` (dialog titles) | `TabGroupPopup.kt`, `RenameGroupDialog.kt` |
 
 `Tab Group…` in layer 3 and `tab group` in layer 2 co-exist on purpose: one is a
 button you click, the other is what you get. If a source string changes, update

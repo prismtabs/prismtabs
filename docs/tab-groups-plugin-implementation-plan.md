@@ -296,6 +296,15 @@ separator below it so reading is visually separated from mutating.
   option to unassign it. This is real persisted state (see the new risk-register row) and this list
   is the first surface anywhere that makes it visible.
 
+  **Delivered** as written, in `TabGroupPopup.kt`: `GroupActionsStep` leads with `Files…` (only when
+  the group has members — an empty group's list would be a dead end), a bare separator under it, and
+  `showGroupFiles` opening a `createPopupChooserBuilder` chooser titled `Files in <name>`. The row
+  split, sort, left-elision and the missing-file prompt are pure functions
+  (`memberFileRows`, `shortenedDirectory`, `missingFileMessage`), unit-tested in
+  `MemberFileRowsTest`; the chooser itself is driven end-to-end in `TabGroupPopupUiTest`. Choosing a
+  missing row asks "Remove from Group" / "Keep" and routes an emptied group back through
+  `promptToDeleteEmptied`. See the README's "Group membership".
+
 **Why 6b is free and 6a is paid.** Membership visibility is a *correctness* feature — the same
 argument the README already makes for rename/move remapping, which stays free because your
 assignments surviving a rename is not a premium. A free tier that can fill groups whose contents are
@@ -355,8 +364,15 @@ recorded as what it would have to answer for. Not part of this phase.
 - Which data-provider interface 2024.2 wants for the tree (`UiDataProvider` vs the older
   `DataProvider`) — it changed around this baseline, and the plugin compiles against the floor.
 - The tree expansion-state helpers (`TreeState` / `TreeUtil`) that survive a wholesale model swap.
-- `JBPopupFactory.createPopupChooserBuilder`'s renderer / speed-search / item-chosen methods as they
-  exist in 2024.2.
+- ~~`JBPopupFactory.createPopupChooserBuilder`'s renderer / speed-search / item-chosen methods as
+  they exist in 2024.2.~~ **Checked while writing 6b:** `createPopupChooserBuilder(List)` returns an
+  `IPopupChooserBuilder` carrying `setTitle` / `setRenderer(ListCellRenderer)` /
+  `setNamerForFiltering(Function)` / `setItemChosenCallback(Consumer)` / `createPopup`, and
+  `PopupFactoryImpl` builds it over a plain `JBList` — which is why the uiTest's chooser helpers
+  cannot reuse the `ListPopupImpl$MyList` locators the menu-shaped popups need. A single click
+  chooses (`PopupChooserBuilder`'s own `MouseAdapter` → `UIUtil.isActionClick` → `JBPopup.closeOk`),
+  and the item-chosen callback runs from the popup's dispose, i.e. after it has closed — so opening
+  a modal from it is safe. All read off the bytecode per CLAUDE.md's recipe.
 - Confirmed already, no need to re-check: `CustomScopesProvider.CUSTOM_SCOPES_PROVIDER`
   (`ProjectExtensionPointName`, `getCustomScopes(): List<NamedScope>`), `PackageSet.contains` /
   `getText` / `createCopy` / `getNodePriority`, and `FileColorManager.isEnabledForTabs` /

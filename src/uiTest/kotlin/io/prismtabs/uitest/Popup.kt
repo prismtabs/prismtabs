@@ -4,6 +4,7 @@ import com.intellij.remoterobot.RemoteRobot
 import com.intellij.remoterobot.fixtures.ComponentFixture
 import com.intellij.remoterobot.fixtures.ContainerFixture
 import com.intellij.remoterobot.fixtures.JButtonFixture
+import com.intellij.remoterobot.fixtures.JListFixture
 import com.intellij.remoterobot.fixtures.JTextFieldFixture
 import com.intellij.remoterobot.search.locators.byXpath
 import com.intellij.remoterobot.utils.waitFor
@@ -229,6 +230,41 @@ fun RemoteRobot.popupSeparatorAndListForeground(): Pair<String, String> {
 }
 
 /**
+ * The open **chooser** popup — what "Files…" produces — as its rendered rows.
+ *
+ * A different component from every other helper in this file: `createPopupChooserBuilder` builds a
+ * plain `JBList` (verified with `javap` on `PopupFactoryImpl`), not the `ListPopupImpl$MyList` that
+ * [popupList] and [clickPopupItem] deal in, so the menu-shaped locators do not find it and vice
+ * versa. That difference is the feature, not an accident: the file list is a chooser with a title
+ * bar and speed search, deliberately one window deep rather than a further nested menu step.
+ *
+ * The `JBList` locator is unqualified, so a test using this must not leave the PrismTabs tool
+ * window showing — its group list is a `JBList` too. Every current caller hides it first, which
+ * those tests want anyway (see [IdeaFrame.hideTabGroupsToolWindow] for the tab-strip reason).
+ */
+fun RemoteRobot.chooserPopupRows(timeout: Duration = Duration.ofSeconds(10)): List<String> {
+    val locator = byXpath("//div[@class='JBList']")
+    waitFor(timeout) { findAll<JListFixture>(locator).isNotEmpty() }
+    return findAll<JListFixture>(locator).last().collectItems()
+}
+
+/**
+ * Clicks the chooser row whose text *contains* [text] — a substring match, because a file row is
+ * rendered as its name plus a greyed directory and any "missing" marker, and the test knows the
+ * name. One click chooses: `PopupChooserBuilder` closes on `isActionClick` and runs the
+ * item-chosen callback from the popup's own dispose, so no double-click is needed and the callback
+ * is free to open a modal.
+ */
+fun RemoteRobot.clickChooserPopupItem(text: String, timeout: Duration = Duration.ofSeconds(10)) {
+    val locator = byXpath("//div[@class='JBList']")
+    waitFor(timeout) { findAll<JListFixture>(locator).any { l -> l.collectItems().any { it.contains(text) } } }
+    retryingOnStaleComponent {
+        findAll<JListFixture>(locator).last { l -> l.collectItems().any { it.contains(text) } }
+            .clickItem(text, false)
+    }
+}
+
+/**
  * Retries [action] a few times when the popup mutates mid-interaction.
  *
  * Locating and clicking are separate round-trips to the IDE, so a cascading `ListPopup` can close
@@ -247,6 +283,35 @@ private fun retryingOnStaleComponent(attempts: Int = 3, action: () -> Unit) {
         }
     }
     action()
+}
+
+/**
+ * Opens the `hasSubstep` row labelled [parent] the same way [clickPopupSubstepItem] does — by
+ * hovering, never clicking — and returns the substep's rendered rows instead of choosing one.
+ *
+ * [anchor] is a row the substep is known to contain, and it is what tells this that the child
+ * window has actually rendered: waiting on the parent alone would read the *parent's* rows back,
+ * since the parent list is still open and still matches the locator.
+ *
+ * The reason this exists at all is that clicking is not a neutral way to look: every row in a group
+ * action list *does* something — "Rename…" opens a modal — so a test asking "which items are here?"
+ * has to stop short of choosing one.
+ */
+fun RemoteRobot.popupSubstepItems(
+    parent: String,
+    anchor: String,
+    timeout: Duration = Duration.ofSeconds(10),
+): List<String> {
+    val locator = byXpath("//div[@class='MyList']")
+    waitFor(timeout) { findAll<ContainerFixture>(locator).any { it.findAllText(parent).isNotEmpty() } }
+    var items = emptyList<String>()
+    retryingOnStaleComponent {
+        findAll<ContainerFixture>(locator).last { it.findAllText(parent).isNotEmpty() }.findText(parent).moveMouse()
+        waitFor(timeout) { findAll<ContainerFixture>(locator).any { it.findAllText(anchor).isNotEmpty() } }
+        items = findAll<ContainerFixture>(locator).last { it.findAllText(anchor).isNotEmpty() }
+            .findAllText().map { it.text }
+    }
+    return items
 }
 
 /**

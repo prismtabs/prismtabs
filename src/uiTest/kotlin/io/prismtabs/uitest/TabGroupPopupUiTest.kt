@@ -3,6 +3,7 @@ package io.prismtabs.uitest
 import com.intellij.remoterobot.RemoteRobot
 import com.intellij.remoterobot.fixtures.JButtonFixture
 import com.intellij.remoterobot.fixtures.JTextFieldFixture
+import com.intellij.remoterobot.utils.Keyboard
 import com.intellij.remoterobot.utils.waitFor
 import io.prismtabs.model.TabGroupPalette
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -103,6 +104,128 @@ class TabGroupPopupUiTest {
                 captions.contains("In group: Auth"),
                 "expected the popup to caption the file's own group, got $captions",
             )
+        }
+    }
+
+    /**
+     * Phase 6b's own acceptance criterion: a group's members are *files*, so the list has to name
+     * every one of them whether or not it currently has a tab — that is the whole gap, since a free
+     * user (no tool window) could otherwise colour a file, close it, and have no route back.
+     *
+     * "Second.kt" and "Third.kt" are assigned without ever being opened, which is the state a
+     * restart leaves behind and the one no other surface in the plugin could answer for. The
+     * rendered rows are matched by `contains`, not equality: each row is a name plus its greyed
+     * directory, and pinning the exact spacing here would make the renderer's layout this test's
+     * subject rather than its membership.
+     */
+    @Test
+    fun `the file list names every member, tab open or not, and opening one brings it back`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            hideTabGroupsToolWindow()
+            closeAllEditors()
+            openFile("Sample.kt")
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Blue", name = "Auth")
+            addFileToGroup("Second.kt", "Auth")
+            addFileToGroup("Third.kt", "Auth")
+            assertEquals(listOf("Sample.kt"), openTabNames(), "only one member may have a tab open")
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            remoteRobot.clickPopupItem("Manage Groups…")
+            remoteRobot.clickPopupSubstepItem("Auth", "Files…")
+
+            val rows = remoteRobot.chooserPopupRows()
+            assertEquals(3, rows.size, "expected all three members listed, got $rows")
+            listOf("Sample.kt", "Second.kt", "Third.kt").forEach { name ->
+                assertTrue(rows.any { it.contains(name) }, "expected $name in the file list, got $rows")
+            }
+
+            remoteRobot.clickChooserPopupItem("Second.kt")
+            waitFor(ofSeconds(10)) { openTabNames().contains("Second.kt") }
+            assertTrue(openTabNames().contains("Second.kt"), "choosing a row must open that file")
+        }
+    }
+
+    /**
+     * The stale assignment this list is the first surface to expose: a file deleted while the IDE
+     * was closed fires no VFS event, so nothing ever clears its assignment and the group keeps a
+     * member that isn't there. It is shown as *missing* rather than quietly skipped — a list that
+     * hid it would leave a group looking fuller than it is — and choosing it offers the fix.
+     *
+     * The list is re-opened afterwards rather than asserting through a service call: what the user
+     * came here to check is that the row is gone, and that is the same round trip they would make.
+     */
+    @Test
+    fun `a member whose file is gone is listed as missing, and can be unassigned from there`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            hideTabGroupsToolWindow()
+            closeAllEditors()
+            openFile("Sample.kt")
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Red", name = "Stale")
+            assignMissingFileToGroup("Deleted.kt", "Stale")
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            remoteRobot.clickPopupItem("Manage Groups…")
+            remoteRobot.clickPopupSubstepItem("Stale", "Files…")
+
+            val rows = remoteRobot.chooserPopupRows()
+            assertTrue(
+                rows.any { it.contains("Deleted.kt") && it.contains("missing") },
+                "expected the vanished member to be listed and marked missing, got $rows",
+            )
+
+            remoteRobot.clickChooserPopupItem("Deleted.kt")
+            dialog("Missing File") {
+                find<JButtonFixture>(JButtonFixture.byText("Remove from Group")).click()
+            }
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            remoteRobot.clickPopupItem("Manage Groups…")
+            remoteRobot.clickPopupSubstepItem("Stale", "Files…")
+            val remaining = remoteRobot.chooserPopupRows()
+            assertEquals(1, remaining.size, "expected only the real member left, got $remaining")
+            assertTrue(remaining.single().contains("Sample.kt"), "expected Sample.kt to remain, got $remaining")
+            // The chooser is still open — every other test here starts with a tab right-click, and
+            // an open popup swallows it (see RemoteRobotExtension's own pre-test escapes).
+            Keyboard(remoteRobot).escape()
+        }
+    }
+
+    /**
+     * An empty group has no file list to offer, so the entry is not there at all — the same rule
+     * `RootStep` applies to "Manage Groups…" before any group exists. Reachable in one step: a
+     * group whose last member is removed is *offered* for deletion, and the offer can be declined.
+     */
+    @Test
+    fun `an emptied group offers no file list`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            hideTabGroupsToolWindow()
+            closeAllEditors()
+            openFile("Sample.kt")
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Green", name = "Emptied")
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            remoteRobot.clickPopupItem("Remove from Group")
+            dialog("Empty Tab Group") {
+                find<JButtonFixture>(JButtonFixture.byText("Keep")).click()
+            }
+            waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == null }
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            remoteRobot.clickPopupItem("Manage Groups…")
+            // Read, don't choose: every row in this substep does something, "Rename…" included.
+            val items = remoteRobot.popupSubstepItems("Emptied", anchor = "Delete Group")
+            assertTrue(
+                items.any { it.contains("Rename") },
+                "expected the group's own action list, got $items",
+            )
+            assertFalse(
+                items.any { it.contains("Files") },
+                "an empty group must not offer a file list, got $items",
+            )
+            Keyboard(remoteRobot).escape()
         }
     }
 
