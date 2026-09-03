@@ -232,6 +232,138 @@ tinting is invisible (§2.4).
   now done on macOS and Windows; see
   [cross-platform manual verification](cross-platform-manual-verification.md)'s sign-off log.
 
+### Phase 6 — Group membership visibility
+
+**The gap.** A group's members are *files*, but nothing in the UI ever lists them. `membersOf` is
+called in exactly two places — to decide emptiness, and to render a count — so the only way to learn
+what is in a group is to look at which tabs are currently tinted. Close a tab and its membership
+becomes unknowable. It lands hardest on the free tier, which can create and fill groups but has no
+tool window: a free user can colour a file, close it, and have no route back to where it went.
+
+Two smaller gaps in the same family, fixed here because they are the same question asked from
+somewhere else:
+
+- The tool window row renders `membersOf(...).size` as `"N tabs"`, which contradicts the model —
+  `TabGroupService`'s own doc is explicit that a group's emptiness "has nothing to do with how many
+  of its files are open". It must read `N files`. Add the string to
+  [naming and terminology](naming-and-terminology.md) §3's table so it stays in step.
+- `RootStep` has an empty title and offers `Remove from Group` without ever naming the group the file
+  is in. Right-clicking a tab should say which group it belongs to — a captioned separator or a step
+  title, decided against a live sandbox.
+
+**6a. The tool window becomes a tree** (paid, like the rest of that window). A container with
+children is a tree you expand — Bookmarks, Changes, Favourites, Project view all do exactly this, so
+it is the platform's own idiom for this question rather than an invention.
+
+- `JBList<TabGroup>` → a two-level tree. Group rows keep today's shape (swatch, name, `N files`, and
+  the `hidden` / `active` suffixes); each has one child per member file.
+- Child rows: file-type icon, file name, then the project-relative *parent directory* in
+  `GRAYED_ATTRIBUTES`. **Never the full path as the primary text** — see the rejected alternative
+  below.
+- Members whose tab is currently open must be distinguishable from those that are not, since the
+  closed ones are the whole point of this phase. The distinction must not read as *disabled*; pick
+  the attribute against the rendered tree, the way `CAPTION_BOTTOM_GAP` was measured rather than
+  guessed.
+- Double-click already toggles hide/show. It must stay bound to **group rows only**; on a file row
+  double-click and Enter open the file.
+- The five toolbar actions read `list.selectedValue` and are disabled when it is null. They must
+  become "the selected group, or the selected file's parent group", or the whole toolbar goes dead
+  whenever a child row is selected.
+- `refresh()` replaces the model wholesale. A tree must preserve expansion state across every
+  `TabGroupsChangedListener` notification, or expanding a group and then recolouring it collapses
+  the thing you were looking at.
+- Publish the tree's selection into the `DataContext` (`VIRTUAL_FILE`, `VIRTUAL_FILE_ARRAY`,
+  `NAVIGATABLE`) so the platform's own F4 / Select in Project View work without being reimplemented.
+- `installRowSelectingPopupMenu` is list-specific. Re-decide the tree's context-menu behaviour
+  against a live sandbox for the same reason the list version was: the platform's tree helper
+  suppresses the menu off-selection, which is the opposite trade from what this window needs.
+- `TabGroupsToolWindowUiTest` asserts list behaviour throughout and has to move with this.
+
+**6b. `Files…` in the tab popup** (free). `GroupActionsStep` gains it as the first item, with a bare
+separator below it so reading is visually separated from mutating.
+
+- It must **not** be a nested `PopupStep`. That would put the file names five popups deep from the
+  right-click, each a separate window the mouse has to stay inside, and make the most frequently
+  asked question the deepest thing in the plugin. Instead `getFinalRunnable` opens a *fresh
+  top-level* chooser — exactly what the tool window's `RecolorAction` already does with
+  `RecolorStep`. Visual depth stays at one popup, and it gets a real title bar (the group's name)
+  and speed search.
+- Same row shape as 6a's child rows: name plus greyed relative directory, truncated from the left.
+- Sort explicitly by relative path, then name. `membersOf` returns map iteration order, which is
+  arbitrary after a `loadState` — today nothing depends on it, and a file list would be the first
+  thing to expose it as jumbled.
+- A member whose URL no longer resolves must be shown as **missing**, not silently skipped, with the
+  option to unassign it. This is real persisted state (see the new risk-register row) and this list
+  is the first surface anywhere that makes it visible.
+
+**Why 6b is free and 6a is paid.** Membership visibility is a *correctness* feature — the same
+argument the README already makes for rename/move remapping, which stays free because your
+assignments surviving a rename is not a premium. A free tier that can fill groups whose contents are
+unknowable is precisely the "too limited" outcome the feature-based split exists to avoid. The tool
+window's paid value is unaffected: it is hide/show, active-group auto-join, and being always-on and
+browsable — not the membership data itself.
+
+One line to hold: opening a *single* member from the free popup stays free, but do **not** add "Open
+All Files in Group" there. That is `expand` under another name, and expand is paid.
+
+- **Acceptance:** assign three files to "Auth", close all three tabs, restart the IDE. Right-click
+  any tab → `Tab Group…` → `Manage Groups…` → Auth → `Files…` lists all three by name with their
+  directories; Enter on one opens it. Subscribed, the tool window lists Auth as `3 files`, expands
+  to the same three, opens one on double-click, and still hides the group on double-clicking its own
+  row.
+
+#### Rejected: a file list nested inside the popup tree
+
+The obvious shape — `Tab Group…` → `Manage Groups…` → group → `Files` → the names — was rejected on
+three counts. It nests five levels deep — each level a separate popup window the mouse has to stay
+inside — which is well past anything the JetBrains guidelines' menu-nesting advice contemplates, and
+buries the most frequently asked question deepest. A menu is also a list of verbs, so rows that do
+nothing on click are a tooltip wearing a menu's clothes, and rows that *do* something are a feature
+deserving its own popup. And full paths from the project root
+as the primary text make the popup as wide as the deepest package while burying the one part the eye
+is scanning for; every platform file list (Search Everywhere, Recent Files, Navigate | File,
+Bookmarks) renders name-plus-greyed-directory instead.
+
+#### Rejected: a `NamedScope` per group
+
+Superficially the platform-native answer, and it is — to a *different* question. Scopes are how you
+**scope work to** a group (Find in Files within it, inspections over it); they are not how you
+**enumerate** one. Signatures below verified with `javap` per CLAUDE.md's recipe, not assumed.
+
+1. **A `PackageSet` is a predicate, not a list.** `contains(PsiFile, NamedScopesHolder)` is asked
+   about one file at a time, so answering "what is in Auth?" still means reading `membersOf`. The
+   Project view filtered to a scope renders the members as a pruned directory tree — a browsing
+   surface where the question wants an answer. Scopes are therefore additive work, not a substitute
+   for 6a or 6b.
+2. **It is not reachable from where the question is asked**, which is the tab strip. Scope selection
+   lives in the Project view's filter and the Find in Files / Analyze dropdowns — global IDE
+   furniture shared across features. Ten tab groups would put ten permanent entries in every one of
+   those dropdowns, for a grouping that is frequently transient.
+3. **Two collisions.** `PackageSet` is PSI-based and must implement `getText()`, a pattern string the
+   platform serialises and round-trips; PrismTabs keys assignments by `VirtualFile.getUrl()` and is
+   `DumbAware` throughout (Phase 1's finding: dropping `DumbAware` breaks colouring silently), so an
+   arbitrary URL set fits that contract badly. Separately, `FileColorManager` exposes
+   `isEnabledForTabs()` — scope-based file colours reach the tab strip too, so a scope per group
+   risks a second colouring path for the same file, competing with `TabGroupColorProvider` and
+   switchable in Settings behind the user's back.
+
+Worth keeping as a *later, separate* feature ("search within this group"), with those collisions
+recorded as what it would have to answer for. Not part of this phase.
+
+#### [VERIFY] before writing Phase 6
+
+- Which data-provider interface 2024.2 wants for the tree (`UiDataProvider` vs the older
+  `DataProvider`) — it changed around this baseline, and the plugin compiles against the floor.
+- The tree expansion-state helpers (`TreeState` / `TreeUtil`) that survive a wholesale model swap.
+- `JBPopupFactory.createPopupChooserBuilder`'s renderer / speed-search / item-chosen methods as they
+  exist in 2024.2.
+- Confirmed already, no need to re-check: `CustomScopesProvider.CUSTOM_SCOPES_PROVIDER`
+  (`ProjectExtensionPointName`, `getCustomScopes(): List<NamedScope>`), `PackageSet.contains` /
+  `getText` / `createCopy` / `getNodePriority`, and `FileColorManager.isEnabledForTabs` /
+  `getFileColor(VirtualFile)`. What is *not* verified is how a scope's file colour composes with
+  `EditorTabColorProvider` at paint time, and in which order — that would need a live check, and
+  only matters if the rejected scopes idea is ever revived.
+
 ---
 
 ## 5. Risk register
@@ -243,6 +375,7 @@ tinting is invisible (§2.4).
 | `getEditorTabColor` called so often it lags | Low | Pure map lookup, no locks on the read path |
 | File URL keys break on rename | High (eventually) | Fixed: `TabGroupVfsListener` remaps on rename/move |
 | JetBrains ships IJPL-59322 natively | Low near-term | The issue is 3+ years old and still open; watch it |
+| Assignments for files deleted while the IDE was closed are never cleared | Medium | No VFS event ever fires, so `clearTree` never runs and the stale member keeps its group non-empty. Surfaced as *missing* by Phase 6's file list, with the option to unassign |
 
 ## 6. Fallback if tab tinting can't render
 
