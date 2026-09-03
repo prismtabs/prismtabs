@@ -22,10 +22,10 @@ class TabGroupState {
         var name: String = ""
         var lightRgb: Int = 0
         var darkRgb: Int = 0
-        var collapsed: Boolean = false
 
+        /** See [TabGroup.rememberedTabUrls]. */
         @XCollection
-        var collapsedFileUrls: MutableList<String> = mutableListOf()
+        var rememberedTabUrls: MutableList<String> = mutableListOf()
         var order: Int = 0
     }
 }

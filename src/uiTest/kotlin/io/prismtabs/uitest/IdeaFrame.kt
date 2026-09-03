@@ -133,7 +133,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
      * `.idea/tabGroups.xml` and survive both the test run and an IDE restart, so without this a
      * second run of any test that creates a named group sees *two* groups with that name and
      * `popupList().findText(name)` / row assertions resolve ambiguously — diagnosed live after a
-     * run reported `[CollapseMe 1 tab · collapsed, CollapseMe 1 tab]`.
+     * run reported `[HideMe 1 file · hidden, HideMe 1 file]`.
      */
     fun resetTabGroups() {
         runJs(
@@ -328,14 +328,14 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     ).split('|')
 
     /**
-     * Collapses or expands `groupName` through `TabGroupCollapse` — the same entry point the tool
+     * Hides or shows `groupName` through `TabGroupVisibility` — the same entry point the tool
      * window's own toggle action calls, invoked on the EDT via `invokeAndWait` because it opens and
      * closes editors. Driving the mechanism directly rather than clicking the tool window's toolbar
-     * button keeps this assertion about *collapse behaviour* (which tabs close and reopen, in what
+     * button keeps this assertion about *hide/show behaviour* (which tabs close and reopen, in what
      * order) rather than about toolbar-button hit coordinates; the tool window's own rendering is
      * covered separately by [toolWindowGroupRows].
      */
-    fun setGroupCollapsed(groupName: String, collapsed: Boolean) {
+    fun setGroupHidden(groupName: String, hidden: Boolean) {
         runJs(
             """
             importPackage(com.intellij.openapi.wm.impl)
@@ -354,11 +354,11 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
                 if (groups.get(i).getName() == '$groupName') target = groups.get(i)
             }
 
-            // TabGroupCollapse is a Kotlin `object`; its singleton is the INSTANCE static field.
-            const collapseClass = java.lang.Class.forName('io.prismtabs.service.TabGroupCollapse', true, pluginLoader)
-            const collapse = collapseClass.getField('INSTANCE').get(null)
-            const method = collapseClass.getMethod(
-                '${if (collapsed) "collapse" else "expand"}',
+            // TabGroupVisibility is a Kotlin `object`; its singleton is the INSTANCE static field.
+            const visibilityClass = java.lang.Class.forName('io.prismtabs.service.TabGroupVisibility', true, pluginLoader)
+            const visibility = visibilityClass.getField('INSTANCE').get(null)
+            const method = visibilityClass.getMethod(
+                '${if (hidden) "hide" else "show"}',
                 com.intellij.openapi.project.Project,
                 java.lang.Class.forName('io.prismtabs.service.TabGroupService', true, pluginLoader),
                 java.lang.Class.forName('io.prismtabs.model.TabGroup', true, pluginLoader)
@@ -366,7 +366,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
             method.setAccessible(true)
 
             const task = new Runnable({
-                run: function() { method.invoke(collapse, project, service, target) }
+                run: function() { method.invoke(visibility, project, service, target) }
             })
             ApplicationManager.getApplication().invokeAndWait(task)
             """,
@@ -542,20 +542,21 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
             const service = project.getService(serviceClass)
             const groupClass = java.lang.Class.forName('io.prismtabs.model.TabGroup', true, pluginLoader)
 
-            // The 7-arg primary constructor, named explicitly rather than taken from
+            // The 6-arg primary constructor, named explicitly rather than taken from
             // getConstructors()[0]: a Kotlin data class with default arguments also emits a
             // synthetic DefaultConstructorMarker overload, and the array order isn't contractual.
+            // Six, not seven, since `collapsed` was dropped — see TabGroupVisibility for why.
             const ctor = groupClass.getConstructor(
                 java.lang.String, java.lang.String,
                 java.lang.Integer.TYPE, java.lang.Integer.TYPE,
-                java.lang.Boolean.TYPE, java.util.List, java.lang.Integer.TYPE
+                java.util.List, java.lang.Integer.TYPE
             )
             // Integer.valueOf, not `new Integer(...)`: that constructor was removed in JDK 16 and
             // this sandbox runs 21, so Rhino would find no such constructor and throw.
             const group = ctor.newInstance(
                 java.util.UUID.randomUUID().toString(), '$groupName',
                 java.lang.Integer.valueOf($lightRgb), java.lang.Integer.valueOf($darkRgb),
-                java.lang.Boolean.FALSE, new java.util.ArrayList(), java.lang.Integer.valueOf(service.groups().size())
+                new java.util.ArrayList(), java.lang.Integer.valueOf(service.groups().size())
             )
             service.assign(file.getUrl(), group)
             """,
@@ -881,10 +882,10 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
         )
     }
 
-    /** Invokes the locked tool window's "reopen the tabs of N collapsed groups" escape hatch —
-     * [io.prismtabs.ui.expandAllCollapsedGroups], the same function that link calls. Driven directly
-     * rather than clicked for the reason given on [setGroupCollapsed]. */
-    fun expandAllCollapsedGroups() {
+    /** Invokes the locked tool window's "reopen the tabs of N hidden groups" escape hatch —
+     * [io.prismtabs.ui.showAllHiddenGroups], the same function that link calls. Driven directly
+     * rather than clicked for the reason given on [setGroupHidden]. */
+    fun showAllHiddenGroups() {
         runJs(
             """
             importPackage(com.intellij.openapi.wm.impl)
@@ -900,7 +901,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
 
             // Top-level Kotlin functions compile to static methods on a <FileName>Kt facade class.
             const facade = java.lang.Class.forName('io.prismtabs.ui.TabGroupsToolWindowKt', true, pluginLoader)
-            const method = facade.getDeclaredMethod('expandAllCollapsedGroups', com.intellij.openapi.project.Project, serviceClass)
+            const method = facade.getDeclaredMethod('showAllHiddenGroups', com.intellij.openapi.project.Project, serviceClass)
             method.setAccessible(true)
 
             const task = new Runnable({ run: function() { method.invoke(null, project, service) } })
@@ -912,22 +913,22 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
 
     /**
      * Invokes the tool window's *gated* hide/show choke point — the private top-level
-     * `toggleCollapse(project, service, group)` in `TabGroupsToolWindow.kt` that its toolbar button,
-     * its context menu item and its double-click shortcut all land on, and which carries the
+     * `toggleVisibility(project, service, group)` in `TabGroupsToolWindow.kt` that its toolbar
+     * button, its context menu item and its double-click shortcut all land on, and which carries the
      * `requirePaidFeature` check itself.
      *
-     * Deliberately **not** [setGroupCollapsed]: that one calls `TabGroupCollapse` directly and so
-     * runs *past* the gate, which is right for tests about collapse behaviour and useless for a test
+     * Deliberately **not** [setGroupHidden]: that one calls `TabGroupVisibility` directly and so
+     * runs *past* the gate, which is right for tests about hide/show behaviour and useless for a test
      * about the paywall. This is the only helper that exercises the gate on that call site, so
-     * without it the check at `TabGroupsToolWindow.kt`'s `toggleCollapse` could be deleted outright
-     * and the whole suite would still pass — every other path into collapsing either bypasses it
-     * ([setGroupCollapsed]) or is the deliberately-free escape hatch ([expandAllCollapsedGroups]).
+     * without it the check at `TabGroupsToolWindow.kt`'s `toggleVisibility` could be deleted outright
+     * and the whole suite would still pass — every other path into hiding either bypasses it
+     * ([setGroupHidden]) or is the deliberately-free escape hatch ([showAllHiddenGroups]).
      *
      * Reached reflectively because the function is `private`; the compiled signature was confirmed
      * with `javap -p` rather than assumed, per CLAUDE.md. Pair it with [suppressRegisterDialog]: a
      * refused call raises the registration dialog, and a modal left open wedges robot-server.
      */
-    fun invokeToggleCollapse(groupName: String) {
+    fun invokeToggleVisibility(groupName: String) {
         runJs(
             """
             importPackage(com.intellij.openapi.wm.impl)
@@ -955,7 +956,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
 
             const facade = java.lang.Class.forName('io.prismtabs.ui.TabGroupsToolWindowKt', true, pluginLoader)
             const method = facade.getDeclaredMethod(
-                'toggleCollapse', com.intellij.openapi.project.Project, serviceClass, groupClass
+                'toggleVisibility', com.intellij.openapi.project.Project, serviceClass, groupClass
             )
             method.setAccessible(true)
 
@@ -967,14 +968,15 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     }
 
     /**
-     * The `collapsed` flag of the group named [groupName], read from the model.
+     * Whether the group named [groupName] reads as hidden — [io.prismtabs.service.TabGroupVisibility]'s
+     * own derivation, asked of the live `FileEditorManager` rather than of a stored flag, because
+     * there is no stored flag: see that object's doc.
      *
      * The companion assertion to [openTabNames] rather than a replacement for it: tabs staying open
-     * is what the *user* notices when a gated hide is refused, but a hide that flipped the flag and
-     * failed to close anything would still leave the group rendered as "hidden" and un-showable, so
-     * the paywall tests assert both.
+     * is what the *user* notices when a gated hide is refused, and asking the same question the tool
+     * window's own toggle asks is what pins down what the row would say about them.
      */
-    fun isGroupCollapsed(groupName: String): Boolean = callJs<Boolean>(
+    fun isGroupHidden(groupName: String): Boolean = callJs<Boolean>(
         """
         importPackage(com.intellij.openapi.wm.impl)
         importPackage(com.intellij.ide.plugins)
@@ -983,7 +985,8 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
         const frameHelper = ProjectFrameHelper.getFrameHelper(component)
         const project = frameHelper.getProject()
         const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
-        const service = project.getService(java.lang.Class.forName('io.prismtabs.service.TabGroupService', true, pluginLoader))
+        const serviceClass = java.lang.Class.forName('io.prismtabs.service.TabGroupService', true, pluginLoader)
+        const service = project.getService(serviceClass)
 
         const groups = service.groups()
         let target = null
@@ -996,7 +999,20 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
         if (target == null) {
             throw new java.lang.IllegalStateException('no tab group named $groupName')
         }
-        target.getCollapsed()
+
+        const visibilityClass = java.lang.Class.forName('io.prismtabs.service.TabGroupVisibility', true, pluginLoader)
+        const visibility = visibilityClass.getField('INSTANCE').get(null)
+        const method = visibilityClass.getMethod(
+            'isHidden',
+            com.intellij.openapi.project.Project,
+            serviceClass,
+            java.lang.Class.forName('io.prismtabs.model.TabGroup', true, pluginLoader)
+        )
+        method.setAccessible(true)
+        // `.booleanValue()` rather than the bare `invoke`: reflection hands back a boxed
+        // `java.lang.Boolean`, which the script engine wraps as a Java object rather than a JS
+        // boolean, and the wrapper does not survive the trip back over the wire.
+        method.invoke(visibility, project, service, target).booleanValue()
         """,
         true,
     )

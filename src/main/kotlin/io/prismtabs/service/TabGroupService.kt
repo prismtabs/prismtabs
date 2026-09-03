@@ -21,11 +21,11 @@ import io.prismtabs.model.TabGroupState
  * boundary's job (see [TabGroup]'s doc), not this service's.
  *
  * A group is *empty* when it has no assigned files — which has nothing to do with how many of its
- * files are open. Closing a tab never touches an assignment (there is no `fileClosed` handling
- * anywhere in the plugin), and [collapse] deliberately closes every one of a group's tabs while
- * keeping its members. The three removals that can genuinely empty a group all report it, so the
- * UI can offer to delete it: [clear], [assign] (moving the last member elsewhere) and [clearTree]
- * (the file being deleted on disk). See [AssignmentRemoval].
+ * files are open. Closing a tab never touches an assignment, and
+ * [io.prismtabs.service.TabGroupVisibility.hide] deliberately closes every one of a group's tabs
+ * while keeping its members. The three removals that can genuinely empty a group all report it, so
+ * the UI can offer to delete it: [clear], [assign] (moving the last member elsewhere) and
+ * [clearTree] (the file being deleted on disk). See [AssignmentRemoval].
  *
  * [activeGroupId] is Phase 3's "sticky group": [io.prismtabs.listener.TabGroupFileListener] reads
  * it to decide which group a newly opened, unassigned file should join. It is deliberately **not**
@@ -86,21 +86,22 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
 
     /**
      * Drops every assignment whose URL [matches], and those same URLs from any group's
-     * [TabGroup.collapsedFileUrls] — a file that no longer exists must not be reopened by [expand].
+     * [TabGroup.rememberedTabUrls] — a file that no longer exists must not be reopened by
+     * [io.prismtabs.service.TabGroupVisibility.show].
      *
      * The early return keeps the overwhelmingly common case free of allocation: this runs once per
      * deleted file, and almost none of them are assigned to anything.
      */
     private fun removeAssignments(matches: (String) -> Boolean): AssignmentRemoval {
         val removedUrls = assignments.keys.filter(matches)
-        if (removedUrls.isEmpty() && groups.values.none { it.collapsedFileUrls.any(matches) }) {
+        if (removedUrls.isEmpty() && groups.values.none { it.rememberedTabUrls.any(matches) }) {
             return AssignmentRemoval(emptyList(), emptyList())
         }
         val affectedIds = removedUrls.mapNotNull { assignments[it] }.toSet()
         assignments = assignments.filterKeys { !matches(it) }
         groups = groups.mapValues { (_, group) ->
-            if (group.collapsedFileUrls.none(matches)) group
-            else group.copy(collapsedFileUrls = group.collapsedFileUrls.filterNot(matches))
+            if (group.rememberedTabUrls.none(matches)) group
+            else group.copy(rememberedTabUrls = group.rememberedTabUrls.filterNot(matches))
         }
         recomputeCache()
         val emptied = affectedIds.filter { membersOf(it).isEmpty() }.mapNotNull { groups[it] }
@@ -127,26 +128,29 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
     }
 
     /**
-     * Phase 4a's "collapse = close-and-remember". [openFileUrls] is the ordered list of files that
-     * were open, and belonged to this group, at the moment of collapse — gathered by the caller
-     * (see [io.prismtabs.service.TabGroupCollapse]) since [TabGroupService] has no
+     * Records [openFileUrls] as [TabGroup.rememberedTabUrls] — the ordered files that were open, and
+     * belonged to this group, as of now. Gathered by the caller
+     * ([io.prismtabs.service.TabGroupVisibility.openMemberUrls]) since [TabGroupService] has no
      * `FileEditorManager` access. A no-op if the group doesn't exist.
+     *
+     * Callers only ever record a **non-empty** list: an empty one would mean "this group has no tabs
+     * to restore", which is precisely the state the memory exists to survive. Nothing here enforces
+     * that — the rule belongs with the callers that know why they are recording — but see
+     * [io.prismtabs.listener.TabGroupFileListener] and [io.prismtabs.service.TabGroupVisibility.hide]
+     * for both of them.
+     *
+     * The equality guard keeps an unchanged recording off the persisted state entirely: this runs on
+     * every editor open and close, and most of them re-record exactly what is already there.
      */
-    fun collapse(groupId: String, openFileUrls: List<String>) {
+    fun rememberOpenTabs(groupId: String, openFileUrls: List<String>) {
         val group = groups[groupId] ?: return
-        groups = groups + (groupId to group.copy(collapsed = true, collapsedFileUrls = openFileUrls))
-        recomputeCache()
-    }
-
-    /** Clears [TabGroup.collapsed] and [TabGroup.collapsedFileUrls]. A no-op if the group doesn't exist. */
-    fun expand(groupId: String) {
-        val group = groups[groupId] ?: return
-        groups = groups + (groupId to group.copy(collapsed = false, collapsedFileUrls = emptyList()))
+        if (group.rememberedTabUrls == openFileUrls) return
+        groups = groups + (groupId to group.copy(rememberedTabUrls = openFileUrls))
         recomputeCache()
     }
 
     /**
-     * Remaps every assignment, and every group's [TabGroup.collapsedFileUrls], whose URL is
+     * Remaps every assignment, and every group's [TabGroup.rememberedTabUrls], whose URL is
      * [oldUrl] or lives under it as a directory, to [newUrl]. Called by
      * [io.prismtabs.listener.TabGroupVfsListener] after a rename or move.
      *
@@ -168,8 +172,8 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
             mapped to groupId
         }
         groups = groups.mapValues { (_, group) ->
-            if (group.collapsedFileUrls.isEmpty()) group
-            else group.copy(collapsedFileUrls = group.collapsedFileUrls.map { remap(it, oldUrl, newUrl) })
+            if (group.rememberedTabUrls.isEmpty()) group
+            else group.copy(rememberedTabUrls = group.rememberedTabUrls.map { remap(it, oldUrl, newUrl) })
         }
         if (remappedUrls.isNotEmpty()) recomputeCache()
         return remappedUrls
@@ -202,8 +206,7 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
                 name = group.name
                 lightRgb = group.lightRgb
                 darkRgb = group.darkRgb
-                collapsed = group.collapsed
-                collapsedFileUrls = group.collapsedFileUrls.toMutableList()
+                rememberedTabUrls = group.rememberedTabUrls.toMutableList()
                 order = group.order
             }
         }.toMutableList()
@@ -217,8 +220,7 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
                 entry.name,
                 entry.lightRgb,
                 entry.darkRgb,
-                entry.collapsed,
-                entry.collapsedFileUrls.toList(),
+                entry.rememberedTabUrls.toList(),
                 entry.order,
             )
         }

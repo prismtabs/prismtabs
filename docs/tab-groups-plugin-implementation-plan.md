@@ -418,6 +418,39 @@ recorded as what it would have to answer for. Not part of this phase.
 
 ---
 
+### Phase 7 — Hidden as a derived state
+
+**Amends Phase 4a.** Phase 4a stored `collapsed: Boolean` on `TabGroup`. Phase 6a's tree, which
+reopens a closed member on a double-click, made that flag disagree with the tab strip in three ways
+users hit immediately: a group that still read `· hidden` with one of its tabs open, a "Show Group"
+that was a no-op clearing a word, and a group whose tabs were closed one at a time never reading as
+hidden at all.
+
+- **Drop the flag.** A group is hidden when it *has members and none of them is open*, derived from
+  `FileEditorManager` by `TabGroupVisibility.isHidden`. Every surface reads that one predicate: the
+  tool window's suffix, the Hide/Show toggle, the delete warning, the paywall escape hatch. The tree
+  takes it from the member rows it has just built, so the group row cannot contradict the bold rows
+  beneath it.
+- **Keep the memory, maintain it continuously.** `rememberedTabUrls` (was `collapsedFileUrls`) is
+  written by `TabGroupFileListener` on every editor open and close — never when the resulting set is
+  empty, which is what leaves it holding the arrangement from just before the group went hidden,
+  regardless of *how* it got there. `hide()` records after closing, not before, so that upkeep can't
+  overwrite it mid-loop. `show()` filters the memory against current membership and falls back to
+  every member file when nothing is remembered.
+- **Empty groups are neither.** With no members there is nothing to close and nothing to reopen, so
+  the Hide/Show toggle is disabled rather than left as a no-op that the stored flag used to let
+  through — an empty group could sit there reading `0 files · hidden`.
+- **Acceptance:** reopen one member of a hidden group from the tree → the row stops reading
+  `hidden` and the toggle offers Hide; close its tabs one at a time → the row reads `hidden` again
+  once the last one goes, and Show reopens exactly the set that was last open.
+- **Rejected:** wording that reconciles the flag with reality (`group hidden, 1 tab visible`) — it
+  narrates a state machine the user should not have to know exists. Also rejected: a per-file `S`/`H`
+  letter or eye icon on member rows. Bold already carries "this one is open"; a letter reads as a
+  file-type badge beside the actual file-type icon, and an eye promises a per-file toggle that does
+  not exist.
+
+---
+
 ## 5. Risk register
 
 | Risk | Likelihood | Mitigation |

@@ -246,13 +246,13 @@ class WindowsManualVerificationUiTest {
                     "expected the kept, emptied Blue group listed with 0 files, got ${remoteRobot.toolWindowGroupRows()}",
                 )
                 note("5b. The kept, emptied group is listed by the tool window as \"0 files\"")
-                setGroupCollapsed("TeamWindows", collapsed = true)
+                setGroupHidden("TeamWindows", hidden = true)
                 waitFor(ofSeconds(10)) { !openTabNames().contains("Second.kt") }
                 assertTrue(remoteRobot.toolWindowGroupRows().any { it.contains("TeamWindows") && it.contains("hidden") })
-                remoteRobot.saveScreenshot("06b-tool-window-collapsed")
-                setGroupCollapsed("TeamWindows", collapsed = false)
+                remoteRobot.saveScreenshot("06b-tool-window-hidden")
+                setGroupHidden("TeamWindows", hidden = false)
                 waitFor(ofSeconds(10)) { openTabNames().containsAll(listOf("Second.kt", "Third.kt")) }
-                note("6. Tool window listed TeamWindows (2 files); collapse closed its tabs and marked it collapsed; expand reopened them")
+                note("6. Tool window listed TeamWindows (2 files); hiding closed its tabs and marked it hidden; showing reopened them")
                 hideTabGroupsToolWindow()
 
                 // --- 7. Settings | Tools | PrismTabs ---------------------------------------
