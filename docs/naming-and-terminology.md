@@ -70,6 +70,8 @@ keep it in sync with the source string.
 | `Add to Group…`, `Manage Groups…`, `Remove from Group` | `TabGroupPopup.kt`, `textFor(entry)` |
 | `Mark as Active Group` / `Clear Active Group`, `Delete Group`, `Hide Group` / `Show Group` | `TabGroupPopup.kt`, `TabGroupsToolWindow.kt` |
 | `Active Group` (tool window toolbar/context-menu toggle) | `TabGroupsToolWindow.kt`, `ToggleActiveAction` |
+| `N files` / `1 file` (tool window row member count) | `TabGroupsToolWindow.kt`, `GroupCellRenderer` |
+| `In group: <name>` (caption over `Remove from Group`) | `TabGroupPopup.kt`, `currentGroupCaption` |
 | `New Tab Group`, `Rename Tab Group` (dialog titles) | `TabGroupPopup.kt`, `RenameGroupDialog.kt` |
 
 `Tab Group…` in layer 3 and `tab group` in layer 2 co-exist on purpose: one is a

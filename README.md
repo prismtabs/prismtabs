@@ -821,7 +821,7 @@ the group ([`promptToDeleteEmptied`](src/main/kotlin/io/prismtabs/ui/TabGroupPop
 Chrome drops a tab group silently once its last tab is gone; this asks first, because a PrismTabs
 group is persisted data — name, colour, tool-window row — rather than a strip decoration, and the
 removal may have been a misclick. Declining leaves the empty group in place; the tool window shows
-it as "0 tabs" with its own Delete Group action.
+it as "0 files" with its own Delete Group action.
 
 Deliberately **not** implemented: a sweep for groups that were already empty before this existed.
 The prompt fires on the *transition* to zero members, so a `tabGroups.xml` carrying an empty group

@@ -161,8 +161,11 @@ pass:
 - **Screenshots.** All four shots (≥1200×760) live in `docs/marketplace/`, upload in filename
   order: `01-swatch-popup-and-tabs-dark.png`, `02-tool-window-and-tabs-dark.png`,
   `03-palette-settings-dark.png`, `04-tool-window-and-tabs-light.png`. The two tool-window shots
-  (`02-…` and `04-…`) were re-shot 2026-09-02 and now match the shipped UI (pin icon in the
-  stripe, "Backend 1 tab · active" marker). Ready to upload.
+  (`02-…` and `04-…`) were re-shot 2026-09-02 for the pin icon and active-group marker.
+  **They need one more re-shoot before upload:** the row's member count now reads "1 file" /
+  "3 files" rather than "1 tab" / "3 tabs" (a group's members are files, and a group whose tabs are
+  all closed still has them), so both shots show wording the plugin no longer produces. Nothing
+  else about them has changed.
 
 ## ~~7. Choose and prepare a License/EULA for the paid listing — closed~~
 

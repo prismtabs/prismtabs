@@ -127,8 +127,8 @@ listing (three dark, one light):
    one-right-click pitch; it goes first.
 2. **`02-tool-window-and-tabs-dark.png`** (1853 × 885) — the PrismTabs tool window
    docked right, listing Tests / Backend / Docs with colour dots and member
-   counts, "Backend 1 tab · active" showing the active-group marker (pin toggle
-   pressed in the stripe), "Docs 3 tabs · hidden" showing the hide feature, editor
+   counts, "Backend 1 file · active" showing the active-group marker (pin toggle
+   pressed in the stripe), "Docs 3 files · hidden" showing the hide feature, editor
    tabs behind it tinted to match. The paid tier's home.
 3. **`03-palette-settings-dark.png`** (1794 × 1045) — the full `Settings | Tools |
    PrismTabs` dialog, all eight presets renamed to a consistent scheme, the light

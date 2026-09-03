@@ -10,6 +10,7 @@ import com.intellij.openapi.ui.popup.ListPopupStep
 import com.intellij.openapi.ui.popup.ListSeparator
 import com.intellij.openapi.ui.popup.PopupStep
 import com.intellij.openapi.ui.popup.util.BaseListPopupStep
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.ui.JBColor
@@ -38,7 +39,8 @@ import javax.swing.border.Border
  * plan's Phase 2 section, with the plan's separate "New Group…" substep folded into the dots
  * themselves — a "New Group" caption over 8 preset dots, a separator, "Add to Group…"
  * (`hasSubstep`), "Manage Groups…" (`hasSubstep`, only once a group exists), and "Remove from
- * Group" (only when the file is currently assigned).
+ * Group" under an "In group: <name>" caption — the last two only when the file is currently
+ * assigned, and the caption is the only place the popup says *which* group that is.
  */
 internal object TabGroupPopup {
 
@@ -191,6 +193,12 @@ private class RootStep(
     override fun getSeparatorAbove(value: Entry): ListSeparator? = when {
         value === values.firstOrNull() -> ListSeparator("New Group")
         value == Entry.AddToGroup -> ListSeparator()
+        // The one place the popup says which group the right-clicked file is already in. Without
+        // it, "Remove from Group" is the only hint that the file is assigned at all, and it names
+        // nothing — so the answer to "which group is this tab in?" was nowhere in the UI once the
+        // tab's own tint stopped being enough to tell two similar colours apart.
+        value == Entry.RemoveFromGroup ->
+            service.groupFor(file.url)?.let { ListSeparator(currentGroupCaption(it.name)) }
         else -> null
     }
 
@@ -443,6 +451,30 @@ internal fun deleteConfirmationMessage(group: TabGroup): String = buildString {
         append(" will not be reopened.")
     }
 }
+
+/**
+ * The caption over "Remove from Group": which group the right-clicked file is currently in.
+ *
+ * A captioned [ListSeparator] rather than the step's own title, for exactly the reason [RootStep]
+ * gives for "New Group" — the popup's title bar would label the whole tree, including the swatches
+ * and "Add to Group…", which are about groups this file is *not* in.
+ *
+ * Truncated because a group name has no length limit (the New Group prompt validates only that it
+ * is non-blank) and a popup sizes itself to its widest row, so an unbounded name would stretch the
+ * swatch row and every other entry along with it. [MAX_CAPTION_NAME] is a plain cap rather than a
+ * measured one: unlike `CAPTION_BOTTOM_GAP` there is no platform value to match here, only a width
+ * past which a caption stops being scannable.
+ *
+ * The ellipsis is passed explicitly so the caption uses the same "…" the popup's own item labels do
+ * ("Add to Group…", "Rename…") rather than the three full stops `StringUtil`'s shorter overload
+ * substitutes. Split out as a pure function for the same reason [deleteConfirmationMessage] is: the
+ * wording and the truncation are then unit-testable without a platform harness.
+ */
+internal fun currentGroupCaption(groupName: String): String =
+    "In group: " + StringUtil.shortenTextWithEllipsis(groupName, MAX_CAPTION_NAME, 0, "…")
+
+/** Longest group name [currentGroupCaption] renders in full, in characters. */
+private const val MAX_CAPTION_NAME = 40
 
 /** "Remove from Group"'s handler: unassign, repaint, and offer to delete a group left empty. */
 private fun removeFromGroup(project: Project, file: VirtualFile, service: TabGroupService) {

@@ -271,7 +271,11 @@ private class GroupCellRenderer(private val service: TabGroupService) : ColoredL
         icon = ColorSwatchIcon(JBColor(Color(value.lightRgb), Color(value.darkRgb)))
         append(value.name)
         val count = service.membersOf(value.id).size
-        append("  $count ${if (count == 1) "tab" else "tabs"}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+        // "files", not "tabs": a group's members are files, and a group whose every tab is closed
+        // still has all of them (see TabGroupService's doc). Calling them tabs made the row read as
+        // a lie exactly when it mattered most — a group with three members and nothing open
+        // announcing "3 tabs" beside an empty strip.
+        append("  $count ${if (count == 1) "file" else "files"}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
         if (value.collapsed) append("  ·  hidden", SimpleTextAttributes.GRAYED_ATTRIBUTES)
         // Same suffix wording the tab popup's group list uses, so the two views name the state alike.
         if (value.id == service.activeGroupId()) append("  ·  active", SimpleTextAttributes.GRAYED_ATTRIBUTES)
