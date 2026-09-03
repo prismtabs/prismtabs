@@ -7,25 +7,34 @@ import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.CommonDataKeys
+import com.intellij.openapi.actionSystem.CommonShortcuts
+import com.intellij.openapi.actionSystem.DataSink
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.ToggleAction
 import com.intellij.openapi.components.service
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.FileEditorManagerListener
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.DumbAware
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.wm.ex.ToolWindowManagerListener
-import com.intellij.ui.CollectionListModel
-import com.intellij.ui.ColoredListCellRenderer
+import com.intellij.ui.ColoredTreeCellRenderer
 import com.intellij.ui.JBColor
 import com.intellij.ui.PopupHandler
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.SimpleTextAttributes
-import com.intellij.ui.components.JBList
+import com.intellij.ui.TreeSpeedSearch
 import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.ui.content.ContentFactory
+import com.intellij.ui.treeStructure.Tree
 import io.prismtabs.license.PrismTabsLicense
 import io.prismtabs.model.TabGroup
 import io.prismtabs.service.TabGroupCollapse
@@ -33,19 +42,28 @@ import io.prismtabs.service.TabGroupService
 import io.prismtabs.service.TabGroupsChangedListener
 import java.awt.Color
 import java.awt.Component
-import java.awt.Point
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
+import javax.swing.Icon
 import javax.swing.JComponent
-import javax.swing.JList
-import javax.swing.ListSelectionModel
+import javax.swing.JTree
+import javax.swing.SwingUtilities
+import javax.swing.tree.DefaultMutableTreeNode
+import javax.swing.tree.DefaultTreeModel
+import javax.swing.tree.TreePath
+import javax.swing.tree.TreeSelectionModel
 
 /**
  * Phase 4b: the stable, public-API substitute for Chrome's in-strip group chip (see README
- * "Constraints that are not going away" §3) — a plain list of every group, live-synced to
- * [TabGroupService] via [TabGroupsChangedListener] rather than only refreshing on its own actions,
- * so a group created from [TabGroupPopup] while this panel is already visible still shows up.
- * `DumbAware`: nothing here reads the index.
+ * "Constraints that are not going away" §3) — every group, live-synced to [TabGroupService] via
+ * [TabGroupsChangedListener] rather than only refreshing on its own actions, so a group created
+ * from [TabGroupPopup] while this panel is already visible still shows up. `DumbAware`: nothing
+ * here reads the index.
+ *
+ * Phase 6a turned the flat list into a two-level **tree**: each group row expands to one child per
+ * member file. A container you expand to see its contents is the platform's own idiom for this
+ * question — Bookmarks, Changes, the Project view all answer it that way — rather than an
+ * invention, and it is what makes a group's membership knowable once its tabs are closed.
  *
  * This whole tool window — and with it collapse/expand, which is only driven from here — is a paid
  * feature (see the README's "Marketplace publishing prep"). It is gated inside [TabGroupsPanel]
@@ -68,40 +86,77 @@ private class TabGroupsPanel(
 ) : SimpleToolWindowPanel(true, true) {
 
     private val service = project.service<TabGroupService>()
-    private val listModel = CollectionListModel<TabGroup>()
-    private val list = JBList(listModel).apply {
-        selectionMode = ListSelectionModel.SINGLE_SELECTION
-        cellRenderer = GroupCellRenderer(service)
+
+    /** Invisible: the groups are the top level, and a "Tab Groups" root above them says nothing. */
+    private val root = DefaultMutableTreeNode()
+    private val treeModel = DefaultTreeModel(root)
+    private val tree = Tree(treeModel).apply {
+        // Named so the uiTests can address this exact tree: the IDE frame holds several others
+        // (the Project view's among them), and a by-type locator is a coin toss between them.
+        name = GROUP_TREE_NAME
+        isRootVisible = false
+        showsRootHandles = true
+        selectionModel.selectionMode = TreeSelectionModel.SINGLE_TREE_SELECTION
+        cellRenderer = TabGroupsTreeRenderer(service)
         emptyText.text = "No tab groups yet — right-click a tab to create one."
+        // Double-click means hide/show on a group row and open on a file row (see below), so it must
+        // not *also* be the tree's expand toggle: one gesture doing two things at once is how you
+        // get a group whose tabs vanish because the user meant to look inside it. Expanding stays on
+        // the handle, the arrow keys and Enter, which is where a tree's own affordance lives anyway.
+        toggleClickCount = 0
     }
-    private val groupList = ScrollPaneFactory.createScrollPane(list, true)
+    private val groupTree = ScrollPaneFactory.createScrollPane(tree, true)
     private val toolbarComponent: JComponent
 
     init {
         val actions = DefaultActionGroup(
-            ToggleActiveAction(project, service, list),
-            ToggleCollapseAction(project, service, list),
-            RenameAction(project, service, list),
-            RecolorAction(project, service, list),
-            DeleteAction(project, service, list),
+            ToggleActiveAction(project, service, ::selectedGroup),
+            ToggleCollapseAction(project, service, ::selectedGroup),
+            RenameAction(project, service, ::selectedGroup),
+            RecolorAction(project, service, ::selectedGroup),
+            DeleteAction(project, service, ::selectedGroup),
         )
         val toolbar = ActionManager.getInstance().createActionToolbar("PrismTabs.TabGroupsToolWindow", actions, true)
-        toolbar.setTargetComponent(list)
+        toolbar.setTargetComponent(tree)
         toolbarComponent = toolbar.component
-        installRowSelectingPopupMenu(list, actions)
+        installRowSelectingPopupMenu(tree, actions)
 
-        // Double-click as a shortcut for the toolbar's hide/show toggle — mirrors the
-        // platform's own convention of double-click-as-default-action on list/tree tool windows.
-        list.addMouseListener(object : MouseAdapter() {
+        // Speed search over the member names as well as the group names, and `canExpand` so it
+        // reaches into *collapsed* groups: finding a file whose tab is closed is the whole point of
+        // this tree, and a filter that only searched what is already on screen would miss exactly
+        // the rows the user came here for.
+        TreeSpeedSearch.installOn(tree, true) { path -> searchTextFor(path.lastPathComponent) }
+
+        // Double-click as a shortcut for the toolbar's hide/show toggle — mirrors the platform's own
+        // convention of double-click-as-default-action on list/tree tool windows. Read off the path
+        // under the cursor rather than the selection: a double-click on empty space below the last
+        // row must do nothing, not act on whatever happened to be selected.
+        tree.addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
-                if (e.clickCount != 2) return
-                val group = list.selectedValue ?: return
-                toggleCollapse(project, service, group)
+                if (e.clickCount != 2 || !SwingUtilities.isLeftMouseButton(e)) return
+                doubleClickOn(tree.getPathForLocation(e.x, e.y) ?: return)
             }
         })
+        // Enter, registered as an action rather than left to the tree's own key bindings so both
+        // kinds of row have a defined answer.
+        DumbAwareAction.create { enterOn(tree.selectionPath ?: return@create) }
+            .registerCustomShortcutSet(CommonShortcuts.ENTER, tree, disposable)
 
         val connection = project.messageBus.connect(disposable)
         connection.subscribe(TabGroupsChangedListener.TOPIC, TabGroupsChangedListener { refresh() })
+        // Opening or closing a tab changes no group, but it does change which members are drawn as
+        // open — and a row that stayed bold after its tab was closed would be wrong about the one
+        // thing this tree exists to report. Rebuilding on an editor event is blunt for what is a
+        // per-row boolean, but the alternative is asking FileEditorManager per painted row, which is
+        // the service call in a paint path this renderer was deliberately freed of.
+        connection.subscribe(
+            FileEditorManagerListener.FILE_EDITOR_MANAGER,
+            object : FileEditorManagerListener {
+                override fun fileOpened(source: FileEditorManager, file: VirtualFile) = refresh()
+
+                override fun fileClosed(source: FileEditorManager, file: VirtualFile) = refresh()
+            },
+        )
         // A subscription activated mid-session doesn't notify anyone, so re-read the licence each
         // time the tool window is shown: that's the moment the user would look for the unlock, and
         // it's rare enough that re-verifying the signed stamp costs nothing.
@@ -116,38 +171,164 @@ private class TabGroupsPanel(
         refresh()
     }
 
+    /**
+     * Rebuilds the whole tree from [TabGroupService], preserving what the user was looking at.
+     *
+     * The model is replaced wholesale — a change notification says only "something changed", and
+     * diffing groups and members against the old nodes to save a rebuild of at most a few dozen rows
+     * would be more machinery than the thing it optimises. What that costs is the two pieces of
+     * *view* state Swing throws away with the nodes, so both are captured before the swap and put
+     * back after: which groups were expanded, and which row was selected. Without the first,
+     * expanding a group and then recolouring it would collapse the very thing you were looking at.
+     */
     private fun refresh() {
         if (!PrismTabsLicense.paidFeaturesEnabled()) {
             setToolbar(null)
             setContent(upsellPanel())
+            // Not just hidden — emptied. A lapsed subscriber's tree must not keep answering
+            // `uiDataSnapshot` (or hold group data) from behind the paywall panel.
+            root.removeAllChildren()
+            treeModel.reload()
             return
         }
-        setToolbar(toolbarComponent)
-        setContent(groupList)
-        val groups = service.groups()
-        val selectedIndex = list.selectedIndex
-        val selectedId = list.selectedValue?.id
-        listModel.replaceAll(groups)
-        val stillListed = groups.indexOfFirst { it.id == selectedId }
-        when {
-            stillListed >= 0 -> select(stillListed)
-            // The selected group is gone — deleted here or from a tab's popup. Fall to the row that
-            // took its place (the last one, if it was the last) rather than leaving the list with no
-            // selection: an empty selection disables the whole toolbar and context menu, which is
-            // the platform's convention for "nothing is selected" and reads as a dead panel right
-            // after a delete. Only when something *was* selected: a list nobody has touched yet
-            // must not select a row on its own.
-            selectedId != null && groups.isNotEmpty() -> select(selectedIndex.coerceIn(groups.indices))
+        // Only when it isn't already showing: `setContent` removes and re-adds the component, and
+        // since this now runs on every editor open and close, doing that unconditionally would put
+        // a remove/add of the focused tree in the middle of an ordinary "open a file".
+        if (content !== groupTree) {
+            setToolbar(toolbarComponent)
+            setContent(groupTree)
         }
+
+        val expandedIds = groupNodes().filter { tree.isExpanded(it.treePath) }.mapTo(mutableSetOf()) { it.group.id }
+        val selection = selectionKey()
+
+        root.removeAllChildren()
+        service.groups().forEach { root.add(groupNode(it)) }
+        treeModel.reload()
+
+        groupNodes().filter { it.group.id in expandedIds }.forEach { tree.expandPath(it.treePath) }
+        restoreSelection(selection)
     }
 
-    private fun select(index: Int) {
-        list.selectedIndex = index
-        list.ensureIndexIsVisible(index)
+    /** One group row and its member children, in [memberFileRows]' display order. */
+    private fun groupNode(group: TabGroup): GroupNode {
+        val vfm = VirtualFileManager.getInstance()
+        val editors = FileEditorManager.getInstance(project)
+        // Membership is resolved once, here, for the same reason the popup's file list does it: the
+        // renderer must not do VFS lookups per paint, and a row's icon, its open/closed state and
+        // its missing/present state all have to agree with each other.
+        val resolved = service.membersOf(group.id).associateWith { vfm.findFileByUrl(it) }
+        val node = GroupNode(group)
+        memberFileRows(resolved.keys, project.basePath) { resolved[it] == null }.forEach { row ->
+            val file = resolved[row.url]
+            node.add(
+                MemberNode(
+                    group = group,
+                    row = row,
+                    icon = file?.fileType?.icon ?: AllIcons.FileTypes.Unknown,
+                    openInEditor = file != null && editors.isFileOpen(file),
+                ),
+            )
+        }
+        return node
     }
 
     /**
-     * What an unsubscribed user sees here instead of the list: what this window is, what stays free,
+     * What the toolbar and the context menu act on: **the selected group, or the selected file's
+     * parent group**. Without the second half every action would go dead the moment a child row was
+     * selected — and selecting a child is the ordinary way to use this tree.
+     */
+    private fun selectedGroup(): TabGroup? = (tree.selectionPath?.lastPathComponent as? TabGroupsNode)?.group
+
+    /**
+     * Double-click on [path]: **hide or show** a group row, open a file row. The group binding is
+     * the one this window already had and Phase 6a kept; what it must not become is the tree's own
+     * expand toggle, which is why [tree] is built with `toggleClickCount = 0`.
+     */
+    private fun doubleClickOn(path: TreePath) {
+        when (val node = path.lastPathComponent) {
+            is GroupNode -> toggleCollapse(project, service, node.group)
+            is MemberNode -> chooseMemberFile(project, node.group, service, node.row)
+        }
+    }
+
+    /**
+     * Enter on [path]: open a file row; **expand or collapse** a group row, which is what Enter on a
+     * container means everywhere else.
+     *
+     * Deliberately not hide/show — that is the double-click's job. Enter is what a keyboard user
+     * presses while arrowing down a tree to look inside a row, and closing a group's tabs would be
+     * the most surprising thing in the plugin to hang off that.
+     */
+    private fun enterOn(path: TreePath) {
+        when (val node = path.lastPathComponent) {
+            is GroupNode -> if (tree.isExpanded(path)) tree.collapsePath(path) else tree.expandPath(path)
+            is MemberNode -> chooseMemberFile(project, node.group, service, node.row)
+        }
+    }
+
+    private fun groupNodes(): List<GroupNode> = (0 until root.childCount).map { root.getChildAt(it) as GroupNode }
+
+    /**
+     * What was selected, in terms that survive the node objects being thrown away: the group's id,
+     * the member's URL if a member was selected, and the group's position so a *deleted* group can
+     * fall to whatever took its place.
+     */
+    private data class SelectionKey(val groupId: String, val url: String?, val groupIndex: Int)
+
+    private fun selectionKey(): SelectionKey? {
+        val node = tree.selectionPath?.lastPathComponent as? TabGroupsNode ?: return null
+        val groupId = node.group.id
+        return SelectionKey(groupId, (node as? MemberNode)?.row?.url, groupNodes().indexOfFirst { it.group.id == groupId })
+    }
+
+    private fun restoreSelection(key: SelectionKey?) {
+        if (key == null) return
+        val groups = groupNodes()
+        val group = groups.firstOrNull { it.group.id == key.groupId }
+        if (group != null) {
+            // The same member if it is still assigned; the group row if it isn't (it was unassigned,
+            // renamed onto a new URL, or deleted from disk between refreshes).
+            select(key.url?.let { url -> group.members.firstOrNull { it.row.url == url } } ?: group)
+            return
+        }
+        // The selected group is gone — deleted here or from a tab's popup. Fall to the row that took
+        // its place (the last one, if it was the last) rather than leaving the tree with no
+        // selection: an empty selection disables the whole toolbar and context menu, which is the
+        // platform's convention for "nothing is selected" and reads as a dead panel right after a
+        // delete. Only when something *was* selected: a tree nobody has touched yet must not select
+        // a row on its own.
+        if (groups.isNotEmpty()) select(groups[key.groupIndex.coerceIn(groups.indices)])
+    }
+
+    private fun select(node: DefaultMutableTreeNode) {
+        val path = node.treePath
+        tree.selectionPath = path
+        tree.scrollPathToVisible(path)
+    }
+
+    /**
+     * The selected *file* row, published for the platform's own file actions — F4 (Jump to Source),
+     * Select in Project View, Copy Path — so this tree gets them without reimplementing any of them.
+     *
+     * Only a file row publishes: a group row has no single file, and answering with all of its
+     * members would silently point file-wide actions at a whole group. The panel is the provider
+     * rather than the tree because [SimpleToolWindowPanel] already implements
+     * `UiCompatibleDataProvider`, and the tree is inside it either way.
+     */
+    override fun uiDataSnapshot(sink: DataSink) {
+        super.uiDataSnapshot(sink)
+        val node = tree.selectionPath?.lastPathComponent as? MemberNode ?: return
+        // Re-resolved, not cached on the node: the snapshot is read at the moment an action asks,
+        // and the file may have gone since the tree was last built.
+        val file = VirtualFileManager.getInstance().findFileByUrl(node.row.url) ?: return
+        sink[CommonDataKeys.VIRTUAL_FILE] = file
+        sink[CommonDataKeys.VIRTUAL_FILE_ARRAY] = arrayOf(file)
+        sink[CommonDataKeys.NAVIGATABLE] = OpenFileDescriptor(project, file)
+    }
+
+    /**
+     * What an unsubscribed user sees here instead of the tree: what this window is, what stays free,
      * and a way to subscribe — the platform's own empty-state idiom, so it reads as a locked feature
      * rather than a failure.
      *
@@ -190,36 +371,70 @@ private class TabGroupsPanel(
 }
 
 /**
- * Installs [actions] as [list]'s context menu, moving the selection to the row under the cursor
+ * A row of the tool window's tree. Both kinds answer [group] — a member row with the group it
+ * belongs to — which is what lets the toolbar act on "the selected group, or the selected file's
+ * parent group" without caring which row is selected.
+ */
+private sealed class TabGroupsNode(userObject: Any, allowsChildren: Boolean) :
+    DefaultMutableTreeNode(userObject, allowsChildren) {
+
+    abstract val group: TabGroup
+}
+
+private class GroupNode(override val group: TabGroup) : TabGroupsNode(group, true) {
+    val members: List<MemberNode> get() = (0 until childCount).map { getChildAt(it) as MemberNode }
+}
+
+/**
+ * One member file. [openInEditor] is read when the tree is built rather than at paint time, for the
+ * same reason the icon is: the renderer must stay a pure function of the node.
+ */
+private class MemberNode(
+    override val group: TabGroup,
+    val row: MemberFileRow,
+    val icon: Icon,
+    val openInEditor: Boolean,
+) : TabGroupsNode(row, false)
+
+private val DefaultMutableTreeNode.treePath: TreePath get() = TreePath(path)
+
+/** What speed search matches a row on: the group's name, or the file's own name. */
+private fun searchTextFor(node: Any?): String = when (node) {
+    is GroupNode -> node.group.name
+    is MemberNode -> node.row.name
+    else -> ""
+}
+
+/**
+ * Installs [actions] as [tree]'s context menu, moving the selection to the row under the cursor
  * before the menu opens.
  *
  * [PopupHandler.installPopupMenu] on its own is not enough, and the gap is one users actually hit:
- * Swing's `BasicListUI` moves a list's selection for the *left* mouse button only, so a right-click
- * on an unselected row leaves the selection wherever it was — and every action here is enabled by
- * `list.selectedValue` (see [SelectionAction]), so a list with nothing selected shows a wholly
- * greyed-out menu. Deleting the selected group is the everyday way into that state, which is what
- * made this read as a focus bug: the group vanishes, the selection goes with it, and the next
- * right-click is dead until a left-click revives it. Reproduced end-to-end, and now guarded, by
+ * Swing moves a tree's selection for the *left* mouse button only, so a right-click on an unselected
+ * row leaves the selection wherever it was — and every action here is enabled by the selected group
+ * (see [SelectionAction]), so a tree with nothing selected shows a wholly greyed-out menu. Deleting
+ * the selected group is the everyday way into that state, which is what made this read as a focus
+ * bug: the group vanishes, the selection goes with it, and the next right-click is dead until a
+ * left-click revives it. Reproduced end-to-end, and now guarded, by
  * `TabGroupsToolWindowUiTest."right-clicking a group row acts on that row..."`.
  *
  * Selecting the right-clicked row is what the platform's own tool windows do — right-clicking an
  * unselected file in the Project view selects it before opening the menu, verified against a live
- * sandbox IDE rather than assumed. The two selection-aware helpers the platform ships
- * ([PopupHandler.installSelectionListPopup] and `installFollowingSelectionTreePopup`) make the
- * opposite trade: they *suppress* the menu unless the click is already on the selection, which
- * suits a multi-selection list and would only make this one deader still.
+ * sandbox IDE rather than assumed. The selection-aware helper the platform ships for trees
+ * ([PopupHandler.installFollowingSelectionTreePopup]) makes the opposite trade: it *suppresses* the
+ * menu unless the click is already on the selection, which suits a multi-selection tree and would
+ * only make this one deader still.
+ *
+ * `getPathForLocation` returns null for a point that isn't on a row, which is the bounds check the
+ * list this replaced had to do by hand: a right-click on the empty space below the last row leaves
+ * the selection alone instead of snapping to the nearest row.
  */
-private fun installRowSelectingPopupMenu(list: JBList<TabGroup>, actions: ActionGroup) {
-    list.addMouseListener(object : PopupHandler() {
+private fun installRowSelectingPopupMenu(tree: JTree, actions: ActionGroup) {
+    tree.addMouseListener(object : PopupHandler() {
         override fun invokePopup(comp: Component, x: Int, y: Int) {
-            val index = list.locationToIndex(Point(x, y))
-            // locationToIndex snaps to the nearest row for a point past the last one, so without the
-            // bounds check a right-click on the empty space below the list would select its last row.
-            if (index >= 0 && list.getCellBounds(index, index)?.contains(x, y) == true) {
-                list.selectedIndex = index
-            }
+            tree.getPathForLocation(x, y)?.let { tree.selectionPath = it }
             val menu = ActionManager.getInstance().createActionPopupMenu(POPUP_PLACE, actions)
-            menu.setTargetComponent(list)
+            menu.setTargetComponent(tree)
             menu.component.show(comp, x, y)
         }
     })
@@ -240,6 +455,13 @@ private const val TOOL_WINDOW_ID = "PrismTabs"
 internal const val LOCKED_PANEL_NAME = "PrismTabs.LockedToolWindow"
 
 /**
+ * `Component.name` of the tool window's group tree. The uiTests locate it by this exact name for the
+ * same reason they do the locked panel — kept in step with the literal in `IdeaFrame`'s
+ * `GROUP_TREE_XPATH`.
+ */
+internal const val GROUP_TREE_NAME = "PrismTabs.GroupTree"
+
+/**
  * The locked tool window's escape hatch: reopen the tabs of every collapsed group. Deliberately
  * *not* gated — see [TabGroupsPanel.upsellPanel] for why a lapsed subscription must never leave
  * tabs closed behind the paywall that closed them.
@@ -258,47 +480,83 @@ internal fun expandAllCollapsedGroups(project: Project, service: TabGroupService
     service.groups().filter { it.collapsed }.forEach { TabGroupCollapse.expand(project, service, it) }
 }
 
-/** Swatch dot, name, member count, and a "hidden" suffix — the plan's stated row shape. */
-private class GroupCellRenderer(private val service: TabGroupService) : ColoredListCellRenderer<TabGroup>() {
+/**
+ * Group rows — swatch dot, name, member count, "hidden" and "active" suffixes — and file rows,
+ * which are the popup's own member rows ([appendMemberFile]) so the two surfaces cannot drift.
+ *
+ * A member whose tab is currently **open** is drawn bold. The two rows have to be told apart —
+ * closed members are the whole reason this tree exists — and bold is the emphasis the platform
+ * already spends on "this one is live"; greying the closed ones, the only other obvious reading,
+ * would say *disabled* about exactly the rows the user came here to find. Checked against the
+ * rendered tree in a sandbox IDE, not picked off a palette.
+ */
+private class TabGroupsTreeRenderer(private val service: TabGroupService) : ColoredTreeCellRenderer() {
 
     override fun customizeCellRenderer(
-        list: JList<out TabGroup>,
-        value: TabGroup,
-        index: Int,
+        tree: JTree,
+        value: Any?,
         selected: Boolean,
+        expanded: Boolean,
+        leaf: Boolean,
+        row: Int,
         hasFocus: Boolean,
     ) {
-        icon = ColorSwatchIcon(JBColor(Color(value.lightRgb), Color(value.darkRgb)))
-        append(value.name)
-        val count = service.membersOf(value.id).size
-        // "files", not "tabs": a group's members are files, and a group whose every tab is closed
-        // still has all of them (see TabGroupService's doc). Calling them tabs made the row read as
-        // a lie exactly when it mattered most — a group with three members and nothing open
-        // announcing "3 tabs" beside an empty strip.
-        append("  $count ${if (count == 1) "file" else "files"}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
-        if (value.collapsed) append("  ·  hidden", SimpleTextAttributes.GRAYED_ATTRIBUTES)
-        // Same suffix wording the tab popup's group list uses, so the two views name the state alike.
-        if (value.id == service.activeGroupId()) append("  ·  active", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+        when (value) {
+            is GroupNode -> {
+                val group = value.group
+                icon = ColorSwatchIcon(JBColor(Color(group.lightRgb), Color(group.darkRgb)))
+                append(group.name)
+                // "files", not "tabs": a group's members are files, and a group whose every tab is
+                // closed still has all of them (see TabGroupService's doc). Calling them tabs made
+                // the row read as a lie exactly when it mattered most — a group with three members
+                // and nothing open announcing "3 tabs" beside an empty strip. Counted off the
+                // children rather than re-asking the service, which is the same number by
+                // construction and keeps the paint path free of service calls.
+                val count = value.childCount
+                append("  $count ${if (count == 1) "file" else "files"}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+                if (group.collapsed) append("  ·  hidden", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+                // Same suffix wording the tab popup's group list uses, so the views name the state alike.
+                if (group.id == service.activeGroupId()) {
+                    append("  ·  active", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+                }
+            }
+
+            is MemberNode -> {
+                icon = value.icon
+                appendMemberFile(
+                    value.row,
+                    if (value.openInEditor) {
+                        SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES
+                    } else {
+                        SimpleTextAttributes.REGULAR_ATTRIBUTES
+                    },
+                )
+            }
+        }
     }
 }
 
 /**
- * Every action here reads [list]'s live Swing selection directly in [update] rather than through
+ * Every action here reads the tree's live Swing selection directly in [update] rather than through
  * `DataContext`, so — per the plan's own rule ("return BGT unless you touch Swing") — these need
  * [ActionUpdateThread.EDT], not the [io.prismtabs.action.AssignTabGroupAction] default.
+ *
+ * [selectedGroup] is a supplier, not the tree itself: since Phase 6a the answer is "the selected
+ * group, or the selected file's parent group", and that resolution belongs to the panel that owns
+ * the node types rather than being repeated in five actions.
  */
 private abstract class SelectionAction(
     text: String,
-    icon: javax.swing.Icon,
+    icon: Icon,
     protected val project: Project,
     protected val service: TabGroupService,
-    protected val list: JBList<TabGroup>,
+    protected val selectedGroup: () -> TabGroup?,
 ) : AnAction(text, null, icon) {
 
     final override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
 
     override fun update(e: AnActionEvent) {
-        e.presentation.isEnabled = list.selectedValue != null
+        e.presentation.isEnabled = selectedGroup() != null
     }
 }
 
@@ -316,7 +574,7 @@ private abstract class SelectionAction(
 private class ToggleActiveAction(
     private val project: Project,
     private val service: TabGroupService,
-    private val list: JBList<TabGroup>,
+    private val selectedGroup: () -> TabGroup?,
 ) : ToggleAction("Active Group", "Newly opened files join this group", AllIcons.General.Pin_tab) {
 
     // Same EDT/selection contract as [SelectionAction], repeated rather than inherited: a
@@ -325,11 +583,11 @@ private class ToggleActiveAction(
 
     override fun update(e: AnActionEvent) {
         super.update(e)
-        e.presentation.isEnabled = list.selectedValue != null
+        e.presentation.isEnabled = selectedGroup() != null
     }
 
     override fun isSelected(e: AnActionEvent): Boolean {
-        val selected = list.selectedValue ?: return false
+        val selected = selectedGroup() ?: return false
         return selected.id == service.activeGroupId()
     }
 
@@ -337,7 +595,7 @@ private class ToggleActiveAction(
     // what toggleActiveGroup recomputes — and going through that one helper is what keeps the
     // licence gate (and the change notification) identical to the tab popup's route.
     override fun setSelected(e: AnActionEvent, state: Boolean) {
-        val group = list.selectedValue ?: return
+        val group = selectedGroup() ?: return
         toggleActiveGroup(project, group, service)
     }
 }
@@ -346,37 +604,39 @@ private class ToggleActiveAction(
  * Presented as Hide/Show, not Collapse/Expand: the action closes a group's tabs and reopens them,
  * with nothing left behind in their place, so the eye pair is what users read it as. The model
  * keeps saying `collapsed` — that name is persisted state and is not worth churning for wording.
+ *
+ * Not to be confused with *expanding a tree row*, which shows a group's files and touches no tabs.
  */
-private class ToggleCollapseAction(project: Project, service: TabGroupService, list: JBList<TabGroup>) :
-    SelectionAction("Hide Group", PrismTabsIcons.Hide, project, service, list) {
+private class ToggleCollapseAction(project: Project, service: TabGroupService, selectedGroup: () -> TabGroup?) :
+    SelectionAction("Hide Group", PrismTabsIcons.Hide, project, service, selectedGroup) {
 
     override fun update(e: AnActionEvent) {
         super.update(e)
-        val collapsed = list.selectedValue?.collapsed == true
+        val collapsed = selectedGroup()?.collapsed == true
         e.presentation.text = if (collapsed) "Show Group" else "Hide Group"
         e.presentation.icon = if (collapsed) PrismTabsIcons.Show else PrismTabsIcons.Hide
     }
 
     override fun actionPerformed(e: AnActionEvent) {
-        val group = list.selectedValue ?: return
+        val group = selectedGroup() ?: return
         toggleCollapse(project, service, group)
     }
 }
 
-private class RenameAction(project: Project, service: TabGroupService, list: JBList<TabGroup>) :
-    SelectionAction("Rename…", AllIcons.Actions.Edit, project, service, list) {
+private class RenameAction(project: Project, service: TabGroupService, selectedGroup: () -> TabGroup?) :
+    SelectionAction("Rename…", AllIcons.Actions.Edit, project, service, selectedGroup) {
 
     override fun actionPerformed(e: AnActionEvent) {
-        val group = list.selectedValue ?: return
+        val group = selectedGroup() ?: return
         promptForRenameAndApply(project, group, service)
     }
 }
 
-private class RecolorAction(project: Project, service: TabGroupService, list: JBList<TabGroup>) :
-    SelectionAction("Recolour…", AllIcons.Actions.Colors, project, service, list) {
+private class RecolorAction(project: Project, service: TabGroupService, selectedGroup: () -> TabGroup?) :
+    SelectionAction("Recolour…", AllIcons.Actions.Colors, project, service, selectedGroup) {
 
     override fun actionPerformed(e: AnActionEvent) {
-        val group = list.selectedValue ?: return
+        val group = selectedGroup() ?: return
         JBPopupFactory.getInstance().createListPopup(RecolorStep(project, group, service)).showInBestPositionFor(e.dataContext)
     }
 }
@@ -386,11 +646,11 @@ private class RecolorAction(project: Project, service: TabGroupService, list: JB
  * classic and the new UI (`expui/general/delete.svg`). `General.Remove`, which this used to carry,
  * is a minus sign — the icon for taking a row out of a list, not for destroying what it points at.
  */
-private class DeleteAction(project: Project, service: TabGroupService, list: JBList<TabGroup>) :
-    SelectionAction("Delete Group", AllIcons.Actions.GC, project, service, list) {
+private class DeleteAction(project: Project, service: TabGroupService, selectedGroup: () -> TabGroup?) :
+    SelectionAction("Delete Group", AllIcons.Actions.GC, project, service, selectedGroup) {
 
     override fun actionPerformed(e: AnActionEvent) {
-        val group = list.selectedValue ?: return
+        val group = selectedGroup() ?: return
         confirmAndDelete(project, group, service)
     }
 }
@@ -398,7 +658,7 @@ private class DeleteAction(project: Project, service: TabGroupService, list: JBL
 /**
  * The single place collapse/expand is driven from — the toolbar action, the context menu and the
  * double-click shortcut all land here — so it carries the paid-feature gate itself rather than
- * relying on the locked panel simply not showing the list. The one deliberate way past it is the
+ * relying on the locked panel simply not showing the tree. The one deliberate way past it is the
  * locked panel's own "reopen the tabs" escape hatch, which calls [TabGroupCollapse.expand] direct.
  */
 private fun toggleCollapse(project: Project, service: TabGroupService, group: TabGroup) {

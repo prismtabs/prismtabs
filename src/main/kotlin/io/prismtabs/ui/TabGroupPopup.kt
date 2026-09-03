@@ -18,6 +18,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.JBColor
+import com.intellij.ui.SimpleColoredComponent
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.popup.list.ListPopupImpl
 import com.intellij.ui.popup.list.PopupListElementRenderer
@@ -549,26 +550,46 @@ private class MemberFileRenderer : ColoredListCellRenderer<MemberFile>() {
         hasFocus: Boolean,
     ) {
         icon = value.icon
-        val row = value.row
-        append(
-            row.name,
-            if (row.missing) SimpleTextAttributes.ERROR_ATTRIBUTES else SimpleTextAttributes.REGULAR_ATTRIBUTES,
-        )
-        if (row.directory.isNotEmpty()) {
-            append("  ${shortenedDirectory(row.directory)}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
-        }
-        if (row.missing) append("  ·  missing", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+        appendMemberFile(value.row, SimpleTextAttributes.REGULAR_ATTRIBUTES)
     }
 }
 
 /**
- * Choosing a row: open the file, or — when it is no longer there — offer to unassign it.
+ * Paints one member file row — name, greyed directory, and the "missing" suffix — onto whichever
+ * [SimpleColoredComponent] is asking.
  *
- * The URL is re-resolved rather than trusting the row's own `missing` flag: the chooser is a live
- * window and a file can be deleted while it is open. A row that was fine and is now gone lands on
- * the same prompt as one that was already missing when the list was built.
+ * Shared rather than written twice: the tool window's tree (Phase 6a) renders the same rows this
+ * chooser does, and two copies of the row shape would drift the moment either surface changed. It
+ * hangs off [SimpleColoredComponent] because that is the one base class [ColoredListCellRenderer]
+ * and [com.intellij.ui.ColoredTreeCellRenderer] have in common.
+ *
+ * [nameAttributes] is the caller's choice for a file that is *present* — the tree emphasises the
+ * members whose tab is currently open, this chooser does not — while a missing file overrides it
+ * with the platform's error attributes either way.
  */
-private fun chooseMemberFile(
+internal fun SimpleColoredComponent.appendMemberFile(
+    row: MemberFileRow,
+    nameAttributes: SimpleTextAttributes,
+) {
+    append(row.name, if (row.missing) SimpleTextAttributes.ERROR_ATTRIBUTES else nameAttributes)
+    if (row.directory.isNotEmpty()) {
+        append("  ${shortenedDirectory(row.directory)}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+    }
+    if (row.missing) append("  ·  missing", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+}
+
+/**
+ * Activating a member row: open the file, or — when it is no longer there — offer to unassign it.
+ *
+ * The URL is re-resolved rather than trusting the row's own `missing` flag: both surfaces that call
+ * this are live windows and a file can be deleted while one of them is showing. A row that was fine
+ * and is now gone lands on the same prompt as one that was already missing when the list was built.
+ *
+ * `internal`, not `private`: the tool window's tree (Phase 6a) activates a file row through here
+ * too, so double-clicking a member in the tree and choosing one in this popup's chooser behave
+ * identically — including the missing-file prompt, which is the half that is easy to forget.
+ */
+internal fun chooseMemberFile(
     project: Project,
     group: TabGroup,
     service: TabGroupService,

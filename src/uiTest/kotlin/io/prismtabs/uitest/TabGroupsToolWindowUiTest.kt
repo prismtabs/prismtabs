@@ -11,10 +11,11 @@ import org.junit.jupiter.api.extension.ExtendWith
 import java.time.Duration.ofSeconds
 
 /**
- * Phase 4, end-to-end against a real sandbox IDE — see README "UI testing" for how to launch
- * `runIdeForUiTests` first. Covers the plan's stated acceptance criterion verbatim: collapse a
- * group, see its tabs leave the strip while the group stays listed in the tool window, then expand
- * and see the tabs return in order.
+ * Phases 4 and 6a, end-to-end against a real sandbox IDE — see README "UI testing" for how to
+ * launch `runIdeForUiTests` first. Covers both phases' stated acceptance criteria verbatim:
+ * collapse a group, see its tabs leave the strip while the group stays listed in the tool window,
+ * then expand and see the tabs return in order; and expand a group *row* to the files it holds,
+ * with every tab closed, and open one from there.
  */
 @ExtendWith(RemoteRobotExtension::class)
 class TabGroupsToolWindowUiTest {
@@ -80,7 +81,7 @@ class TabGroupsToolWindowUiTest {
     /**
      * The context menu must act on the row the user right-clicked, whatever was selected before —
      * the regression guarded here is a menu that comes up entirely greyed out, which is what
-     * happens when a right-click doesn't move the list's selection (Swing moves it for the left
+     * happens when a right-click doesn't move the tree's selection (Swing moves it for the left
      * button only) and nothing is selected. Deleting a group is the everyday way into that state:
      * the deleted row was the selected one.
      *
@@ -98,17 +99,17 @@ class TabGroupsToolWindowUiTest {
                 assignFileToNewGroup("Second.kt", "RightClickB")
                 waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().size == 2 }
 
-                // Nothing has ever been selected in this list, so this is the plain form of the bug.
-                val list = remoteRobot.toolWindowGroupList()
-                assertTrue(list.collectSelectedItems().isEmpty(), "precondition: the list starts with no selection")
-                list.findText("RightClickA").rightClick()
+                // Nothing has ever been selected in this tree, so this is the plain form of the bug.
+                val tree = remoteRobot.toolWindowGroupTree()
+                assertTrue(tree.collectSelectedPaths().isEmpty(), "precondition: the tree starts with no selection")
+                tree.findText("RightClickA").rightClick()
                 assertTrue(
                     remoteRobot.contextMenuItemStates().all { it.endsWith("=true") },
                     "a right-click on a row must enable that row's actions, got ${remoteRobot.contextMenuItemStates()}",
                 )
                 assertTrue(
-                    remoteRobot.toolWindowGroupList().collectSelectedItems().any { it.contains("RightClickA") },
-                    "the right-clicked row must be the selected one, got ${remoteRobot.toolWindowGroupList().collectSelectedItems()}",
+                    remoteRobot.selectedToolWindowRows().any { it.contains("RightClickA") },
+                    "the right-clicked row must be the selected one, got ${remoteRobot.selectedToolWindowRows()}",
                 )
                 // The wording the menu offers, asserted where it is actually rendered: the toggle
                 // reads Hide/Show, not the model's Collapse/Expand, and a visible group offers Hide.
@@ -124,12 +125,12 @@ class TabGroupsToolWindowUiTest {
                 }
                 waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().size == 1 }
                 assertTrue(
-                    remoteRobot.toolWindowGroupList().collectSelectedItems().any { it.contains("RightClickB") },
+                    remoteRobot.selectedToolWindowRows().any { it.contains("RightClickB") },
                     "deleting the selected group must leave the surviving row selected, not an empty selection",
                 )
 
                 // ...and the very next right-click, with no left-click to revive the panel first.
-                remoteRobot.toolWindowGroupList().findText("RightClickB").rightClick()
+                remoteRobot.toolWindowGroupTree().findText("RightClickB").rightClick()
                 assertTrue(
                     remoteRobot.contextMenuItemStates().all { it.endsWith("=true") },
                     "the menu must be live straight after a delete, got ${remoteRobot.contextMenuItemStates()}",
@@ -157,7 +158,7 @@ class TabGroupsToolWindowUiTest {
                 assignFileToNewGroup("Sample.kt", "StickyA")
                 waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().size == 1 }
 
-                remoteRobot.toolWindowGroupList().findText("StickyA").rightClick()
+                remoteRobot.toolWindowGroupTree().findText("StickyA").rightClick()
                 remoteRobot.actionMenuItem("Active Group").click()
                 waitFor(ofSeconds(10)) { activeGroupName() == "StickyA" }
                 assertTrue(
@@ -170,7 +171,7 @@ class TabGroupsToolWindowUiTest {
                 waitFor(ofSeconds(10)) { groupNameFor("Second.kt") == "StickyA" }
 
                 // The same item clears it — the toggle reads its state from the selected row.
-                remoteRobot.toolWindowGroupList().findText("StickyA").rightClick()
+                remoteRobot.toolWindowGroupTree().findText("StickyA").rightClick()
                 remoteRobot.actionMenuItem("Active Group").click()
                 waitFor(ofSeconds(10)) { activeGroupName() == null }
                 assertTrue(
@@ -178,6 +179,83 @@ class TabGroupsToolWindowUiTest {
                     "clearing must drop the row's suffix, got ${remoteRobot.toolWindowGroupRows()}",
                 )
             } finally {
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
+     * Phase 6a's acceptance criterion, driven as the plan states it: a group's members are files,
+     * and the tool window has to say which — *especially* once none of them is open, which is the
+     * case the tab strip cannot answer at all.
+     *
+     * Four things at once, because they only make sense together: the group row expands to its
+     * members; the members are still listed with every tab closed; double-clicking a member opens
+     * it; and double-clicking the *group* row still hides the group rather than opening anything —
+     * the one binding Phase 6a had to keep from leaking onto the new child rows. The last assertion
+     * is the expansion-state guard: hiding republishes a change, `refresh()` swaps the model
+     * wholesale, and an expanded group that collapsed itself under the user at that moment was the
+     * failure mode the plan called out by name.
+     */
+    @Test
+    fun `a group row expands to its files, which stay listed with every tab closed`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                assignFileToNewGroup("Sample.kt", "Members")
+                addFileToGroup("Second.kt", "Members")
+                waitFor(ofSeconds(10)) {
+                    remoteRobot.toolWindowGroupRows().any { it.contains("Members") && it.contains("2 files") }
+                }
+
+                // The whole point of the phase: close every tab, so the strip can no longer answer
+                // "what is in this group?", and ask the tool window instead.
+                closeAllEditors()
+                waitFor(ofSeconds(10)) { openTabNames().isEmpty() }
+
+                val members = remoteRobot.toolWindowMemberRows("Members")
+                assertEquals(
+                    listOf("Sample.kt", "Second.kt"),
+                    members.map { it.trim().substringBefore("  ") },
+                    "expected the group to expand to its two members by name, got $members",
+                )
+
+                // The toolbar and the context menu act on "the selected group, or the selected
+                // file's parent group": without that second half, selecting a child row — the
+                // ordinary way to use this tree — would grey out every action in the window.
+                remoteRobot.toolWindowGroupTree().findText("Sample.kt").rightClick()
+                assertTrue(
+                    remoteRobot.contextMenuItemStates().all { it.endsWith("=true") },
+                    "a right-click on a member row must enable its group's actions, got ${remoteRobot.contextMenuItemStates()}",
+                )
+                assertTrue(
+                    remoteRobot.contextMenuItemStates().any { it.startsWith("Hide Group=") },
+                    "and they must be the parent group's, got ${remoteRobot.contextMenuItemStates()}",
+                )
+                Keyboard(remoteRobot).escape()
+
+                // Double-click on a member row opens it — the free popup's "Files…" behaviour, here.
+                remoteRobot.toolWindowGroupTree().doubleClickRowWithText("Second.kt", false)
+                waitFor(ofSeconds(10)) { openTabNames() == listOf("Second.kt") }
+
+                // ...while double-click on the *group* row still means Hide Group.
+                remoteRobot.toolWindowGroupTree().doubleClickRowWithText("Members", false)
+                waitFor(ofSeconds(10)) { openTabNames().isEmpty() }
+                assertTrue(
+                    remoteRobot.toolWindowGroupRows().any { it.contains("Members") && it.contains("hidden") },
+                    "double-clicking a group row must hide it, got ${remoteRobot.toolWindowGroupRows()}",
+                )
+                assertTrue(
+                    remoteRobot.toolWindowGroupRows().any { it.contains("Sample.kt") },
+                    "hiding must not collapse the tree row the user had open, got ${remoteRobot.toolWindowGroupRows()}",
+                )
+            } finally {
+                // Hidden groups keep their tabs closed, so unhide before leaving: the next test
+                // starts from resetTabGroups, but a stray collapsed group would still be holding
+                // this one's members shut if that ever changed.
+                setGroupCollapsed("Members", collapsed = false)
                 hideTabGroupsToolWindow()
             }
         }

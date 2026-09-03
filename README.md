@@ -506,7 +506,10 @@ group and reopens each via `openFile(file, focusEditor = false)`, in the same or
 + `DumbAware`, registered `anchor="right"`) is the plan's stated substitute for Chrome's in-strip
 chip: a `JBList<TabGroup>` showing each group's swatch, name, member count and — new this phase — a
 "hidden" (and "active") suffix, with a toolbar (and matching context menu) for Active Group,
-Hide/Show Group, Rename…, Recolour…, and Delete Group. Rename, Recolour and Delete don't duplicate `TabGroupPopup`'s logic —
+Hide/Show Group, Rename…, Recolour…, and Delete Group. (Phase 6a later turned that list into a tree
+whose group rows expand to their member files — see
+[Group membership](#the-same-answer-in-the-tool-window-as-a-tree) — but the row shape, the toolbar
+and everything below are unchanged by it.) Rename, Recolour and Delete don't duplicate `TabGroupPopup`'s logic —
 `promptForRenameAndApply`, `confirmAndDelete` and `RecolorStep` were widened from `private` to
 `internal` and are invoked directly from here.
 
@@ -861,8 +864,50 @@ are plain functions with no platform harness behind them
 end-to-end in [`TabGroupPopupUiTest`](src/uiTest/kotlin/io/prismtabs/uitest/TabGroupPopupUiTest.kt):
 three members with only one tab open, listed and opened by name; a fabricated stale assignment
 listed as missing, unassigned from the dialog, and confirmed gone by re-opening the list; and an
-emptied group offering no `Files…` at all. The tool window growing the same list as a tree (Phase
-6a) is not done — see the plan's Phase 6 section.
+emptied group offering no `Files…` at all.
+
+### The same answer in the tool window, as a tree
+
+Subscribers get it as browsable furniture rather than a popup they have to go and ask for: the
+PrismTabs tool window's flat list of groups became a **two-level tree**, each group row expanding to
+one child per member file. A container you expand to see its contents is the platform's own idiom
+for this question — Bookmarks, Changes and the Project view all answer it that way.
+
+Child rows are the popup chooser's rows, literally: one `appendMemberFile` paints both, so the two
+surfaces cannot drift apart on icon, name, greyed directory or the "missing" suffix. What the tree
+adds is one distinction the popup has no use for — **a member whose tab is currently open is drawn
+in bold**. The closed ones are the whole reason the tree exists, so they keep full regular weight;
+greying them, the only other obvious reading, would say *disabled* about exactly the rows the user
+came here to find. Checked against the rendered tree in a sandbox IDE rather than picked off a
+palette, the way `CAPTION_BOTTOM_GAP` was measured.
+
+Four smaller decisions the tree forced, each with a reason:
+
+- **Double-click still means Hide/Show on a group row**, and opens the file on a child row. Since a
+  tree's own double-click is expand-toggle, that would be one gesture doing two things at once — so
+  the tree is built with `toggleClickCount = 0` and expanding stays on the handle, the arrow keys
+  and Enter. Enter is deliberately *not* hide/show: it is what a keyboard user presses while
+  arrowing down a tree to look inside a row.
+- **The five toolbar actions read "the selected group, or the selected file's parent group."** They
+  used to read `list.selectedValue`, which would have greyed the whole toolbar out the moment a
+  child row was selected — the ordinary way to use the tree.
+- **Expansion and selection survive every refresh.** A change notification says only "something
+  changed", so `refresh()` swaps the model wholesale; both pieces of view state Swing throws away
+  with the nodes are captured before and restored after, or expanding a group and then recolouring
+  it would collapse the thing you were looking at.
+- **The selected file row is published into the `DataContext`** (`VIRTUAL_FILE`,
+  `VIRTUAL_FILE_ARRAY`, `NAVIGATABLE`), so F4, Select in Project View and Copy Path work without
+  being reimplemented. A group row publishes nothing: it has no single file, and answering with all
+  of its members would quietly point file-wide actions at a whole group.
+
+The tree also refreshes on editor open/close, which no group change does — a row that stayed bold
+after its tab closed would be wrong about the one thing this window exists to report.
+
+Driven end-to-end in
+[`TabGroupsToolWindowUiTest`](src/uiTest/kotlin/io/prismtabs/uitest/TabGroupsToolWindowUiTest.kt):
+a group expanded to its two members with every tab closed, a right-click on a *child* row leaving
+its parent group's actions all enabled, a double-click opening the member, and a double-click on the
+group row hiding it — with the expansion still standing afterwards.
 
 ## Empty groups
 
