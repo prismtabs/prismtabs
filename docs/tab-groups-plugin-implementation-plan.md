@@ -279,6 +279,26 @@ it is the platform's own idiom for this question rather than an invention.
   suppresses the menu off-selection, which is the opposite trade from what this window needs.
 - `TabGroupsToolWindowUiTest` asserts list behaviour throughout and has to move with this.
 
+  **Delivered** as written, in `TabGroupsToolWindow.kt`. `JBList<TabGroup>` is now a
+  `com.intellij.ui.treeStructure.Tree` over a `DefaultTreeModel` with an invisible root; `GroupNode`
+  keeps the old row shape (swatch, name, `N files`, `hidden`/`active`) and each holds one
+  `MemberNode` per member. Child rows are the popup's own rows — `appendMemberFile`, shared between
+  `ColoredListCellRenderer` and `ColoredTreeCellRenderer` via their common `SimpleColoredComponent`
+  — plus the open/closed distinction, which is **bold for a member whose tab is open** and full
+  regular weight for one that is closed, checked against the rendered tree in a sandbox rather than
+  picked off a palette. Double-click stays hide/show on a group row and opens a file row, with
+  `toggleClickCount = 0` keeping it off the tree's own expand toggle; Enter expands a group row and
+  opens a file row. The five actions take a `() -> TabGroup?` supplier resolving "the selected
+  group, or the selected file's parent group". `refresh()` captures the expanded group ids and the
+  selection (group id plus member URL) before the wholesale model swap and restores both after, and
+  now also runs on `FileEditorManagerListener` open/close, since nothing else would correct a row
+  left bold after its tab closed. `uiDataSnapshot` publishes the selected *file* row only. The
+  context menu is the tree form of `installRowSelectingPopupMenu`, keeping the same trade for the
+  same reason — `getPathForLocation` returning null off-row replaces the list version's manual
+  bounds check. `TreeSpeedSearch.installOn(tree, canExpand = true, …)` searches into collapsed
+  groups, which is where the file you are looking for is. See the README's "The same answer in the
+  tool window, as a tree".
+
 **6b. `Files…` in the tab popup** (free). `GroupActionsStep` gains it as the first item, with a bare
 separator below it so reading is visually separated from mutating.
 
@@ -315,11 +335,14 @@ browsable — not the membership data itself.
 One line to hold: opening a *single* member from the free popup stays free, but do **not** add "Open
 All Files in Group" there. That is `expand` under another name, and expand is paid.
 
-- **Acceptance:** assign three files to "Auth", close all three tabs, restart the IDE. Right-click
-  any tab → `Tab Group…` → `Manage Groups…` → Auth → `Files…` lists all three by name with their
-  directories; Enter on one opens it. Subscribed, the tool window lists Auth as `3 files`, expands
-  to the same three, opens one on double-click, and still hides the group on double-clicking its own
-  row.
+- **Acceptance: passed.** Assign three files to "Auth", close all three tabs, restart the IDE.
+  Right-click any tab → `Tab Group…` → `Manage Groups…` → Auth → `Files…` lists all three by name
+  with their directories; Enter on one opens it. Subscribed, the tool window lists Auth as
+  `3 files`, expands to the same three, opens one on double-click, and still hides the group on
+  double-clicking its own row. Verified live in `runIdeForUiTests` — `TabGroupPopupUiTest`'s three
+  6b cases and `TabGroupsToolWindowUiTest`'s `a group row expands to its files, which stay listed
+  with every tab closed` — with the whole suite green (31 tests, 28 run, 3 self-skipped) and
+  `verifyPlugin` "Compatible" on all eight IDEs.
 
 #### Rejected: a file list nested inside the popup tree
 
@@ -361,9 +384,22 @@ recorded as what it would have to answer for. Not part of this phase.
 
 #### [VERIFY] before writing Phase 6
 
-- Which data-provider interface 2024.2 wants for the tree (`UiDataProvider` vs the older
-  `DataProvider`) — it changed around this baseline, and the plugin compiles against the floor.
-- The tree expansion-state helpers (`TreeState` / `TreeUtil`) that survive a wholesale model swap.
+- ~~Which data-provider interface 2024.2 wants for the tree (`UiDataProvider` vs the older
+  `DataProvider`).~~ **Checked while writing 6a:** 2024.2 already has
+  `UiDataProvider.uiDataSnapshot(DataSink)` and `DataSink`'s `set`/`setNull`/`lazy`, and — the part
+  that settled it — `SimpleToolWindowPanel` itself implements `UiCompatibleDataProvider` (which
+  extends both `UiDataProvider` and the older `DataProvider`) and already declares
+  `uiDataSnapshot`. So the panel overrides that one method and calls `super`; no `getData(String)`
+  anywhere, and nothing to guard for the floor.
+- ~~The tree expansion-state helpers (`TreeState` / `TreeUtil`) that survive a wholesale model
+  swap.~~ **Checked while writing 6a:** both exist on the floor — `TreeState.createOn(JTree)` /
+  `applyTo(JTree)`, and `TreeUtil.collectExpandedPaths` / `restoreExpandedPaths` /
+  `expandPaths` — but neither is used. `TreeState` identifies nodes through its own
+  `calcId`/`calcType`, which is built for `NodeDescriptor`-based trees and falls back to `toString`
+  otherwise, and `TreeUtil`'s pair round-trips `TreePath`s whose node objects the swap has just
+  thrown away. Recording the expanded groups' **ids** and re-expanding by id after the rebuild is
+  both exact and shorter than either, and it is the same key `refresh()` already uses to restore the
+  selection.
 - ~~`JBPopupFactory.createPopupChooserBuilder`'s renderer / speed-search / item-chosen methods as
   they exist in 2024.2.~~ **Checked while writing 6b:** `createPopupChooserBuilder(List)` returns an
   `IPopupChooserBuilder` carrying `setTitle` / `setRenderer(ListCellRenderer)` /

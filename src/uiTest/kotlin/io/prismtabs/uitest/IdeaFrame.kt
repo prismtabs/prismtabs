@@ -5,9 +5,11 @@ import com.intellij.remoterobot.data.RemoteComponent
 import com.intellij.remoterobot.fixtures.CommonContainerFixture
 import com.intellij.remoterobot.fixtures.ComponentFixture
 import com.intellij.remoterobot.fixtures.DefaultXpath
-import com.intellij.remoterobot.fixtures.JListFixture
+import com.intellij.remoterobot.fixtures.JTreeFixture
 import com.intellij.remoterobot.search.locators.byXpath
+import com.intellij.remoterobot.utils.Keyboard
 import com.intellij.remoterobot.utils.waitFor
+import java.awt.event.KeyEvent
 import java.time.Duration
 
 fun RemoteRobot.idea(function: IdeaFrame.() -> Unit) {
@@ -1148,14 +1150,62 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
 }
 
 /**
- * The "PrismTabs" tool-window list itself, for the tests that need more of it than
+ * The "PrismTabs" tool-window tree itself, for the tests that need more of it than
  * [toolWindowGroupRows]' rendered rows — its live selection, or a right-click on one row. Opens the
  * tool window first if it isn't already showing, exactly as [toolWindowGroupRows] does.
  */
-fun RemoteRobot.toolWindowGroupList(): JListFixture {
+fun RemoteRobot.toolWindowGroupTree(): JTreeFixture {
     toolWindowGroupRows()
-    return findAll<JListFixture>(byXpath("//div[@class='JBList']")).last()
+    return find(byXpath(GROUP_TREE_XPATH))
 }
+
+/**
+ * Expands [groupName]'s row, if it isn't already, and returns the tree's visible rows once its
+ * children are showing. Only meaningful for a group that *has* members — an empty one never grows
+ * children and would simply time out here.
+ *
+ * Driven as a user would: select the row, then press Right — the tree's own expand key. Not
+ * `JTreeFixture.expand`, whose path matching is against the *rendered* row text, which here carries
+ * the member count and the "hidden"/"active" suffixes and so is not a stable path segment. Not a
+ * double-click either: on a group row that is Hide Group, which closes the very tabs the test is
+ * about (see `TabGroupsToolWindow`'s `toggleClickCount = 0`).
+ */
+fun RemoteRobot.expandToolWindowGroup(groupName: String): List<String> {
+    val tree = toolWindowGroupTree()
+    if (memberRowsIn(tree.collectRows(), groupName).isNotEmpty()) return tree.collectRows()
+    tree.clickRowWithText(groupName, false)
+    Keyboard(this).key(KeyEvent.VK_RIGHT)
+    waitFor(Duration.ofSeconds(10)) { memberRowsIn(tree.collectRows(), groupName).isNotEmpty() }
+    return tree.collectRows()
+}
+
+/**
+ * The rendered text of every selected row, flattened out of `collectSelectedPaths`' root-to-node
+ * paths — the tree's answer to the list fixture's `collectSelectedItems`, which this window's
+ * assertions used before Phase 6a made it a tree.
+ */
+fun RemoteRobot.selectedToolWindowRows(): List<String> = toolWindowGroupTree().collectSelectedPaths().flatten()
+
+/**
+ * The rows under [groupName] once it is expanded — the group's member files, as rendered. Sliced
+ * out of the whole tree rather than read off the node, because a rendered row is what this phase is
+ * actually about: name, greyed directory, and any "missing" suffix.
+ */
+fun RemoteRobot.toolWindowMemberRows(groupName: String): List<String> =
+    memberRowsIn(expandToolWindowGroup(groupName), groupName)
+
+/**
+ * [groupName]'s children within [rows]: everything after its row up to the next *group* row, or the
+ * end of the tree.
+ */
+private fun memberRowsIn(rows: List<String>, groupName: String): List<String> {
+    val start = rows.indexOfFirst { it.startsWith(groupName) }
+    if (start < 0) return emptyList()
+    return rows.drop(start + 1).takeWhile { !isGroupRow(it) }
+}
+
+/** Group rows carry the "N files" count this plugin paints; member rows never do. */
+private fun isGroupRow(row: String): Boolean = Regex("""\s\d+ files?(\s|$)""").containsMatchIn(row)
 
 /**
  * Every item of the context menu that is open right now, as `"text=enabled"` — the reading that
@@ -1171,19 +1221,27 @@ fun RemoteRobot.contextMenuItemStates(): List<String> {
 }
 
 /**
- * The "PrismTabs" tool-window list rows, as rendered — colour dot aside, this is the group name,
- * member count and any "hidden" suffix that [io.prismtabs.ui.TabGroupsToolWindow] paints. Opens
- * the tool window via its stripe button first if it isn't already showing. Unscoped
- * ([RemoteRobot.find], not [IdeaFrame]'s subtree-scoped find) for the stripe button only; the list
- * itself lives inside the frame.
+ * The "PrismTabs" tool-window tree's visible rows, as rendered — colour dot aside, a group row is
+ * its name, member count and any "hidden"/"active" suffix, and (once expanded) a member row is its
+ * file name plus greyed directory. Opens the tool window via its stripe button first if it isn't
+ * already showing. Unscoped ([RemoteRobot.find], not [IdeaFrame]'s subtree-scoped find) for the
+ * stripe button only; the tree itself lives inside the frame.
  */
 fun RemoteRobot.toolWindowGroupRows(): List<String> {
     val stripe = findAll<ComponentFixture>(
         byXpath("//div[@accessiblename='PrismTabs' and @class='SquareStripeButton']"),
     )
-    if (findAll<JListFixture>(byXpath("//div[@class='JBList']")).isEmpty()) {
+    if (findAll<JTreeFixture>(byXpath(GROUP_TREE_XPATH)).isEmpty()) {
         stripe.firstOrNull()?.click()
     }
-    waitFor(Duration.ofSeconds(10)) { findAll<JListFixture>(byXpath("//div[@class='JBList']")).isNotEmpty() }
-    return findAll<JListFixture>(byXpath("//div[@class='JBList']")).last().collectItems()
+    waitFor(Duration.ofSeconds(10)) { findAll<JTreeFixture>(byXpath(GROUP_TREE_XPATH)).isNotEmpty() }
+    return find<JTreeFixture>(byXpath(GROUP_TREE_XPATH)).collectRows()
 }
+
+/**
+ * Locates the tool window's group tree by the `Component.name` the panel sets on it
+ * (`io.prismtabs.ui.GROUP_TREE_NAME`) rather than by type: the IDE frame holds several other trees,
+ * the Project view's among them, and a by-type locator is a coin toss between them. Keep the
+ * literal in step with the source constant.
+ */
+private const val GROUP_TREE_XPATH = "//div[@name='PrismTabs.GroupTree']"

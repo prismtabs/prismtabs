@@ -130,8 +130,9 @@ generated and is now set as the `PUBLISH_TOKEN` repo secret (closes item 3). Acc
 
 **Current state (2026-09-02):** copy and metadata are done. The two tool-window screenshots
 (`02-tool-window-and-tabs-dark.png`, `04-tool-window-and-tabs-light.png`) were re-shot on
-2026-09-02: both now show the new pin icon in the stripe and the "Backend 1 tab · active"
-active-group marker, so the listing reflects the shipped UI. The drafting is captured in
+2026-09-02: both show the pin icon in the stripe and the "Backend 1 tab · active" active-group
+marker. They have since fallen behind the shipped UI twice over — see the screenshot bullet under
+"To close". The drafting is captured in
 [`marketplace-listing.md`](marketplace-listing.md) — tagline, description, change notes, Technical
 Information link values, and tags — so the upload step (item 5) is a paste job. What changed this
 pass:
@@ -162,10 +163,14 @@ pass:
   order: `01-swatch-popup-and-tabs-dark.png`, `02-tool-window-and-tabs-dark.png`,
   `03-palette-settings-dark.png`, `04-tool-window-and-tabs-light.png`. The two tool-window shots
   (`02-…` and `04-…`) were re-shot 2026-09-02 for the pin icon and active-group marker.
-  **They need one more re-shoot before upload:** the row's member count now reads "1 file" /
-  "3 files" rather than "1 tab" / "3 tabs" (a group's members are files, and a group whose tabs are
-  all closed still has them), so both shots show wording the plugin no longer produces. Nothing
-  else about them has changed.
+  **They need one more re-shoot before upload,** and the window has changed twice since:
+  the row's member count now reads "1 file" / "3 files" rather than "1 tab" / "3 tabs" (a group's
+  members are files, and a group whose tabs are all closed still has them), and Phase 6a turned the
+  flat list into a tree whose group rows expand to their member files. Shoot the replacements with
+  one group **expanded** — that expansion is the window's headline now, and a shot of collapsed
+  rows alone would undersell it and still show the old shape. Consider a fifth shot of the free
+  `Files…` chooser while you are at it: membership visibility is a free-tier headline and nothing in
+  the listing shows it.
 
 ## ~~7. Choose and prepare a License/EULA for the paid listing — closed~~
 
