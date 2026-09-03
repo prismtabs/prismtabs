@@ -81,6 +81,31 @@ class TabGroupPopupUiTest {
         }
     }
 
+    /**
+     * The popup names the group the right-clicked file is already in — the only place it says so,
+     * since "Remove from Group" announces that the file is assigned without naming what to.
+     *
+     * Read off the separator captions rather than the popup's rows, because that is what the label
+     * is: asserting on item text would pass just as happily if the name turned up as an *item*,
+     * which is exactly what "Add to Group…"'s substep lists one level down.
+     */
+    @Test
+    fun `the popup captions which group the file is already in`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            openFile("Sample.kt")
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Grey", name = "Auth")
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+
+            val captions = remoteRobot.popupSeparatorInsetsByCaption().map { it.first }
+            assertTrue(
+                captions.contains("In group: Auth"),
+                "expected the popup to caption the file's own group, got $captions",
+            )
+        }
+    }
+
     @Test
     fun `clicking a preset dot prompts for a name, pre-filled with the colour's label`(remoteRobot: RemoteRobot) {
         remoteRobot.idea {

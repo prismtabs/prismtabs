@@ -42,7 +42,7 @@ class TabGroupsToolWindowUiTest {
                 // The tool window lists the group with its member count before anything collapses.
                 waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().any { it.contains("CollapseMe") } }
                 assertTrue(
-                    remoteRobot.toolWindowGroupRows().any { it.contains("CollapseMe") && it.contains("2 tabs") },
+                    remoteRobot.toolWindowGroupRows().any { it.contains("CollapseMe") && it.contains("2 files") },
                     "expected the tool window to list CollapseMe with 2 members, got ${remoteRobot.toolWindowGroupRows()}",
                 )
 

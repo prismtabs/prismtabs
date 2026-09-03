@@ -235,24 +235,24 @@ class WindowsManualVerificationUiTest {
                 waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().any { it.contains("TeamWindows") } }
                 remoteRobot.saveScreenshot("06-tool-window-listing")
                 assertTrue(
-                    remoteRobot.toolWindowGroupRows().any { it.contains("TeamWindows") && it.contains("2 tabs") },
+                    remoteRobot.toolWindowGroupRows().any { it.contains("TeamWindows") && it.contains("2 files") },
                     "expected TeamWindows listed with 2 members, got ${remoteRobot.toolWindowGroupRows()}",
                 )
                 // The other half of "Keep": a declined group stays, and the tool window is where a
                 // user is told it is now empty rather than gone. README "Empty groups" promises
                 // exactly this row, and nothing else in the suite reads it.
                 assertTrue(
-                    remoteRobot.toolWindowGroupRows().any { it.contains("Blue") && it.contains("0 tabs") },
-                    "expected the kept, emptied Blue group listed with 0 tabs, got ${remoteRobot.toolWindowGroupRows()}",
+                    remoteRobot.toolWindowGroupRows().any { it.contains("Blue") && it.contains("0 files") },
+                    "expected the kept, emptied Blue group listed with 0 files, got ${remoteRobot.toolWindowGroupRows()}",
                 )
-                note("5b. The kept, emptied group is listed by the tool window as \"0 tabs\"")
+                note("5b. The kept, emptied group is listed by the tool window as \"0 files\"")
                 setGroupCollapsed("TeamWindows", collapsed = true)
                 waitFor(ofSeconds(10)) { !openTabNames().contains("Second.kt") }
                 assertTrue(remoteRobot.toolWindowGroupRows().any { it.contains("TeamWindows") && it.contains("hidden") })
                 remoteRobot.saveScreenshot("06b-tool-window-collapsed")
                 setGroupCollapsed("TeamWindows", collapsed = false)
                 waitFor(ofSeconds(10)) { openTabNames().containsAll(listOf("Second.kt", "Third.kt")) }
-                note("6. Tool window listed TeamWindows (2 tabs); collapse closed its tabs and marked it collapsed; expand reopened them")
+                note("6. Tool window listed TeamWindows (2 files); collapse closed its tabs and marked it collapsed; expand reopened them")
                 hideTabGroupsToolWindow()
 
                 // --- 7. Settings | Tools | PrismTabs ---------------------------------------
@@ -313,7 +313,7 @@ class WindowsManualVerificationUiTest {
                 // until the IDE closes. Nothing else checks an empty group round-trips through
                 // tabGroups.xml — it has no assignments to reconstruct it from.
                 assertTrue(
-                    remoteRobot.toolWindowGroupRows().any { it.contains("Blue") && it.contains("0 tabs") },
+                    remoteRobot.toolWindowGroupRows().any { it.contains("Blue") && it.contains("0 files") },
                     "expected the kept, emptied Blue group to survive the restart, got ${remoteRobot.toolWindowGroupRows()}",
                 )
                 hideTabGroupsToolWindow()
