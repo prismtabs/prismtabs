@@ -681,8 +681,10 @@ tier (below), not a frozen paid snapshot.
 punish a mid-task user who needs one more, which is exactly the "too limited" outcome to avoid:
 
 - **Free forever:** assigning tabs to the 8 preset colours, unlimited groups, create/rename/recolour
-  (Phase 1–3 core), persistence across restarts, and rename/move remapping — the last one is a
-  correctness feature (your assignments survive a rename), not a premium one, so it stays free.
+  (Phase 1–3 core), persistence across restarts, rename/move remapping, and listing a group's files
+  ("Files…", see [Group membership](#group-membership)) — the last two are correctness features
+  (your assignments survive a rename; what is in a group is knowable at all), not premium ones, so
+  they stay free.
 - **Paid** (active subscription, or during the 30-day trial): the PrismTabs tool window,
   collapse/expand, active/sticky-group auto-join on newly opened files (Phase 4's tool window +
   Phase 3's inheritance rule), and custom palette editing (Phase 5's settings page). These are the
@@ -800,6 +802,67 @@ Not applicable here: the "inform your users in advance" notice
 ([`inform-your-users-in-advance.html`](https://plugins.jetbrains.com/docs/marketplace/inform-your-users-in-advance.html))
 only applies when an *already-published free plugin* switches to paid. PrismTabs has never been
 published, so there are no existing free users to warn.
+
+## Group membership
+
+A group's members are **files**, and until Phase 6 nothing in the UI ever listed them.
+`membersOf` was called in exactly two places — to decide emptiness, and to render a count — so the
+only way to learn what was in a group was to look at which tabs happened to be tinted. Close a tab
+and its membership became unknowable. That landed hardest on the free tier, which can create and
+fill groups but has no tool window: a free user could colour a file, close it, and have no route
+back to where it went.
+
+"Manage Groups…" → a group → **`Files…`** answers it, and stays free. Membership visibility is a
+correctness feature, the same argument the free/paid split already makes for rename/move remapping:
+a free tier that can fill groups whose contents are unknowable is exactly the "too limited" outcome
+the feature-based split exists to avoid. The tool window's paid value is unaffected — it is
+hide/show, active-group auto-join, and being always-on and browsable, not the membership data
+itself. One line held deliberately: opening a *single* member from this list is free, but there is
+no "Open All Files in Group" here. That is `expand` under another name, and expand is paid.
+
+It opens a **fresh top-level chooser**, not a further nested `PopupStep` — the one shape the plan
+argued against at length. Nested, the file names would sit five popup windows deep from the
+right-click, each a separate window the mouse has to stay inside, which buries the most frequently
+asked question deepest; a menu is also a list of verbs, and rows that merely *say* something are a
+tooltip wearing a menu's clothes. Opened this way the visual depth stays at one window, and it gets
+a title bar (`Files in <name>`) and speed search for free. It is the same move the tool window's
+"Recolour…" action already makes with `RecolorStep`, one step further: a chooser rather than a
+menu, because these rows are files.
+
+Row shape follows every platform file list (Search Everywhere, Recent Files, Navigate | File,
+Bookmarks): file-type icon, **name**, then the project-relative directory in grey — never the full
+path as the primary text, which would make the popup as wide as the deepest package while burying
+the one part the eye is scanning for. Long directories are elided from the left with
+`StringUtil.shortenPathWithEllipsis`, keeping the segment the file actually lives in. The sort is
+explicit (directory, then name, case-insensitively): `membersOf` returns map iteration order, which
+is arbitrary after a `loadState`, and nothing depended on it until a list existed to show it as
+jumbled.
+
+### Members whose file is gone
+
+A member can outlive its file. Deleting one while the IDE is running fires a VFS event, and
+`TabGroupVfsListener` answers it by clearing the assignment — but a file deleted while the IDE is
+*closed* fires nothing, so `clearTree` never runs and the assignment survives, keeping its group
+non-empty (the plan's risk register has the row). This list is the first surface anywhere that
+makes that visible, so it is also the first that can offer the fix: the row is shown as **missing**
+rather than silently skipped — a list that hid it would leave the group looking fuller than it is —
+with the name in the platform's error attributes *and* the word "missing", since a selected row is
+repainted in the list's selection foreground and colour alone is not a reading to rely on. Choosing
+it asks whether to unassign, and unassigning can empty the group, which is `promptToDeleteEmptied`'s
+business exactly as everywhere else (see [Empty groups](#empty-groups)).
+
+`Files…` is offered only when the group has members, the same rule `RootStep` applies to "Manage
+Groups…" before any group exists: an empty group's file list would be a dead end, not an answer.
+
+The pure parts — the row's name/directory split, the sort, the elision and the prompt's wording —
+are plain functions with no platform harness behind them
+([`MemberFileRowsTest`](src/test/kotlin/io/prismtabs/ui/MemberFileRowsTest.kt)), the same trade
+`deleteConfirmationMessage` and `currentGroupCaption` already make. The chooser itself is driven
+end-to-end in [`TabGroupPopupUiTest`](src/uiTest/kotlin/io/prismtabs/uitest/TabGroupPopupUiTest.kt):
+three members with only one tab open, listed and opened by name; a fabricated stale assignment
+listed as missing, unassigned from the dialog, and confirmed gone by re-opening the list; and an
+emptied group offering no `Files…` at all. The tool window growing the same list as a tree (Phase
+6a) is not done — see the plan's Phase 6 section.
 
 ## Empty groups
 

@@ -1,11 +1,14 @@
 package io.prismtabs.ui
 
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.components.service
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.InputValidator
 import com.intellij.openapi.ui.MessageDialogBuilder
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.ListPopupStep
 import com.intellij.openapi.ui.popup.ListSeparator
 import com.intellij.openapi.ui.popup.PopupStep
@@ -13,7 +16,9 @@ import com.intellij.openapi.ui.popup.util.BaseListPopupStep
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.JBColor
+import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.popup.list.ListPopupImpl
 import com.intellij.ui.popup.list.PopupListElementRenderer
 import com.intellij.util.ui.JBUI
@@ -287,6 +292,7 @@ private class ManageGroupsStep(
 }
 
 private sealed class GroupAction {
+    data object Files : GroupAction()
     data object Rename : GroupAction()
     data object Recolor : GroupAction()
     data object ToggleActive : GroupAction()
@@ -294,23 +300,24 @@ private sealed class GroupAction {
 }
 
 /**
- * Per-group actions reached from [ManageGroupsStep]. Rename and Delete both pop a modal — same
- * [getFinalRunnable] deferral as [RootStep]'s preset click, for the same reason (avoid racing the
- * popup's close animation). Recolour instead opens [RecolorStep], a further list step with no
- * modal involved, so it can apply and repaint straight from `onChosen`.
+ * Per-group actions reached from [ManageGroupsStep]. "Files…", Rename and Delete all open a window
+ * of their own — same [getFinalRunnable] deferral as [RootStep]'s preset click, for the same reason
+ * (avoid racing the popup's close animation). Recolour instead opens [RecolorStep], a further list
+ * step with no separate window involved, so it can apply and repaint straight from `onChosen`.
+ *
+ * "Files…" leads the list, with a bare separator under it: everything below that divider *changes*
+ * the group, and reading what is in one should not sit among them.
  */
 private class GroupActionsStep(
     private val project: Project,
     private val group: TabGroup,
     private val service: TabGroupService,
-) : BaseListPopupStep<GroupAction>(
-    group.name,
-    listOf(GroupAction.Rename, GroupAction.Recolor, GroupAction.ToggleActive, GroupAction.Delete),
-) {
+) : BaseListPopupStep<GroupAction>(group.name, buildActions(group, service)) {
 
     private var finalRunnable: Runnable? = null
 
     override fun getTextFor(value: GroupAction): String = when (value) {
+        GroupAction.Files -> "Files…"
         GroupAction.Rename -> "Rename…"
         GroupAction.Recolor -> "Recolour…"
         GroupAction.ToggleActive ->
@@ -318,13 +325,23 @@ private class GroupActionsStep(
         GroupAction.Delete -> "Delete Group"
     }
 
-    override fun getSeparatorAbove(value: GroupAction): ListSeparator? =
-        if (value == GroupAction.Delete) ListSeparator() else null
+    override fun getSeparatorAbove(value: GroupAction): ListSeparator? = when (value) {
+        // Only when "Files…" is actually there to be separated from: an empty group has no file
+        // list to offer, and a divider above the first row would be the renderer's job to suppress
+        // rather than this step's to emit.
+        GroupAction.Rename -> if (values.firstOrNull() == GroupAction.Files) ListSeparator() else null
+        GroupAction.Delete -> ListSeparator()
+        else -> null
+    }
 
     override fun hasSubstep(value: GroupAction): Boolean = value == GroupAction.Recolor
 
     override fun onChosen(selectedValue: GroupAction, finalChoice: Boolean): PopupStep<*>? =
         when (selectedValue) {
+            GroupAction.Files -> {
+                finalRunnable = Runnable { showGroupFiles(project, group, service) }
+                PopupStep.FINAL_CHOICE
+            }
             GroupAction.Rename -> {
                 finalRunnable = Runnable { promptForRenameAndApply(project, group, service) }
                 PopupStep.FINAL_CHOICE
@@ -341,6 +358,23 @@ private class GroupActionsStep(
         }
 
     override fun getFinalRunnable(): Runnable? = finalRunnable
+
+    private companion object {
+        /**
+         * "Files…" is offered only when the group has members, the same way [RootStep] offers
+         * "Manage Groups…" only once a group exists: a group can legitimately sit empty (removing
+         * its last member offers to delete it, and the offer can be declined — see
+         * [promptToDeleteEmptied]), and an item whose whole content is "nothing" is a dead end, not
+         * an answer.
+         */
+        fun buildActions(group: TabGroup, service: TabGroupService): List<GroupAction> = buildList {
+            if (service.membersOf(group.id).isNotEmpty()) add(GroupAction.Files)
+            add(GroupAction.Rename)
+            add(GroupAction.Recolor)
+            add(GroupAction.ToggleActive)
+            add(GroupAction.Delete)
+        }
+    }
 }
 
 /**
@@ -366,6 +400,221 @@ internal class RecolorStep(
         return PopupStep.FINAL_CHOICE
     }
 }
+
+/**
+ * "Files…"'s window: every file assigned to [group], by name, with the directory it sits in.
+ *
+ * A *fresh top-level* chooser rather than a further nested [PopupStep], which is the whole point of
+ * this entry (see the plan's Phase 6 section and its rejected alternative). Nested, the answer to
+ * "what is in this group?" would sit five cascading popup windows deep from the right-click, each
+ * one the mouse has to stay inside; opened this way the visual depth stays at one window, and it
+ * gets a title bar and speed search the way the platform's own file lists do. Exactly what the tool
+ * window's "Recolour…" action already does with [RecolorStep], one step further: a chooser, not a
+ * menu, because these rows are files rather than verbs.
+ *
+ * Membership is read once, here, and the resolved [VirtualFile]s with it — the renderer must not do
+ * VFS lookups per paint, and a row's icon and its missing/present state have to agree.
+ */
+private fun showGroupFiles(project: Project, group: TabGroup, service: TabGroupService) {
+    val vfm = VirtualFileManager.getInstance()
+    val resolved = service.membersOf(group.id).associateWith { vfm.findFileByUrl(it) }
+    val entries = memberFileRows(resolved.keys, project.basePath) { resolved[it] == null }
+        .map { row -> MemberFile(row, resolved[row.url]?.fileType?.icon ?: AllIcons.FileTypes.Unknown) }
+
+    JBPopupFactory.getInstance().createPopupChooserBuilder(entries)
+        .setTitle("Files in ${group.name}")
+        .setRenderer(MemberFileRenderer())
+        // Speed search over the whole rendered row, not just the name: the directory is on screen,
+        // so typing part of it and having nothing narrow would read as the filter being broken.
+        .setNamerForFiltering { it.row.path }
+        .setItemChosenCallback { chooseMemberFile(project, group, service, it.row) }
+        .setMovable(true)
+        .setResizable(true)
+        .createPopup()
+        // Centred rather than positioned from the originating tab's `DataContext`: this runs from
+        // `getFinalRunnable`, i.e. after the tab popup has closed, and a context captured before
+        // that is no longer a trustworthy anchor. It is what the platform's own titled choosers do.
+        .showCenteredInCurrentWindow(project)
+}
+
+/** One row of [showGroupFiles]' chooser: the pure [MemberFileRow] plus the icon it renders with. */
+private class MemberFile(val row: MemberFileRow, val icon: Icon)
+
+/**
+ * A group member as the file list shows it: the file's own name, the project-relative directory it
+ * sits in, and whether its URL still resolves to a file on disk.
+ *
+ * The name is the primary text and the directory is secondary, greyed — never the full path as the
+ * primary text, which would make the popup as wide as the deepest package while burying the one
+ * part the eye is scanning for. Every platform file list (Search Everywhere, Recent Files,
+ * Navigate | File, Bookmarks) is shaped this way.
+ *
+ * [directory] is the *full* relative path, not the shortened one: [shortenedDirectory] trims it for
+ * display, while [path] — which the missing-file prompt quotes — must stay complete enough to
+ * identify the file being unassigned.
+ */
+internal data class MemberFileRow(
+    val url: String,
+    val name: String,
+    val directory: String,
+    val missing: Boolean,
+) {
+    /** Name and directory rejoined: what a message about this file quotes. */
+    val path: String get() = if (directory.isEmpty()) name else "$directory/$name"
+}
+
+/**
+ * [showGroupFiles]' rows, in display order, derived from the assignment URLs alone.
+ *
+ * Derived from the URL rather than from a resolved [VirtualFile] on purpose: assignments are keyed
+ * by URL, and a member whose file is gone has no `VirtualFile` to ask — yet it is exactly the row
+ * that has to be *shown*, not skipped. [missing] is injected so the whole shape stays testable
+ * without a platform harness, the same trade [deleteConfirmationMessage] and [currentGroupCaption]
+ * make.
+ *
+ * The sort is explicit because [TabGroupService.membersOf] returns map iteration order, which is
+ * arbitrary after a `loadState`. Nothing depended on it before this list existed; a file list would
+ * have been the first surface to expose it as jumbled. Directory first, then name — the order a
+ * file tree would have shown them in — case-insensitively, with the URL as a final tiebreak so two
+ * files differing only in case still order deterministically.
+ */
+internal fun memberFileRows(
+    fileUrls: Collection<String>,
+    projectBasePath: String?,
+    missing: (String) -> Boolean,
+): List<MemberFileRow> =
+    fileUrls
+        .map { url -> memberFileRow(url, projectBasePath, missing(url)) }
+        .sortedWith(
+            compareBy(String.CASE_INSENSITIVE_ORDER, MemberFileRow::directory)
+                .thenBy(String.CASE_INSENSITIVE_ORDER, MemberFileRow::name)
+                .thenBy(MemberFileRow::url),
+        )
+
+/**
+ * Splits one assignment URL into the name and directory [MemberFileRow] renders.
+ *
+ * `VirtualFileManager.extractPath` rather than string surgery on the scheme: it is what turns
+ * `file:///…` and `jar:///…!/…` alike into a plain path, and it is a static with no application
+ * behind it, so this stays unit-testable. Both the path it yields and `Project.getBasePath` are in
+ * the platform's system-independent form (forward slashes, drive letter and all), which is what
+ * makes the prefix comparison below hold on Windows as well as here.
+ *
+ * A file outside the project keeps its absolute directory: shortening it against the user's home
+ * would be a second, machine-dependent notion of "relative" for no gain, since such a member is
+ * rare and its full location is the useful thing about it.
+ */
+private fun memberFileRow(fileUrl: String, projectBasePath: String?, missing: Boolean): MemberFileRow {
+    val path = VirtualFileManager.extractPath(fileUrl).trimEnd('/')
+    val parent = path.substringBeforeLast('/', "")
+    val directory = when {
+        projectBasePath == null -> parent
+        parent == projectBasePath -> ""
+        parent.startsWith("$projectBasePath/") -> parent.substring(projectBasePath.length + 1)
+        else -> parent
+    }
+    return MemberFileRow(fileUrl, path.substringAfterLast('/'), directory, missing)
+}
+
+/**
+ * A row's directory as it is painted: trimmed from the left once it is long enough to widen the
+ * popup more than it informs.
+ *
+ * `shortenPathWithEllipsis` rather than a plain right-truncation, because the informative end of a
+ * path is the *last* segment — the package the file actually lives in — and it is the platform's
+ * own helper for exactly this, keeping the leading segment for orientation and eliding the middle.
+ * The ellipsis symbol is asked for explicitly so it matches the single "…" this popup's own labels
+ * use rather than three full stops, the same choice [currentGroupCaption] makes.
+ */
+internal fun shortenedDirectory(directory: String): String =
+    StringUtil.shortenPathWithEllipsis(directory, MAX_DIRECTORY, true)
+
+/** Longest directory [shortenedDirectory] renders in full, in characters. */
+private const val MAX_DIRECTORY = 60
+
+/**
+ * A file row: type icon, name, greyed directory — and, for a member whose file is gone, the name in
+ * the platform's error attributes *and* the word "missing".
+ *
+ * Both, not just the red: a selected row is repainted in the list's selection foreground, which
+ * takes the red with it, and colour alone is not a reading anyone should have to rely on.
+ */
+private class MemberFileRenderer : ColoredListCellRenderer<MemberFile>() {
+
+    override fun customizeCellRenderer(
+        list: JList<out MemberFile>,
+        value: MemberFile,
+        index: Int,
+        selected: Boolean,
+        hasFocus: Boolean,
+    ) {
+        icon = value.icon
+        val row = value.row
+        append(
+            row.name,
+            if (row.missing) SimpleTextAttributes.ERROR_ATTRIBUTES else SimpleTextAttributes.REGULAR_ATTRIBUTES,
+        )
+        if (row.directory.isNotEmpty()) {
+            append("  ${shortenedDirectory(row.directory)}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+        }
+        if (row.missing) append("  ·  missing", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+    }
+}
+
+/**
+ * Choosing a row: open the file, or — when it is no longer there — offer to unassign it.
+ *
+ * The URL is re-resolved rather than trusting the row's own `missing` flag: the chooser is a live
+ * window and a file can be deleted while it is open. A row that was fine and is now gone lands on
+ * the same prompt as one that was already missing when the list was built.
+ */
+private fun chooseMemberFile(
+    project: Project,
+    group: TabGroup,
+    service: TabGroupService,
+    row: MemberFileRow,
+) {
+    val file = VirtualFileManager.getInstance().findFileByUrl(row.url)
+    if (file == null) {
+        promptToUnassignMissing(project, group, service, row)
+        return
+    }
+    OpenFileDescriptor(project, file).navigate(true)
+}
+
+/**
+ * The missing member's one affordance: say so, and offer to drop the assignment.
+ *
+ * This is real persisted state, not a display glitch — a file deleted while the IDE was closed
+ * fires no VFS event, so [io.prismtabs.listener.TabGroupVfsListener] never gets to call
+ * [TabGroupService.clearTree] and the assignment outlives the file, keeping its group non-empty.
+ * The file list is the first surface anywhere that makes that visible, so it is also the first that
+ * can offer to fix it. Unassigning can leave the group empty, which is [promptToDeleteEmptied]'s
+ * business as everywhere else; no repaint is needed, since a file that does not exist has no tab.
+ */
+private fun promptToUnassignMissing(
+    project: Project,
+    group: TabGroup,
+    service: TabGroupService,
+    row: MemberFileRow,
+) {
+    val confirmed = MessageDialogBuilder.yesNo("Missing File", missingFileMessage(row.path, group.name))
+        .yesText("Remove from Group")
+        .noText("Keep")
+        .icon(Messages.getWarningIcon())
+        .ask(project)
+    if (!confirmed) return
+    val emptied = service.clear(row.url)
+    TabGroupNotifier.notifyChanged(project)
+    promptToDeleteEmptied(project, service, emptied)
+}
+
+/**
+ * [promptToUnassignMissing]'s prompt. Split out as a pure function for the same reason
+ * [deleteConfirmationMessage] is: the wording is then unit-testable without a platform harness.
+ */
+internal fun missingFileMessage(path: String, groupName: String): String =
+    "\"$path\" is no longer on disk.\n\nRemove it from \"$groupName\"?"
 
 /**
  * Marks [group] as the active ("sticky") group, or clears it if it already is — the single choke
