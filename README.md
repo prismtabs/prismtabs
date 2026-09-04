@@ -945,6 +945,36 @@ a group expanded to its two members with every tab closed, a right-click on a *c
 its parent group's actions all enabled, a double-click opening the member, and a double-click on the
 group row hiding it — with the expansion still standing afterwards.
 
+### Dropping a file from a group without opening it
+
+Listing a closed member and then having no way to act on it was the gap the tree left behind:
+"Remove from Group" lived on the editor tab's own right-click menu, which needs the file open, so
+unassigning a closed one meant opening it and closing it again. The tool window's context menu now
+carries the same item on a **file** row.
+
+- **Context menu only, never the toolbar.** The toolbar has no row under the cursor, so a file-only
+  button there would sit disabled for most of the window's life.
+- **Hidden on a group row, not merely disabled.** The platform's general preference is the other
+  way round, but a group row has no one file to remove, and the deliberate widening the five group
+  actions use ("the selected group, or the selected file's parent group") is exactly what must not
+  happen here. The menu describes the row that was right-clicked; on a group row the other five
+  items already do.
+- **Behind a separator, below Delete Group.** Removing one file and destroying the group it is in
+  must not read as neighbours in one list. The icons carry the same distinction: `General.Remove`
+  is a minus sign — taking a row out of a list — against Delete's waste-basket (`Actions.GC`).
+- **No confirmation**, matching the tab popup: the assignment is one click to restore. The case that
+  *does* ask is the group left empty by it, through the same `promptToDeleteEmptied` both surfaces
+  share — see [Empty groups](#empty-groups).
+- **One removal path, keyed by URL.** `removeFromGroup` was widened from `private` to `internal` and
+  now takes a file URL rather than a `VirtualFile`, because a tree row can name a file that is no
+  longer on disk and assignments are URL-keyed throughout. The tab repaint is skipped when nothing
+  resolves — a missing file has no tab to repaint.
+
+The tree is single-selection, so this removes one file at a time; multi-select removal would be its
+own change. `TabGroupsToolWindowUiTest`'s `a member row offers Remove from Group, and a group row
+does not` drives it with every tab closed — the state in which nothing here could have gone through
+the tab popup.
+
 ## Empty groups
 
 A group is **empty** when it has no assigned files. Closing tabs has nothing to do with it: group

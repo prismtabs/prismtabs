@@ -325,6 +325,35 @@ separator below it so reading is visually separated from mutating.
   missing row asks "Remove from Group" / "Keep" and routes an emptied group back through
   `promptToDeleteEmptied`. See the README's "Group membership".
 
+**6c. `Remove from Group` on a member row** (in the paid tool window, but a free *operation*).
+6a and 6b made a group's membership visible; 6c makes the newly visible thing actionable from the
+only surface that can see it. Unassigning already existed on the tab's own right-click menu, which
+requires the file to be *open* — precisely the case the tree exists to cover, so a closed member had
+to be opened and then closed again just to be dropped.
+
+- The action is in the **context menu only**, not the toolbar: the toolbar has no row under the
+  cursor, so a file-only button there would sit disabled for most of the tree's life.
+- **Hidden**, not disabled, on a group row, against the platform's general preference for disabling.
+  A group row has no one member to remove, and `selectedGroup`'s widening ("the selected group, or
+  the selected file's parent group") deliberately does not apply — `selectedMember` answers only for
+  a `MemberNode`. The menu describes the row that was right-clicked, and on a group row the other
+  five items already do.
+- Behind a **separator**, below `Delete Group`. Removing one file and destroying the group that
+  file is in must not read as neighbours in one list; `General.Remove` (a minus sign — taking a row
+  out of a list) against `Actions.GC` (the waste-basket) carries the same distinction in the icons.
+- **No confirmation**, matching the tab popup: one click restores the assignment. Emptying the group
+  is the case that asks, through the shared `promptToDeleteEmptied`.
+- One removal path for both surfaces: `removeFromGroup` is keyed by **URL**, not `VirtualFile`, so a
+  row naming a file that is gone from disk can be unassigned too (assignments are URL-keyed
+  throughout); the repaint is skipped when nothing resolves, since a missing file has no tab.
+- Single-selection only, as the tree is (`SINGLE_TREE_SELECTION`). Multi-select removal is a
+  separate change, not a silent extension of this one.
+
+  **Delivered** in `TabGroupsToolWindow.kt` as `RemoveFromGroupAction`, with the toolbar and context
+  menu now built from one shared list of action instances. Driven end-to-end in
+  `TabGroupsToolWindowUiTest`'s `a member row offers Remove from Group, and a group row does not` —
+  every tab closed, so nothing in it could have gone through the tab popup.
+
 **Why 6b is free and 6a is paid.** Membership visibility is a *correctness* feature — the same
 argument the README already makes for rename/move remapping, which stays free because your
 assignments surviving a rename is not a premium. A free tier that can fill groups whose contents are
