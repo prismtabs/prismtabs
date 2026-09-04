@@ -970,10 +970,43 @@ carries the same item on a **file** row.
   longer on disk and assignments are URL-keyed throughout. The tab repaint is skipped when nothing
   resolves — a missing file has no tab to repaint.
 
-The tree is single-selection, so this removes one file at a time; multi-select removal would be its
-own change. `TabGroupsToolWindowUiTest`'s `a member row offers Remove from Group, and a group row
-does not` drives it with every tab closed — the state in which nothing here could have gone through
-the tab popup.
+**And it takes a whole selection**, which is why the tree is `DISCONTIGUOUS_TREE_SELECTION`: the
+files worth dropping together are rarely adjacent, so they are gathered by Ctrl-click the way every
+platform tree gathers them. The label follows the selection — `Remove from Group` for one file,
+`Remove 3 Files from Group`, or `Remove 4 Files from Their Groups` when the selection spans several,
+because claiming one group there would be a lie about where they came from. It is a pure function
+(`removeFromGroupText`), unit-tested like `addToActiveGroupLabel`.
+
+Multi-selection dragged three other things with it, each load-bearing rather than incidental:
+
+- **The group actions now require a single group.** `selectedGroup()` answers only when every
+  selected row resolves to one group — a group row, or any number of its files. A selection spanning
+  two greys out Rename, Recolour, Delete and both toggles instead of acting on whichever row happens
+  to lead. Removal has no such restriction: "unassign these" is well defined however the selection is
+  spread, while "rename this group" is not.
+- **A right-click inside the selection keeps it.** `installRowSelectingPopupMenu` moves the selection
+  only for a click *outside* it — otherwise opening the menu would discard the very rows its
+  multi-file item acts on. That is the platform's own rule, and the half
+  `installFollowingSelectionTreePopup` gets right while leaving the greyed-out-menu gap above open.
+- **`refresh()` restores the whole selection, not the lead row.** It runs on every editor open and
+  close, so a gathered selection of six files that collapsed to one because a tab opened elsewhere
+  would be worse than no restoration at all.
+
+The batch goes through one `TabGroupService.clearAll(urls)` rather than a loop over `clear`: a single
+pass recomputes the colour cache once and reports the batch's emptied groups with each named once,
+which is what the one empty-group dialog needs — a loop would report a group only through whichever
+of its members happened to go last.
+
+**On the free/paid line:** removal is not gated and must not be. Unassigning is a by-hand assignment
+change, which the [free/paid split](#marketplace-publishing-prep) keeps free forever; it is reachable
+only by subscribers and trial users in practice because the *window* is paid, and free users keep the
+same operation on a tab's own right-click menu.
+
+Driven end-to-end in `TabGroupsToolWindowUiTest`: `a member row offers Remove from Group, and a group
+row does not` (with every tab closed — the state in which nothing could have gone through the tab
+popup), `Ctrl-clicked files are removed together, and the item states the count`, and `a selection
+spanning two groups still removes, greys the group actions, and asks once`, which also pins the
+batched empty-group dialog naming both groups at once.
 
 ## Empty groups
 

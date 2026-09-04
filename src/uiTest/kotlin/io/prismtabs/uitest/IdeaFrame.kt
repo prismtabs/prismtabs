@@ -1278,6 +1278,18 @@ fun RemoteRobot.expandToolWindowGroup(groupName: String): List<String> {
 fun RemoteRobot.selectedToolWindowRows(): List<String> = toolWindowGroupTree().collectSelectedPaths().flatten()
 
 /**
+ * How many rows the tool window's tree currently has selected, read off the component itself.
+ *
+ * Not counted out of [selectedToolWindowRows]: with more than one path selected, the fixture's
+ * `collectSelectedPaths` returns the same flattened row text once per selected path — measured
+ * live, two Ctrl-clicked files came back as two identical three-element lists. That is usable for
+ * *which* rows are selected and useless for *how many*, which is exactly what the multi-select
+ * assertions turn on.
+ */
+fun RemoteRobot.toolWindowSelectionCount(): Int =
+    toolWindowGroupTree().callJs<String>("'' + component.getSelectionCount()", true).toInt()
+
+/**
  * The rows under [groupName] once it is expanded — the group's member files, as rendered. Sliced
  * out of the whole tree rather than read off the node, because a rendered row is what this phase is
  * actually about: name, greyed directory, and any "missing" suffix.

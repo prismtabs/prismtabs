@@ -12,7 +12,8 @@
 - **Paid** (30-day free trial on new installs, then a subscription): the PrismTabs tool window
   listing every group with its colour and member count, and expanding each one to the files it
   holds — open or closed, with "Remove from Group" on a file's right-click menu, so a member whose
-  tab is shut can be dropped without opening it first; hide/show to close a group's tabs and
+  tab is shut can be dropped without opening it first, one file or a whole Ctrl-clicked selection
+  at a time; hide/show to close a group's tabs and
   remember them, then reopen them together later; marking a group active so files opened while it's active join it automatically;
   and a custom palette editor under **Settings | Tools | PrismTabs**.
 - A file that is *already open* joins the active group in one click — a row in the tab popup
