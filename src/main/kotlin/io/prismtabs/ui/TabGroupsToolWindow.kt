@@ -27,7 +27,6 @@ import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.wm.ex.ToolWindowManagerListener
 import com.intellij.ui.ColoredTreeCellRenderer
-import com.intellij.ui.JBColor
 import com.intellij.ui.PopupHandler
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.SimpleTextAttributes
@@ -40,7 +39,6 @@ import io.prismtabs.model.TabGroup
 import io.prismtabs.service.TabGroupService
 import io.prismtabs.service.TabGroupVisibility
 import io.prismtabs.service.TabGroupsChangedListener
-import java.awt.Color
 import java.awt.Component
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
@@ -524,7 +522,7 @@ private class TabGroupsTreeRenderer(private val service: TabGroupService) : Colo
         when (value) {
             is GroupNode -> {
                 val group = value.group
-                icon = ColorSwatchIcon(JBColor(Color(group.lightRgb), Color(group.darkRgb)))
+                icon = groupSwatch(group)
                 append(group.name)
                 // "files", not "tabs": a group's members are files, and a group whose every tab is
                 // closed still has all of them (see TabGroupService's doc). Calling them tabs made

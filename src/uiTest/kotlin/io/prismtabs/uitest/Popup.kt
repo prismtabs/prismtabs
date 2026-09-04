@@ -44,6 +44,17 @@ fun RemoteRobot.clickPopupItem(text: String, timeout: Duration = Duration.ofSeco
 }
 
 /**
+ * Every line the open popup renders, in model order and without choosing anything.
+ *
+ * Looking, not clicking, is the whole point — every row of this popup *does* something the moment
+ * it is picked, which is [popupSubstepItems]' reason for existing one level down. Separator
+ * captions come back among the rows, since they are text the popup paints too; an assertion about
+ * a specific entry should say which one it means rather than index into this.
+ */
+fun RemoteRobot.popupItemTexts(timeout: Duration = Duration.ofSeconds(10)): List<String> =
+    popupList(timeout).findAllText().map { it.text }
+
+/**
  * Right-clicks the editor tab for [path] and opens PrismTabs' "Tab Group…" swatch popup, retrying
  * the whole gesture if the context menu doesn't appear.
  *

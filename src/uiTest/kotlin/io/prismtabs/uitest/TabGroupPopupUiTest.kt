@@ -431,4 +431,75 @@ class TabGroupPopupUiTest {
             remoteRobot.clickPopupSubstepItem("RenamedGroup (active)", "Clear Active Group")
         }
     }
+
+    /**
+     * The gap the active-group shortcut exists to close: a file that is already open joins nothing
+     * on its own, because the platform fires no `fileOpened` for a file it does not have to open —
+     * so the popup offers that same assignment as one click.
+     *
+     * The file is opened *into* the group and then unassigned, rather than opened before the group
+     * is marked active, because only the first ordering is deterministic. `fileOpened` is published
+     * after the editor has been created, not during: a file opened first and a group marked active
+     * a moment later leaves the event queued, and it lands with the group already active and
+     * auto-joins the very file whose *not* joining is the point (measured — this test failed
+     * exactly that way before it was written this way round). Auto-joining first is the barrier:
+     * once the assignment is visible the event has provably been delivered, and after
+     * [IdeaFrame.clearGroupFor] no second one can ever fire for that file. What remains is the
+     * reported state exactly — open, unassigned, a group active, and no route back into it but
+     * this row.
+     */
+    @Test
+    fun `an already-open file joins the active group from the popup in one click`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            assignFileToNewGroup("Second.kt", "StickyGroup")
+            toggleActiveGroup("StickyGroup")
+            try {
+                openFile("Sample.kt")
+                waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == "StickyGroup" }
+
+                clearGroupFor("Sample.kt")
+                assertNull(groupNameFor("Sample.kt"), "the file must start out unassigned")
+
+                remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+                remoteRobot.clickPopupItem("Add to Tab Group \"StickyGroup\"")
+
+                waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == "StickyGroup" }
+                assertEquals("StickyGroup", groupNameFor("Sample.kt"))
+            } finally {
+                // An active group is session-scoped state that would otherwise leak into whichever
+                // test runs next and opens a file — same clean-up the Phase 3 test ends on.
+                toggleActiveGroup("StickyGroup")
+            }
+        }
+    }
+
+    /**
+     * The row is offered for an unassigned file only. A file that is already in a group has the
+     * same need answered twice a row below — its group named in the "In group:" caption, and
+     * "Add to Group…" to move it — and auto-join, which this row stands in for, likewise never
+     * moves an assigned file.
+     */
+    @Test
+    fun `the shortcut is not offered for a file that is already in a group`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            openFile("Sample.kt")
+            assignFileToNewGroup("Sample.kt", "StickyGroup")
+            toggleActiveGroup("StickyGroup")
+            try {
+                remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+                val rows = remoteRobot.popupItemTexts()
+
+                assertTrue(rows.contains("Add to Group…"), "expected the ordinary list step, got $rows")
+                assertFalse(
+                    rows.any { it.startsWith("Add to Tab Group") },
+                    "expected no active-group shortcut for an assigned file, got $rows",
+                )
+                Keyboard(remoteRobot).escape()
+            } finally {
+                toggleActiveGroup("StickyGroup")
+            }
+        }
+    }
 }
