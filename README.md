@@ -1072,45 +1072,49 @@ change:
 
 So the automatic rule stays exactly as it was — a group collects the tabs *opened* while it is
 active — and the gap is closed by making the manual route one gesture instead of three (right-click
-→ "Add to Group…" → find the group marked "(active)"):
+→ "Add to Group…" → find the group marked "(active)"): a row directly under the swatch divider,
+`Add to Group "Auth"`, carrying the group's own colour dot.
 
-- **In the tab popup**, a row directly under the swatch divider: `Add to Tab Group "Auth"`, carrying
-  the group's own colour dot.
-- **In the Project view's context menu**, the same label from `AddToActiveGroupAction`, which is
-  also a keymap entry ("Add to Active Tab Group", no default shortcut — binding one would take a
-  keystroke the user already has). That is where the failing double-click happens, and the file is
-  already selected under the cursor.
+The row is offered for an **unassigned** file only, which is what keeps it a stand-in for auto-join
+— that likewise never moves a file already in a group — and what lets it skip the empty-group prompt
+every other assignment path carries: it cannot move a group's last member out of it. A file that is
+already in a group has the same need answered a row below anyway, its group named in the
+"In group:" caption with "Add to Group…" to move it.
 
-Both obey one rule, in one place (`filesToAdd`): a file that is **already in a group is left
-alone**, and a directory is skipped. The first half is what keeps the shortcut a stand-in for
-auto-join, which likewise never moves an assigned file — and it is what stops a Project view
-multi-selection from quietly emptying two other groups, which would be the same silent reassignment
-rejected above. Because nothing can be emptied, neither surface needs the empty-group prompt every
-other assignment path carries. The popup row is offered for an unassigned file only; a file that is
-already in one has its group named in the "In group:" caption and "Add to Group…" a row below.
-
-Neither surface is licence-gated, though auto-join itself is. Assigning a file to a group by hand is
-free forever, and this is only that, addressed at a group the user already picked; marking a group
-active stays gated in `toggleActiveGroup`. Nor is there a lapsed-subscriber state to worry about:
+It is not licence-gated, though auto-join itself is. Assigning a file to a group by hand is free
+forever, and this is only that, addressed at a group the user already picked; marking a group active
+stays gated in `toggleActiveGroup`. Nor is there a lapsed-subscriber state to worry about:
 `activeGroupId` is session-scoped and never persisted (see
 [Why "active group" isn't persisted](#why-active-group-isnt-persisted)), so an active group can only
 exist if it was marked in this session, through the gate.
 
-One label serves both surfaces, so they cannot drift. It says "Tab Group", not the popup's shorter
-"Group", because the Project view's menu is shared with the platform and every other plugin
-installed, where "Add to Group" names nothing.
+The label deliberately mirrors the "Add to Group…" row beneath it — same verb, one naming the
+destination outright and one opening the list to choose from. The quoted group name is what tells
+them apart at a glance, so it is not decoration.
 
-### The menu item ate part of the group's name
+### Rejected: the same item on the Project view's context menu
 
-`Presentation.setText(String)` forwards to `setText(supplier, mayContainMnemonic = true)` — checked
-in the bytecode, `iconst_1` — and a group name is free text: the New Group prompt validates only
-that it is non-blank. So the first version of the action rendered a group called `auth_flow` into
-the Project view's menu as `Add to Tab Group "authflow"`, the underscore consumed and an F mnemonic
-invented out of it; `R&D` would have gone the same way. Measured, not argued: with the fix reverted
-the menu item came back reading exactly that, and `AddToActiveGroupUiTest`'s third case now pins it
-by asserting on the *rendered* item rather than on the label function, since it was the rendering
-that was wrong. The action calls `setText(label, false)`. The popup row was never affected — a
-`ListPopup` renders a step's text as-is.
+Built first, then removed on 2026-09-04 before any release. An `AddToActiveGroupAction` registered
+into `ProjectViewPopupMenu` put the shortcut in the very tree the failing double-click happens in,
+which is the strongest argument for it, and it came with a keymap entry for free. It went anyway:
+**a single plugin item in a menu the whole IDE shares sets an expectation that the rest of PrismTabs
+belongs there too**, and it doesn't — everything else a group needs lives in the tab popup and the
+tool window by design (see §"Constraints that are not going away" for why the tool window exists at
+all). One row in a shared menu is a promise of a submenu nobody intends to write.
+
+Two things learned there are worth keeping even though the code is gone:
+
+- **`Presentation.setText(String)` parses mnemonics.** It forwards to
+  `setText(supplier, mayContainMnemonic = true)` — `iconst_1` in the bytecode — and a group name is
+  free text, so the action rendered a group called `auth_flow` into the menu as
+  `Add to Group "authflow"`, the underscore eaten and an F mnemonic invented from it; `R&D` would
+  have gone the same way. Measured by reverting the fix and re-running, not argued. Any future
+  action that puts a group name in its presentation must call `setText(label, false)`. The popup row
+  was never affected: a `ListPopup` renders a step's text as-is.
+- **A Project view double-click never reaches the action system**, so an action there could not have
+  been made to fire on the gesture itself even if we had wanted it to — only on an explicit
+  right-click. That is the same `EditSourceOnDoubleClickHandler` → `FileNavigator` path that rules
+  out an `AnActionListener` correlation above.
 
 ### A fourth UI-testing finding: `fileOpened` is published after the editor is created
 
@@ -1119,16 +1123,11 @@ asserted the file had *not* auto-joined. It failed: the file was already in the 
 published after the editor composite exists rather than during the open call, so it was still queued
 when the group became active, and it auto-joined the very file whose not-joining was the point.
 
-Both tests are now written the other way round — open the file *into* the active group, wait for the
+The test is now written the other way round — open the file *into* the active group, wait for the
 assignment, then unassign it with `IdeaFrame.clearGroupFor`. Waiting on the auto-join is the
 barrier: once it is visible the event has provably been delivered, and no second `fileOpened` can
 ever fire for a file that stays open. What is left is the reported state exactly, reached
 deterministically: open, unassigned, a group active, and no route back into it but the new row.
-
-`AddToActiveGroupUiTest` drives the Project view half through the real tree and the real context
-menu rather than invoking the action with a fabricated `DataContext` — what is being tested is
-precisely that the platform hands the action the file that was right-clicked, and a hand-built
-context would assert that against itself.
 
 ## UI testing
 

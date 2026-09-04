@@ -462,7 +462,7 @@ class TabGroupPopupUiTest {
                 assertNull(groupNameFor("Sample.kt"), "the file must start out unassigned")
 
                 remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
-                remoteRobot.clickPopupItem("Add to Tab Group \"StickyGroup\"")
+                remoteRobot.clickPopupItem("Add to Group \"StickyGroup\"")
 
                 waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == "StickyGroup" }
                 assertEquals("StickyGroup", groupNameFor("Sample.kt"))
@@ -493,7 +493,9 @@ class TabGroupPopupUiTest {
 
                 assertTrue(rows.contains("Add to Group…"), "expected the ordinary list step, got $rows")
                 assertFalse(
-                    rows.any { it.startsWith("Add to Tab Group") },
+                    // The named row, not the "Add to Group…" list step one row below it — hence
+                    // matching on the quoted group name rather than on the shared "Add to Group".
+                    rows.any { it.startsWith("""Add to Group "StickyGroup"""") },
                     "expected no active-group shortcut for an assigned file, got $rows",
                 )
                 Keyboard(remoteRobot).escape()

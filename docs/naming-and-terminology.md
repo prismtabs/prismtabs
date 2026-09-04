@@ -68,6 +68,7 @@ keep it in sync with the source string.
 | `Tab Group…` (editor-tab right-click menu) | `plugin.xml`, `<action id="PrismTabs.AssignTabGroup" text="Tab Group…">` |
 | `New Group` (caption over the swatch row) | `TabGroupPopup.kt`, `ListSeparator("New Group")` |
 | `Add to Group…`, `Manage Groups…`, `Remove from Group` | `TabGroupPopup.kt`, `textFor(entry)` |
+| `Add to Group "<name>"` (the active group, offered as its own row above `Add to Group…`) | `TabGroupPopup.kt`, `addToActiveGroupLabel` |
 | `Remove from Group` again, on a tool-window file row — deliberately the same words as the tab popup's, since it is the same operation; `Remove N Files from Group` / `Remove N Files from Their Groups` for a multi-selection | `TabGroupsToolWindow.kt`, `removeFromGroupText` |
 | `Files…` (a group's file list, in `Manage Groups…`) | `TabGroupPopup.kt`, `GroupActionsStep.getTextFor` |
 | `Files in <name>` (that list's own title), `missing` (its suffix on a member whose file is gone) | `TabGroupPopup.kt`, `showGroupFiles`, `MemberFileRenderer` |
@@ -76,8 +77,6 @@ keep it in sync with the source string.
 | `N files` / `1 file` (tool window group row member count) | `TabGroupsToolWindow.kt`, `TabGroupsTreeRenderer` |
 | `In group: <name>` (caption over `Remove from Group`) | `TabGroupPopup.kt`, `currentGroupCaption` |
 | `New Tab Group`, `Rename Tab Group`, `Missing File` (dialog titles) | `TabGroupPopup.kt`, `RenameGroupDialog.kt` |
-| `Add to Tab Group "<name>"` (tab popup row, and the same item on the Project view's context menu) | `TabGroupPopup.kt`, `addToActiveGroupLabel`; `plugin.xml`, `<action id="PrismTabs.AddToActiveGroup">` |
-| `Add to Active Tab Group` (that action's static Keymap/Find Action listing — `update()` rewrites it to `Add to Tab Group "<name>"` wherever a group is actually active) | `plugin.xml`, `<action id="PrismTabs.AddToActiveGroup" text="…">` |
 
 `Tab Group…` in layer 3 and `tab group` in layer 2 co-exist on purpose: one is a
 button you click, the other is what you get. If a source string changes, update

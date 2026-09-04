@@ -161,11 +161,10 @@ private fun labelFor(group: TabGroup, service: TabGroupService): String =
 
 /**
  * A group's own colour as a row icon — the dot [AddToGroupStep], [ManageGroupsStep] and the
- * active-group shortcut all carry, and the [io.prismtabs.action.AddToActiveGroupAction] menu item
- * with them.
+ * active-group row all carry.
  *
- * `internal`, not `private`: that action lives outside this file and must show the *same* dot, or
- * the Project view would label the active group with a colour the popup does not.
+ * `internal`, not `private`: the tool window's tree paints the same dot beside a group row, and two
+ * builders for one swatch would drift the moment either surface changed its colour model.
  */
 internal fun groupSwatch(group: TabGroup): Icon =
     ColorSwatchIcon(JBColor(Color(group.lightRgb), Color(group.darkRgb)))
@@ -251,12 +250,8 @@ private class RootStep(
                 }
                 PopupStep.FINAL_CHOICE
             }
-            // Applied straight from `onChosen`, not deferred to [getFinalRunnable] the way
-            // [AddToGroupStep] is: this row opens no window of its own. The file it acts on is
-            // unassigned by construction (see [buildEntries]), so no group can be left empty here
-            // and there is no prompt to race the popup's close.
             is Entry.AddToActive -> {
-                addToActiveGroup(project, listOf(file), selectedValue.group, service)
+                addToActiveGroup(project, file, selectedValue.group, service)
                 PopupStep.FINAL_CHOICE
             }
             Entry.AddToGroup -> AddToGroupStep(project, file, service)
@@ -787,7 +782,7 @@ internal fun deleteConfirmationMessage(group: TabGroup, hidden: Boolean): String
 internal fun currentGroupCaption(groupName: String): String = "In group: " + shortGroupName(groupName)
 
 /**
- * The one-click route into the active group: "Add to Tab Group \"Auth\"".
+ * The one-click route into the active group: "Add to Group \"Auth\"".
  *
  * It exists because auto-join fires on `fileOpened`, and the platform does not open a file that is
  * already open — double-clicking such a file in the Project view only *selects* its tab, so the
@@ -800,13 +795,12 @@ internal fun currentGroupCaption(groupName: String): String = "In group: " + sho
  * assignment auto-join would have made, asked for explicitly. See README §"Joining the active
  * group by hand".
  *
- * "Tab Group", not the popup's shorter "Group", because [io.prismtabs.action.AddToActiveGroupAction]
- * renders the same label into the Project view's context menu — a generic menu shared with the rest
- * of the IDE, where "Add to Group" alone names nothing. One label rather than one per surface: the
- * two cannot then drift, and this is the same reason [labelFor]'s "(active)" suffix is shared.
+ * Named to match the "Add to Group…" row it sits directly above — same verb, one naming the
+ * destination outright and one opening the list to choose from. This popup is reached from a menu
+ * item already called "Tab Group…", so the shorter noun is unambiguous everywhere the row appears.
  */
 internal fun addToActiveGroupLabel(groupName: String): String =
-    "Add to Tab Group \"${shortGroupName(groupName)}\""
+    "Add to Group \"${shortGroupName(groupName)}\""
 
 /**
  * A group name cut down to what a popup row can carry, ellipsis and all.
@@ -826,40 +820,18 @@ private fun shortGroupName(groupName: String): String =
 private const val MAX_GROUP_NAME = 40
 
 /**
- * Puts [files] in [group] — what both surfaces of the active-group shortcut do, the popup's
- * [Entry.AddToActive] row and [io.prismtabs.action.AddToActiveGroupAction] alike.
+ * The [Entry.AddToActive] row's handler: assign, repaint, and tell the tool window.
  *
- * [filesToAdd] does the filtering here rather than at each call site, which is what makes this safe
- * to run without the empty-group prompt every other assignment path carries: a file that is already
- * in a group is never touched, so no group can lose its last member to this.
+ * No empty-group prompt, unlike every other assignment path: [RootStep.buildEntries] offers the row
+ * for an unassigned file only, so this can never move a group's last member out of it. That is also
+ * what lets it run straight from `onChosen` rather than through `getFinalRunnable` — there is no
+ * modal here to race the popup's close.
  */
-internal fun addToActiveGroup(
-    project: Project,
-    files: Collection<VirtualFile>,
-    group: TabGroup,
-    service: TabGroupService,
-) {
-    val added = filesToAdd(files, service)
-    if (added.isEmpty()) return
-    added.forEach {
-        service.assign(it.url, group)
-        TabRepaint.request(project, it)
-    }
+private fun addToActiveGroup(project: Project, file: VirtualFile, group: TabGroup, service: TabGroupService) {
+    service.assign(file.url, group)
+    TabRepaint.request(project, file)
     TabGroupNotifier.notifyChanged(project)
 }
-
-/**
- * The files [addToActiveGroup] would actually move — the shortcut's whole rule, in one place, so
- * that what an action greys itself out over and what it then does cannot disagree.
- *
- * Files already in a group are left where they are: the shortcut stands in for auto-join, which
- * likewise never moves an assigned file, and a Project view multi-selection that quietly emptied
- * two other groups would be exactly the silent reassignment this feature exists to avoid. A
- * directory is dropped because an assignment is keyed to a file URL and paints a tab — a directory
- * has neither, and would sit in the group as a member nothing can ever show.
- */
-internal fun filesToAdd(files: Collection<VirtualFile>, service: TabGroupService): List<VirtualFile> =
-    files.filter { !it.isDirectory && service.groupFor(it.url) == null }
 
 /**
  * "Remove from Group"'s handler: unassign, repaint, and offer to delete a group left empty.

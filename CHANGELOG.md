@@ -16,8 +16,7 @@
   at a time; hide/show to close a group's tabs and
   remember them, then reopen them together later; marking a group active so files opened while it's active join it automatically;
   and a custom palette editor under **Settings | Tools | PrismTabs**.
-- A file that is *already open* joins the active group in one click — a row in the tab popup
-  (`Add to Tab Group "Auth"`) and the same item on the Project view's context menu, which is
-  also a keymap entry, "Add to Active Tab Group". Auto-join only ever sees files the platform
-  actually has to open, so before this an already-open file had to be closed and reopened to join
-  the group. Free, like every other by-hand assignment.
+- A file that is *already open* joins the active group in one click, from a row in the tab popup
+  (`Add to Group "Auth"`). Auto-join only ever sees files the platform actually has to open, so
+  before this an already-open file had to be closed and reopened to join the group. Free, like
+  every other by-hand assignment.

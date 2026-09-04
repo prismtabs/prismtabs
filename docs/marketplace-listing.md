@@ -54,7 +54,7 @@ start a new group and name it, or "Add to Group…" to put the tab in a group yo
 already have. "Manage Groups…" lets you list a group's files, rename, recolour,
 delete, or mark a group active — files opened while a group is active join it
 automatically, and a file that was already open joins it in one click, from the
-same popup or the Project view's context menu.
+same popup.
 
 The PrismTabs tool window lists every group with its colour and member count,
 and can hide a group (closing its tabs, remembering them) or show it again.

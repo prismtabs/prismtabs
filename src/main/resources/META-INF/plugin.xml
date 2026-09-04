@@ -10,7 +10,7 @@
         group and name it, or "Add to Group…" to put the tab in a group you already have. "Manage
         Groups…" lets you list a group's files, rename, recolour, delete, or mark a group active —
         files opened while a group is active join it automatically, and a file that was already
-        open joins it in one click, from the same popup or the Project view's context menu.
+        open joins it in one click, from the same popup.
         <br/><br/>
         The PrismTabs tool window lists every group with its colour and member count, expands each
         one to the files it holds, and can hide a group (closing its tabs, remembering them) or show
@@ -101,24 +101,6 @@
         <action id="PrismTabs.AssignTabGroup" class="io.prismtabs.action.AssignTabGroupAction"
                 text="Tab Group…" description="Assign this tab's colour group">
             <add-to-group group-id="EditorTabPopupMenu" anchor="first"/>
-        </action>
-
-        <!-- The active-group shortcut's second home. The text here is what the Keymap and Find
-             Action list it under; with a group actually marked active the action rewrites it to
-             "Add to Tab Group "<name>"" in update(), which is the only form a user ever clicks.
-
-             ProjectViewPopupMenu, because the gesture that needs this is a double-click on a file
-             that is already open (see AddToActiveGroupAction) — the file is already selected right
-             there. anchor="last" rather than a position relative to a platform action: the Project
-             view's menu is assembled by the platform and by every other plugin installed, so
-             anchoring to a neighbour would be anchoring to something that may not be there.
-
-             No <keyboard-shortcut>: binding a default keystroke would take one the user already
-             has. -->
-        <action id="PrismTabs.AddToActiveGroup" class="io.prismtabs.action.AddToActiveGroupAction"
-                text="Add to Active Tab Group"
-                description="Add the selected files to the tab group currently marked active">
-            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
         </action>
     </actions>
 </idea-plugin>
