@@ -564,6 +564,32 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
         )
     }
 
+    /**
+     * Unassigns [path] — `TabGroupService.clear`, the service call behind "Remove from Group".
+     *
+     * Script-driven for the same reason [assignFileToNewGroup] is: a test whose subject is the
+     * active-group shortcut needs *an unassigned, already-open file*, and driving the popup to
+     * produce one would make the setup as failure-prone as the thing being measured.
+     */
+    fun clearGroupFor(path: String) {
+        runJs(
+            """
+            importPackage(com.intellij.openapi.wm.impl)
+            importPackage(com.intellij.openapi.vfs)
+            importPackage(com.intellij.ide.plugins)
+            importPackage(com.intellij.openapi.extensions)
+
+            const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+            const project = frameHelper.getProject()
+            const file = LocalFileSystem.getInstance().findFileByPath(project.getBasePath() + '/$path')
+            const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
+            const service = project.getService(java.lang.Class.forName('io.prismtabs.service.TabGroupService', true, pluginLoader))
+            service.clear(file.getUrl())
+            """,
+            true,
+        )
+    }
+
     /** Adds [path] to the existing group named [groupName] — [assignFileToNewGroup]'s counterpart
      * for a second member, standing in for the popup's "Add to Group…" for the same reason. */
     fun addFileToGroup(path: String, groupName: String) {
@@ -874,6 +900,55 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
                 run: function() {
                     const tw = ToolWindowManager.getInstance(project).getToolWindow('PrismTabs')
                     if (tw != null) tw.show(null)
+                }
+            })
+            ApplicationManager.getApplication().invokeAndWait(task)
+            """,
+            true,
+        )
+    }
+
+    /**
+     * Whether the Project view is on screen right now.
+     *
+     * Read so that a test needing that tree can put the IDE back the way it found it — every other
+     * test in this suite clicks editor tabs at real screen coordinates, and a tool window opening
+     * or closing moves them (the same hazard [hideTabGroupsToolWindow] exists for).
+     */
+    fun projectToolWindowVisible(): Boolean = callJs<Boolean>(
+        """
+        importPackage(com.intellij.openapi.wm.impl)
+        importClass(com.intellij.openapi.wm.ToolWindowManager)
+
+        const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+        const project = frameHelper.getProject()
+        const tw = ToolWindowManager.getInstance(project).getToolWindow('Project')
+        tw != null && tw.isVisible()
+        """,
+        true,
+    )
+
+    /**
+     * Shows or hides the Project view — the tree [io.prismtabs.action.AddToActiveGroupAction]'s
+     * menu item is reached from. Driven on the EDT through `invokeAndWait`, like
+     * [showTabGroupsToolWindow], because `show`/`hide` are Swing calls.
+     */
+    fun setProjectToolWindowVisible(visible: Boolean) {
+        runJs(
+            """
+            importPackage(com.intellij.openapi.wm.impl)
+            importClass(com.intellij.openapi.wm.ToolWindowManager)
+            importClass(com.intellij.openapi.application.ApplicationManager)
+
+            const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+            const project = frameHelper.getProject()
+            const task = new Runnable({
+                run: function() {
+                    const tw = ToolWindowManager.getInstance(project).getToolWindow('Project')
+                    if (tw != null) {
+                        if ($visible) tw.show(null)
+                        else tw.hide(null)
+                    }
                 }
             })
             ApplicationManager.getApplication().invokeAndWait(task)
@@ -1261,3 +1336,34 @@ fun RemoteRobot.toolWindowGroupRows(): List<String> {
  * literal in step with the source constant.
  */
 private const val GROUP_TREE_XPATH = "//div[@name='PrismTabs.GroupTree']"
+
+/**
+ * The Project view's tree, with [fileName] actually showing as a row — the project root is expanded
+ * first if it isn't already.
+ *
+ * Expanded by selecting the root and pressing Right, the tree's own expand key, for the reason
+ * [expandToolWindowGroup] gives: a double-click on a file row would *open* it, which is precisely
+ * the state a test of the already-open gap has to control rather than trip into.
+ *
+ * The fixture re-finds the tree on each step instead of being held across the expansion: the
+ * component is the same one, but its row model is not, and a fixture captured before the expand
+ * reports the rows it had then.
+ */
+fun RemoteRobot.projectViewTreeShowing(fileName: String): JTreeFixture {
+    waitFor(Duration.ofSeconds(10)) { findAll<JTreeFixture>(byXpath(PROJECT_TREE_XPATH)).isNotEmpty() }
+    if (projectViewTree().collectRows().none { it.contains(fileName) }) {
+        projectViewTree().clickRow(0)
+        Keyboard(this).key(KeyEvent.VK_RIGHT)
+        waitFor(Duration.ofSeconds(10)) { projectViewTree().collectRows().any { it.contains(fileName) } }
+    }
+    return projectViewTree()
+}
+
+private fun RemoteRobot.projectViewTree(): JTreeFixture = find(byXpath(PROJECT_TREE_XPATH))
+
+/**
+ * Located by class rather than by `Component.name` — the opposite of [toolWindowGroupRows]'s tree,
+ * and for the same reason it is safe here: the platform's own tree carries no name to match on, and
+ * `ProjectViewTree` is a type only the Project view has, so there is nothing to confuse it with.
+ */
+private const val PROJECT_TREE_XPATH = "//div[@class='ProjectViewTree']"

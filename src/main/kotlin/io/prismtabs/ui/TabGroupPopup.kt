@@ -159,8 +159,27 @@ private fun effectivePresets(): List<PresetColor> = service<TabGroupPaletteServi
 private fun labelFor(group: TabGroup, service: TabGroupService): String =
     if (group.id == service.activeGroupId()) "${group.name} (active)" else group.name
 
+/**
+ * A group's own colour as a row icon — the dot [AddToGroupStep], [ManageGroupsStep] and the
+ * active-group shortcut all carry, and the [io.prismtabs.action.AddToActiveGroupAction] menu item
+ * with them.
+ *
+ * `internal`, not `private`: that action lives outside this file and must show the *same* dot, or
+ * the Project view would label the active group with a colour the popup does not.
+ */
+internal fun groupSwatch(group: TabGroup): Icon =
+    ColorSwatchIcon(JBColor(Color(group.lightRgb), Color(group.darkRgb)))
+
 private sealed class Entry {
     class Preset(val preset: PresetColor) : Entry()
+
+    /**
+     * The active group offered as a destination in its own right, rather than one name inside
+     * [AddToGroupStep]'s list. See [addToActiveGroupLabel] for why the row exists and
+     * [RootStep.buildEntries] for the one state it is offered in.
+     */
+    class AddToActive(val group: TabGroup) : Entry()
+
     data object AddToGroup : Entry()
     data object ManageGroups : Entry()
     data object RemoveFromGroup : Entry()
@@ -168,6 +187,7 @@ private sealed class Entry {
 
 private fun textFor(entry: Entry): String = when (entry) {
     is Entry.Preset -> entry.preset.label
+    is Entry.AddToActive -> addToActiveGroupLabel(entry.group.name)
     Entry.AddToGroup -> "Add to Group…"
     Entry.ManageGroups -> "Manage Groups…"
     Entry.RemoveFromGroup -> "Remove from Group"
@@ -175,6 +195,7 @@ private fun textFor(entry: Entry): String = when (entry) {
 
 private fun iconFor(entry: Entry): Icon? = when (entry) {
     is Entry.Preset -> ColorSwatchIcon(JBColor(entry.preset.light, entry.preset.dark))
+    is Entry.AddToActive -> groupSwatch(entry.group)
     else -> null
 }
 
@@ -186,6 +207,16 @@ private class RootStep(
 
     private var finalRunnable: Runnable? = null
 
+    /**
+     * The row that opens the block *under* the swatch divider — [Entry.AddToActive] when the
+     * active-group shortcut is offered, [Entry.AddToGroup] when it is not.
+     *
+     * Held rather than named literally in [getSeparatorAbove], so the block keeps exactly one
+     * divider however it was built: pinning the divider to "Add to Group…" would leave the
+     * shortcut row stranded above it, in the swatch block, where every other row creates a group.
+     */
+    private val firstBelowSwatches: Entry? = values.firstOrNull { it !is Entry.Preset }
+
     override fun getTextFor(value: Entry): String = textFor(value)
 
     override fun getIconFor(value: Entry): Icon? = iconFor(value)
@@ -195,11 +226,11 @@ private class RootStep(
      * entry rather than the step's own title: the popup's title bar would label the whole tree,
      * including "Add to Group…" and "Manage Groups…", which create nothing. `GroupedItemsListRenderer`
      * suppresses a separator at index 0 only when its caption is blank, so a captioned one does
-     * render above the top item — the bare [ListSeparator] before "Add to Group…" still would not.
+     * render above the top item — the bare [ListSeparator] below the swatches still would not.
      */
     override fun getSeparatorAbove(value: Entry): ListSeparator? = when {
         value === values.firstOrNull() -> ListSeparator("New Group")
-        value == Entry.AddToGroup -> ListSeparator()
+        value === firstBelowSwatches -> ListSeparator()
         // The one place the popup says which group the right-clicked file is already in. Without
         // it, "Remove from Group" is the only hint that the file is assigned at all, and it names
         // nothing — so the answer to "which group is this tab in?" was nowhere in the UI once the
@@ -220,6 +251,14 @@ private class RootStep(
                 }
                 PopupStep.FINAL_CHOICE
             }
+            // Applied straight from `onChosen`, not deferred to [getFinalRunnable] the way
+            // [AddToGroupStep] is: this row opens no window of its own. The file it acts on is
+            // unassigned by construction (see [buildEntries]), so no group can be left empty here
+            // and there is no prompt to race the popup's close.
+            is Entry.AddToActive -> {
+                addToActiveGroup(project, listOf(file), selectedValue.group, service)
+                PopupStep.FINAL_CHOICE
+            }
             Entry.AddToGroup -> AddToGroupStep(project, file, service)
             Entry.ManageGroups -> ManageGroupsStep(project, service)
             Entry.RemoveFromGroup -> {
@@ -231,12 +270,21 @@ private class RootStep(
     override fun getFinalRunnable(): Runnable? = finalRunnable
 
     private companion object {
+        /**
+         * [Entry.AddToActive] is offered only for a file that is in **no** group, which is exactly
+         * the state auto-join would have claimed had the file not already been open — see
+         * [addToActiveGroupLabel]. For a file that is already in one, the popup answers the same
+         * need twice over a row below: its group is named in the "In group:" caption, and
+         * "Add to Group…" moves it, active group marked "(active)" in that list.
+         */
         fun buildEntries(service: TabGroupService, file: VirtualFile): List<Entry> {
+            val assigned = service.groupFor(file.url) != null
             val entries = mutableListOf<Entry>()
             entries += effectivePresets().map { Entry.Preset(it) }
+            if (!assigned) service.activeGroup()?.let { entries += Entry.AddToActive(it) }
             entries += Entry.AddToGroup
             if (service.groups().isNotEmpty()) entries += Entry.ManageGroups
-            if (service.groupFor(file.url) != null) entries += Entry.RemoveFromGroup
+            if (assigned) entries += Entry.RemoveFromGroup
             return entries
         }
     }
@@ -253,8 +301,7 @@ private class AddToGroupStep(
 
     override fun getTextFor(value: TabGroup): String = labelFor(value, service)
 
-    override fun getIconFor(value: TabGroup): Icon =
-        ColorSwatchIcon(JBColor(Color(value.lightRgb), Color(value.darkRgb)))
+    override fun getIconFor(value: TabGroup): Icon = groupSwatch(value)
 
     /**
      * Deferred to [getFinalRunnable] rather than applied straight from `onChosen`, unlike the
@@ -284,8 +331,7 @@ private class ManageGroupsStep(
     override fun getTextFor(value: TabGroup): String =
         labelFor(value, service)
 
-    override fun getIconFor(value: TabGroup): Icon =
-        ColorSwatchIcon(JBColor(Color(value.lightRgb), Color(value.darkRgb)))
+    override fun getIconFor(value: TabGroup): Icon = groupSwatch(value)
 
     override fun hasSubstep(value: TabGroup): Boolean = true
 
@@ -734,22 +780,86 @@ internal fun deleteConfirmationMessage(group: TabGroup, hidden: Boolean): String
  * gives for "New Group" — the popup's title bar would label the whole tree, including the swatches
  * and "Add to Group…", which are about groups this file is *not* in.
  *
- * Truncated because a group name has no length limit (the New Group prompt validates only that it
- * is non-blank) and a popup sizes itself to its widest row, so an unbounded name would stretch the
- * swatch row and every other entry along with it. [MAX_CAPTION_NAME] is a plain cap rather than a
- * measured one: unlike `CAPTION_BOTTOM_GAP` there is no platform value to match here, only a width
- * past which a caption stops being scannable.
- *
- * The ellipsis is passed explicitly so the caption uses the same "…" the popup's own item labels do
- * ("Add to Group…", "Rename…") rather than the three full stops `StringUtil`'s shorter overload
- * substitutes. Split out as a pure function for the same reason [deleteConfirmationMessage] is: the
+ * The name goes through [shortGroupName], which is where the length cap and its ellipsis are
+ * explained. Split out as a pure function for the same reason [deleteConfirmationMessage] is: the
  * wording and the truncation are then unit-testable without a platform harness.
  */
-internal fun currentGroupCaption(groupName: String): String =
-    "In group: " + StringUtil.shortenTextWithEllipsis(groupName, MAX_CAPTION_NAME, 0, "…")
+internal fun currentGroupCaption(groupName: String): String = "In group: " + shortGroupName(groupName)
 
-/** Longest group name [currentGroupCaption] renders in full, in characters. */
-private const val MAX_CAPTION_NAME = 40
+/**
+ * The one-click route into the active group: "Add to Tab Group \"Auth\"".
+ *
+ * It exists because auto-join fires on `fileOpened`, and the platform does not open a file that is
+ * already open — double-clicking such a file in the Project view only *selects* its tab, so the
+ * file the user plainly asked for stays ungrouped while an identical gesture on a closed file joins
+ * the active group. There is no event that separates "open this, it happens to be open already"
+ * from an ordinary selection change (`FileEditorManagerEvent` carries no cause, and a Project view
+ * double-click reaches `FileNavigator` without passing through the action system at all), so
+ * auto-joining on selection would sweep in every tab the *platform* selects — the neighbour that
+ * takes focus when a tab is closed, most of all. This row is the honest half of that: the same
+ * assignment auto-join would have made, asked for explicitly. See README §"Joining the active
+ * group by hand".
+ *
+ * "Tab Group", not the popup's shorter "Group", because [io.prismtabs.action.AddToActiveGroupAction]
+ * renders the same label into the Project view's context menu — a generic menu shared with the rest
+ * of the IDE, where "Add to Group" alone names nothing. One label rather than one per surface: the
+ * two cannot then drift, and this is the same reason [labelFor]'s "(active)" suffix is shared.
+ */
+internal fun addToActiveGroupLabel(groupName: String): String =
+    "Add to Tab Group \"${shortGroupName(groupName)}\""
+
+/**
+ * A group name cut down to what a popup row can carry, ellipsis and all.
+ *
+ * Group names are free text with only a non-blank check on them, and a popup sizes itself to its
+ * widest row, so an unbounded name would stretch the swatch row and every other entry along with
+ * it. [MAX_GROUP_NAME] is a plain cap rather than a measured one: unlike `CAPTION_BOTTOM_GAP` there
+ * is no platform value to match here, only a width past which a row stops being scannable.
+ *
+ * The ellipsis is passed explicitly so it is the same "…" the popup's own labels use ("Add to
+ * Group…", "Rename…") rather than the three full stops `StringUtil`'s shorter overload substitutes.
+ */
+private fun shortGroupName(groupName: String): String =
+    StringUtil.shortenTextWithEllipsis(groupName, MAX_GROUP_NAME, 0, "…")
+
+/** Longest group name [shortGroupName] leaves untouched, in characters. */
+private const val MAX_GROUP_NAME = 40
+
+/**
+ * Puts [files] in [group] — what both surfaces of the active-group shortcut do, the popup's
+ * [Entry.AddToActive] row and [io.prismtabs.action.AddToActiveGroupAction] alike.
+ *
+ * [filesToAdd] does the filtering here rather than at each call site, which is what makes this safe
+ * to run without the empty-group prompt every other assignment path carries: a file that is already
+ * in a group is never touched, so no group can lose its last member to this.
+ */
+internal fun addToActiveGroup(
+    project: Project,
+    files: Collection<VirtualFile>,
+    group: TabGroup,
+    service: TabGroupService,
+) {
+    val added = filesToAdd(files, service)
+    if (added.isEmpty()) return
+    added.forEach {
+        service.assign(it.url, group)
+        TabRepaint.request(project, it)
+    }
+    TabGroupNotifier.notifyChanged(project)
+}
+
+/**
+ * The files [addToActiveGroup] would actually move — the shortcut's whole rule, in one place, so
+ * that what an action greys itself out over and what it then does cannot disagree.
+ *
+ * Files already in a group are left where they are: the shortcut stands in for auto-join, which
+ * likewise never moves an assigned file, and a Project view multi-selection that quietly emptied
+ * two other groups would be exactly the silent reassignment this feature exists to avoid. A
+ * directory is dropped because an assignment is keyed to a file URL and paints a tab — a directory
+ * has neither, and would sit in the group as a member nothing can ever show.
+ */
+internal fun filesToAdd(files: Collection<VirtualFile>, service: TabGroupService): List<VirtualFile> =
+    files.filter { !it.isDirectory && service.groupFor(it.url) == null }
 
 /** "Remove from Group"'s handler: unassign, repaint, and offer to delete a group left empty. */
 private fun removeFromGroup(project: Project, file: VirtualFile, service: TabGroupService) {
