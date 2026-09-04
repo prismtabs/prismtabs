@@ -15,9 +15,9 @@
         The PrismTabs tool window lists every group with its colour and member count, expands each
         one to the files it holds, and can hide a group (closing its tabs, remembering them) or show
         it again. Right-clicking one of those files removes it from its group — no need to open the
-        file first, which is the one thing a tab's own menu cannot offer. Assignments and
-        hidden state persist across restarts and follow a file through a rename or move. The preset
-        palette itself is editable under <b>Settings | Tools | PrismTabs</b>.
+        file first, which is the one thing a tab's own menu cannot offer. Assignments persist
+        across restarts, along with the tabs a hidden group remembers, and follow a file through a
+        rename or move. The preset palette itself is editable under <b>Settings | Tools | PrismTabs</b>.
         <br/><br/>
         <b>Free forever</b>
         <ul>
@@ -29,7 +29,8 @@
         </ul>
         <b>Paid — a 30-day free trial on every new install, then a subscription</b>
         <ul>
-            <li>The PrismTabs tool window for managing every group at a glance</li>
+            <li>The PrismTabs tool window for managing every group at a glance, each group
+                expanding to the files it holds</li>
             <li>Hide a group to close its tabs and remember them, then show it to reopen them
                 together</li>
             <li>Mark a group active so newly opened files join it automatically</li>
