@@ -57,10 +57,12 @@ automatically, and a file that was already open joins it in one click, from the
 same popup.
 
 The PrismTabs tool window lists every group with its colour and member count,
-and can hide a group (closing its tabs, remembering them) or show it again.
-Assignments and hidden state persist across restarts and follow a file through a
-rename or move. The preset palette itself is editable under
-Settings | Tools | PrismTabs.
+expands each one to the files it holds, and can hide a group (closing its tabs,
+remembering them) or show it again. Right-clicking one of those files removes it
+from its group — no need to open the file first, which is the one thing a tab's
+own menu cannot offer. Assignments persist across restarts, along with the tabs a
+hidden group remembers, and follow a file through a rename or move. The preset
+palette itself is editable under Settings | Tools | PrismTabs.
 
 Free forever
   • Assign tabs to 8 preset colours, each measured for contrast on both light and
@@ -70,7 +72,8 @@ Free forever
   • Assignments persist across restarts and survive file renames and moves
 
 Paid — a 30-day free trial on every new install, then a subscription
-  • The PrismTabs tool window for managing every group at a glance
+  • The PrismTabs tool window for managing every group at a glance, each group
+    expanding to the files it holds
   • Hide a group to close its tabs and remember them, then show it to reopen them
     together
   • Mark a group active so newly opened files join it automatically

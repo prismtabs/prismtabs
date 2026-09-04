@@ -543,6 +543,13 @@ toolchain, for no benefit. Recommendation:
   tests. Keep these few; they're slow.
 - **The popup and tool window** → manual testing in `runIde`. UI-testing them is not worth the cost here.
 
+  **Overtaken by events.** There is now a permanent `uiTest` source set driving both surfaces
+  end-to-end against a live sandbox through `remote-robot` — every popup step, the tool window
+  tree, and the settings page. It earned its cost several times over: the findings it caught are
+  listed in the README ("Two UI-testing findings", "Three more…", "A fourth…"), none of which a
+  manual pass had noticed. See the README's "UI testing" for how to run it and why `remote-robot`
+  rather than IDE Starter.
+
 ---
 
 ## 8. Bootstrapping prompt for Claude Code

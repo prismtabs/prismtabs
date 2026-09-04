@@ -73,21 +73,30 @@ already covered continuously by local development.
    obsolete" below.)
 4. **Rename / Recolour / active group / Files…** — via **Manage Groups…**, rename a group and
    recolour it; confirm every member tab picks up both changes, and that opening a new file while a
-   group is marked active colours it automatically. Then, on a group with a *closed* member,
-   **Files…**: the chooser opens centred with a `Files in <name>` title bar, lists that member by
-   name with its greyed directory, and clicking it reopens the file. (Kept inside item 4 rather
-   than numbered separately: the sign-off logs below refer to these checks by number, and
-   renumbering them would falsify that record.)
+   group is marked active colours it automatically. On a tab that was already open before the
+   group was marked active, confirm its popup carries the `Add to Group "<name>"` row under the
+   swatches, with that group's colour dot, and that one click assigns it. Then, on a group with a
+   *closed* member, **Files…**: the chooser opens centred with a `Files in <name>` title bar,
+   lists that member by name with its greyed directory, and clicking it reopens the file. (Kept
+   inside item 4 rather than numbered separately: the sign-off logs below refer to these checks
+   by number, and renumbering them would falsify that record.)
 5. **Remove from Group** — clears the tint back to the platform default.
-6. **PrismTabs tool window** — opens from its stripe button; lists every group with member count;
-   hiding closes member tabs and marks the row "hidden"; showing reopens them in their
+6. **PrismTabs tool window** — opens from its stripe button; lists every group as `N files`;
+   expanding a group row shows one row per member — file-type icon, name, greyed relative
+   directory — with the open ones in bold and the closed ones still listed, and double-clicking a
+   member row opens it. Right-clicking a member offers **Remove from Group**, and a Ctrl-clicked
+   selection of several states the count (`Remove 3 Files from Group`); the item is absent on a
+   group row. Hiding closes member tabs and marks the row "hidden"; showing reopens them in their
    original order. Confirm the stripe icon and swatch icons aren't blurry at this OS's default
    scaling.
 7. **Settings | Tools | PrismTabs** — reachable both via the Settings/Preferences menu item and
    (macOS only) via ⌘,. Rename a preset, **Apply**, then **Restore Defaults** and confirm the
    preset label actually reverts.
 8. **Restart persistence** — after steps 2–7, restart the sandbox IDE and confirm group
-   assignments, names, colours, collapsed state, and any palette customisation all survived.
+   assignments, names, colours, and any palette customisation all survived. Hidden is *derived*,
+   not stored (README "Hidden is derived from the strip, not stored"): a group whose tabs are all
+   shut still reads "hidden" after a restart because none of its members is open, and **Show
+   Group** must reopen the set that was last open, which is the part that is persisted.
 
 ## macOS: automated remote-robot suite on real hardware
 
