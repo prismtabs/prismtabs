@@ -94,7 +94,11 @@ private class TabGroupsPanel(
         name = GROUP_TREE_NAME
         isRootVisible = false
         showsRootHandles = true
-        selectionModel.selectionMode = TreeSelectionModel.SINGLE_TREE_SELECTION
+        // Discontiguous, so a Ctrl/Cmd-click can gather files that are nowhere near each other in
+        // the tree — which is the ordinary shape of "these four are done with, drop them". The
+        // group actions below stay unambiguous by refusing a selection that spans two groups
+        // ([selectedGroup]), rather than by keeping the tree single-selection.
+        selectionModel.selectionMode = TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION
         cellRenderer = TabGroupsTreeRenderer(service)
         emptyText.text = "No tab groups yet — right-click a tab to create one."
         // Double-click means hide/show on a group row and open on a file row (see below), so it must
@@ -130,7 +134,7 @@ private class TabGroupsPanel(
         // file is in, and those two must not read as neighbours in the same list.
         val contextMenuActions = DefaultActionGroup(groupActions).apply {
             addSeparator()
-            add(RemoveFromGroupAction(project, service, ::selectedMember))
+            add(RemoveFromGroupAction(project, service, ::selectedMembers))
         }
         installRowSelectingPopupMenu(tree, contextMenuActions)
 
@@ -213,7 +217,7 @@ private class TabGroupsPanel(
         }
 
         val expandedIds = groupNodes().filter { tree.isExpanded(it.treePath) }.mapTo(mutableSetOf()) { it.group.id }
-        val selection = selectionKey()
+        val selection = selectionKeys()
 
         root.removeAllChildren()
         service.groups().forEach { root.add(groupNode(it)) }
@@ -255,15 +259,33 @@ private class TabGroupsPanel(
      * What the toolbar and the context menu act on: **the selected group, or the selected file's
      * parent group**. Without the second half every action would go dead the moment a child row was
      * selected — and selecting a child is the ordinary way to use this tree.
+     *
+     * With the tree multi-selection, "the selected group" must still be *one* group: a selection
+     * spanning two of them answers null, so Rename, Recolour, Delete and the two toggles grey out
+     * rather than silently picking whichever row happens to lead. Rows from a single group — one
+     * group row, or any number of its files — leave them live, which is the case that matters.
      */
-    private fun selectedGroup(): TabGroup? = (tree.selectionPath?.lastPathComponent as? TabGroupsNode)?.group
+    private fun selectedGroup(): TabGroup? =
+        selectedNodes().map { it.group }.distinctBy { it.id }.singleOrNull()
 
     /**
-     * What the context menu's file action acts on: **the selected file**, and nothing else. The
+     * What the context menu's file action acts on: **every selected file**, and only files. The
      * deliberate opposite of [selectedGroup]'s widening — a group row has no one member to remove,
-     * so the action hides itself there rather than guessing.
+     * so a selection that includes one yields nothing and the action hides itself rather than
+     * guessing which of that group's files were meant.
+     *
+     * Files from *different* groups are allowed, unlike [selectedGroup]'s single-group rule:
+     * "unassign these" is well defined however the selection is spread, while "rename this group"
+     * is not.
      */
-    private fun selectedMember(): MemberNode? = tree.selectionPath?.lastPathComponent as? MemberNode
+    private fun selectedMembers(): List<MemberNode> {
+        val nodes = selectedNodes()
+        val members = nodes.filterIsInstance<MemberNode>()
+        return if (members.size == nodes.size) members else emptyList()
+    }
+
+    private fun selectedNodes(): List<TabGroupsNode> =
+        tree.selectionPaths.orEmpty().mapNotNull { it.lastPathComponent as? TabGroupsNode }
 
     /**
      * Double-click on [path]: **hide or show** a group row, open a file row. The group binding is
@@ -284,6 +306,12 @@ private class TabGroupsPanel(
      * Deliberately not hide/show — that is the double-click's job. Enter is what a keyboard user
      * presses while arrowing down a tree to look inside a row, and closing a group's tabs would be
      * the most surprising thing in the plugin to hang off that.
+     *
+     * Acts on the **lead row only**, even now that several can be selected: opening a whole
+     * selection would queue one missing-file dialog per member that is gone from disk
+     * ([chooseMemberFile] asks about each), and a queue of identical modals is the thing
+     * [promptToDeleteEmptied] exists to avoid. Removal is the multi-row operation here; opening
+     * stays one file at a time.
      */
     private fun enterOn(path: TreePath) {
         when (val node = path.lastPathComponent) {
@@ -301,55 +329,70 @@ private class TabGroupsPanel(
      */
     private data class SelectionKey(val groupId: String, val url: String?, val groupIndex: Int)
 
-    private fun selectionKey(): SelectionKey? {
-        val node = tree.selectionPath?.lastPathComponent as? TabGroupsNode ?: return null
-        val groupId = node.group.id
-        return SelectionKey(groupId, (node as? MemberNode)?.row?.url, groupNodes().indexOfFirst { it.group.id == groupId })
-    }
+    /**
+     * Every selected row, not just the lead one: the tree is multi-selection, and `refresh()` runs
+     * on ordinary editor opens and closes too — a gathered selection of six files that collapsed to
+     * one row because a tab opened elsewhere would be worse than useless.
+     */
+    private fun selectionKeys(): List<SelectionKey> =
+        selectedNodes().map { node ->
+            val groupId = node.group.id
+            SelectionKey(groupId, (node as? MemberNode)?.row?.url, groupNodes().indexOfFirst { it.group.id == groupId })
+        }
 
-    private fun restoreSelection(key: SelectionKey?) {
-        if (key == null) return
+    private fun restoreSelection(keys: List<SelectionKey>) {
+        if (keys.isEmpty()) return
         val groups = groupNodes()
-        val group = groups.firstOrNull { it.group.id == key.groupId }
-        if (group != null) {
-            // The same member if it is still assigned; the group row if it isn't (it was unassigned,
-            // renamed onto a new URL, or deleted from disk between refreshes).
-            select(key.url?.let { url -> group.members.firstOrNull { it.row.url == url } } ?: group)
+        // The same rows that were selected, minus any that are gone: a member is matched by URL
+        // within its group and falls back to the group row when it is no longer assigned there
+        // (unassigned, renamed onto a new URL, or deleted from disk between refreshes).
+        val restored = keys.mapNotNull { key ->
+            val group = groups.firstOrNull { it.group.id == key.groupId } ?: return@mapNotNull null
+            key.url?.let { url -> group.members.firstOrNull { it.row.url == url } } ?: group
+        }
+        if (restored.isNotEmpty()) {
+            select(restored.distinct())
             return
         }
-        // The selected group is gone — deleted here or from a tab's popup. Fall to the row that took
-        // its place (the last one, if it was the last) rather than leaving the tree with no
-        // selection: an empty selection disables the whole toolbar and context menu, which is the
-        // platform's convention for "nothing is selected" and reads as a dead panel right after a
-        // delete. Only when something *was* selected: a tree nobody has touched yet must not select
-        // a row on its own.
-        if (groups.isNotEmpty()) select(groups[key.groupIndex.coerceIn(groups.indices)])
+        // Every selected group is gone — deleted here or from a tab's popup. Fall to the row that
+        // took the first one's place (the last row, if it was the last) rather than leaving the tree
+        // with no selection: an empty selection disables the whole toolbar and context menu, which
+        // is the platform's convention for "nothing is selected" and reads as a dead panel right
+        // after a delete. Only when something *was* selected: a tree nobody has touched yet must
+        // not select a row on its own.
+        if (groups.isNotEmpty()) select(listOf(groups[keys.first().groupIndex.coerceIn(groups.indices)]))
     }
 
-    private fun select(node: DefaultMutableTreeNode) {
-        val path = node.treePath
-        tree.selectionPath = path
-        tree.scrollPathToVisible(path)
+    /** Selects exactly [nodes], scrolling the first back into view. */
+    private fun select(nodes: List<DefaultMutableTreeNode>) {
+        val paths = nodes.map { it.treePath }
+        tree.selectionPaths = paths.toTypedArray()
+        paths.firstOrNull()?.let { tree.scrollPathToVisible(it) }
     }
 
     /**
      * The selected *file* row, published for the platform's own file actions — F4 (Jump to Source),
      * Select in Project View, Copy Path — so this tree gets them without reimplementing any of them.
      *
-     * Only a file row publishes: a group row has no single file, and answering with all of its
-     * members would silently point file-wide actions at a whole group. The panel is the provider
+     * Only file rows publish: a group row has no single file, and answering with all of its
+     * members would silently point file-wide actions at a whole group — so a selection that
+     * includes one publishes nothing at all ([selectedMembers]). The panel is the provider
      * rather than the tree because [SimpleToolWindowPanel] already implements
      * `UiCompatibleDataProvider`, and the tree is inside it either way.
      */
     override fun uiDataSnapshot(sink: DataSink) {
         super.uiDataSnapshot(sink)
-        val node = tree.selectionPath?.lastPathComponent as? MemberNode ?: return
-        // Re-resolved, not cached on the node: the snapshot is read at the moment an action asks,
-        // and the file may have gone since the tree was last built.
-        val file = VirtualFileManager.getInstance().findFileByUrl(node.row.url) ?: return
-        sink[CommonDataKeys.VIRTUAL_FILE] = file
-        sink[CommonDataKeys.VIRTUAL_FILE_ARRAY] = arrayOf(file)
-        sink[CommonDataKeys.NAVIGATABLE] = OpenFileDescriptor(project, file)
+        val vfm = VirtualFileManager.getInstance()
+        // Re-resolved, not cached on the nodes: the snapshot is read at the moment an action asks,
+        // and a file may have gone since the tree was last built.
+        val files = selectedMembers().mapNotNull { vfm.findFileByUrl(it.row.url) }
+        if (files.isEmpty()) return
+        // The array is the whole selection — that is what a multi-file action (Copy Paths, Delete)
+        // reads — while the single-file keys answer with the first, since F4 and Select in Project
+        // View can only mean one file.
+        sink[CommonDataKeys.VIRTUAL_FILE_ARRAY] = files.toTypedArray()
+        sink[CommonDataKeys.VIRTUAL_FILE] = files.first()
+        sink[CommonDataKeys.NAVIGATABLE] = OpenFileDescriptor(project, files.first())
     }
 
     /**
@@ -452,10 +495,13 @@ private fun searchTextFor(node: Any?): String = when (node) {
  *
  * Selecting the right-clicked row is what the platform's own tool windows do — right-clicking an
  * unselected file in the Project view selects it before opening the menu, verified against a live
- * sandbox IDE rather than assumed. The selection-aware helper the platform ships for trees
- * ([PopupHandler.installFollowingSelectionTreePopup]) makes the opposite trade: it *suppresses* the
- * menu unless the click is already on the selection, which suits a multi-selection tree and would
- * only make this one deader still.
+ * sandbox IDE rather than assumed. A click *inside* an existing multi-selection leaves it whole,
+ * for the same reason and from the same source: otherwise the menu's own multi-file item could
+ * never be reached, since opening the menu would have just discarded the selection it acts on. The
+ * selection-aware helper the platform ships for trees
+ * ([PopupHandler.installFollowingSelectionTreePopup]) gets only half of that: it *suppresses* the
+ * menu entirely unless the click is already on the selection, which leaves the greyed-out-menu
+ * gap above wide open.
  *
  * `getPathForLocation` returns null for a point that isn't on a row, which is the bounds check the
  * list this replaced had to do by hand: a right-click on the empty space below the last row leaves
@@ -464,7 +510,13 @@ private fun searchTextFor(node: Any?): String = when (node) {
 private fun installRowSelectingPopupMenu(tree: JTree, actions: ActionGroup) {
     tree.addMouseListener(object : PopupHandler() {
         override fun invokePopup(comp: Component, x: Int, y: Int) {
-            tree.getPathForLocation(x, y)?.let { tree.selectionPath = it }
+            // Only when the click is *outside* the current selection: right-clicking one of several
+            // already-selected rows must keep all of them, or a multi-file action could never be
+            // invoked from the menu it lives in. This is the platform's own rule — verified against
+            // the Project view in a live sandbox — and the reason the fix below is a manual
+            // selection move rather than `installFollowingSelectionTreePopup`.
+            val path = tree.getPathForLocation(x, y)
+            if (path != null && tree.selectionPaths?.contains(path) != true) tree.selectionPath = path
             val menu = ActionManager.getInstance().createActionPopupMenu(POPUP_PLACE, actions)
             menu.setTargetComponent(tree)
             menu.component.show(comp, x, y)
@@ -707,7 +759,7 @@ private class DeleteAction(project: Project, service: TabGroupService, selectedG
 }
 
 /**
- * Unassigning the selected file — the same operation a tab's own right-click menu offers, brought
+ * Unassigning the selected files — the same operation a tab's own right-click menu offers, brought
  * here because the tool window is the only surface that shows a member whose tab is *closed*, and
  * so the only one where the file to unassign may not have a tab to right-click at all. Without it,
  * dropping a closed file from a group meant opening it first, just to close it again afterwards.
@@ -716,10 +768,14 @@ private class DeleteAction(project: Project, service: TabGroupService, selectedG
  * waste-basket, which destroys what it points at. The pair sits in one menu, so the icons carry
  * the distinction as much as the wording does.
  *
- * Hidden, not merely disabled, on a group row: the platform's own preference is to disable rather
- * than hide, but that reads a file-only verb onto a row that has no file, and the menu already
- * shows five items that *do* apply there. Nothing is lost — the row the user right-clicked is the
- * row the menu describes.
+ * Hidden, not merely disabled, on a group row — and on any selection that *includes* one: the
+ * platform's own preference is to disable rather than hide, but that reads a file-only verb onto a
+ * row that has no file, and the menu already shows five items that *do* apply there. Nothing is
+ * lost — the rows the user right-clicked are the rows the menu describes.
+ *
+ * Multi-selection is the whole point of the tree being discontiguous: the files worth dropping
+ * together are rarely adjacent. The selected files may span groups — [removeFromGroups] unassigns
+ * each from wherever it is, and the label says so.
  *
  * No confirmation, matching the tab popup: the assignment is one click to restore. Emptying the
  * group is the case that does ask, in [promptToDeleteEmptied], which [removeFromGroup] reaches for
@@ -728,19 +784,41 @@ private class DeleteAction(project: Project, service: TabGroupService, selectedG
 private class RemoveFromGroupAction(
     private val project: Project,
     private val service: TabGroupService,
-    private val selectedMember: () -> MemberNode?,
-) : AnAction("Remove from Group", "Unassign this file from its tab group", AllIcons.General.Remove) {
+    private val selectedMembers: () -> List<MemberNode>,
+) : AnAction("Remove from Group", "Unassign the selected files from their tab groups", AllIcons.General.Remove) {
 
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
 
     override fun update(e: AnActionEvent) {
-        e.presentation.isEnabledAndVisible = selectedMember() != null
+        val members = selectedMembers()
+        e.presentation.isEnabledAndVisible = members.isNotEmpty()
+        if (members.isEmpty()) return
+        e.presentation.text = removeFromGroupText(members.size, members.distinctBy { it.group.id }.size)
     }
 
     override fun actionPerformed(e: AnActionEvent) {
-        val member = selectedMember() ?: return
-        removeFromGroup(project, service, member.row.url)
+        val urls = selectedMembers().map { it.row.url }
+        if (urls.isEmpty()) return
+        removeFromGroups(project, service, urls)
     }
+}
+
+/**
+ * [RemoveFromGroupAction]'s label for a selection of [fileCount] files spread over [groupCount]
+ * groups. Pure, and unit-tested in `RemoveFromGroupTextTest`, for the same reason
+ * `addToActiveGroupLabel` and `deleteConfirmationMessage` are: the wording is the part that goes
+ * wrong, and it needs no platform to check.
+ *
+ * One file keeps the tab popup's exact words, since it is the same operation seen from the other
+ * surface — see [naming and terminology](../../../../../../docs/naming-and-terminology.md) §3. A
+ * multi-selection states the count, which is what the platform's own multi-row actions do
+ * ("Delete 3 Files"), and pluralises the *group* half honestly: unassigning four files that came
+ * from three different groups is not "from Group".
+ */
+internal fun removeFromGroupText(fileCount: Int, groupCount: Int): String = when {
+    fileCount <= 1 -> "Remove from Group"
+    groupCount <= 1 -> "Remove $fileCount Files from Group"
+    else -> "Remove $fileCount Files from Their Groups"
 }
 
 /**

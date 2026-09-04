@@ -346,13 +346,44 @@ to be opened and then closed again just to be dropped.
 - One removal path for both surfaces: `removeFromGroup` is keyed by **URL**, not `VirtualFile`, so a
   row naming a file that is gone from disk can be unassigned too (assignments are URL-keyed
   throughout); the repaint is skipped when nothing resolves, since a missing file has no tab.
-- Single-selection only, as the tree is (`SINGLE_TREE_SELECTION`). Multi-select removal is a
-  separate change, not a silent extension of this one.
+- **Multi-select**, which is why the tree becomes `DISCONTIGUOUS_TREE_SELECTION`: the files worth
+  dropping together are rarely adjacent, and gathering them by Ctrl-click is the gesture every
+  platform tree offers for exactly this. Three consequences, each load-bearing:
+  - The **group** actions must stay unambiguous, so `selectedGroup()` now answers only when every
+    selected row resolves to *one* group — one group row, or any number of its files. A selection
+    spanning two groups greys Rename, Recolour, Delete and both toggles rather than acting on
+    whichever row happens to lead. Removal has no such restriction: "unassign these" is well
+    defined however the selection is spread.
+  - A right-click **inside** an existing selection must keep it whole (`installRowSelectingPopupMenu`
+    now moves the selection only for a click outside it). Without that, opening the menu would
+    discard the very rows its multi-file item acts on. This is the platform's own rule, and it is
+    the half `installFollowingSelectionTreePopup` gets right while getting the greyed-menu case
+    wrong.
+  - `refresh()` must restore the **whole** selection, not the lead row: it runs on every editor
+    open and close, and a gathered selection of six files collapsing to one because a tab opened
+    elsewhere would be worse than no restoration at all.
+- The label is a pure function, `removeFromGroupText(fileCount, groupCount)`, unit-tested in
+  `RemoveFromGroupTextTest` the way `addToActiveGroupLabel` is: one file keeps the tab popup's exact
+  words (same operation, other surface), several state the count as the platform's own multi-row
+  actions do, and the *group* half is pluralised honestly — four files out of three groups is not
+  "from Group".
+- The batch goes through one new `TabGroupService.clearAll(urls)` rather than a loop over `clear`:
+  one pass recomputes the colour cache once and reports the batch's emptied groups each named once,
+  which is exactly what the single empty-group dialog needs. A loop would recompute per file and
+  report a group only via whichever of its members happened to go last.
 
   **Delivered** in `TabGroupsToolWindow.kt` as `RemoveFromGroupAction`, with the toolbar and context
   menu now built from one shared list of action instances. Driven end-to-end in
-  `TabGroupsToolWindowUiTest`'s `a member row offers Remove from Group, and a group row does not` —
-  every tab closed, so nothing in it could have gone through the tab popup.
+  `TabGroupsToolWindowUiTest` — `a member row offers Remove from Group, and a group row does not`
+  (every tab closed, so nothing in it could have gone through the tab popup), `Ctrl-clicked files
+  are removed together, and the item states the count`, and `a selection spanning two groups still
+  removes, greys the group actions, and asks once`.
+
+  **On the free/paid line.** Removal is *not* gated, and must not be: unassigning is a by-hand
+  assignment change, which the split above keeps free forever. It is reachable only by subscribers
+  and trial users in practice, because the surface it lives on — the tool window — is paid; free
+  users keep the same operation on a tab's own right-click menu. The distinction matters if the
+  window ever grows a free mode: the action stays as it is, no `requirePaidFeature` around it.
 
 **Why 6b is free and 6a is paid.** Membership visibility is a *correctness* feature — the same
 argument the README already makes for rename/move remapping, which stays free because your

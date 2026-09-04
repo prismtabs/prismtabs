@@ -77,6 +77,20 @@ class TabGroupService : PersistentStateComponent<TabGroupState> {
         removeAssignments { it == fileUrl }.emptiedGroups.firstOrNull()
 
     /**
+     * Unassigns every URL in [fileUrls] as one removal — the tool window's multi-select
+     * "Remove from Group".
+     *
+     * Not a loop over [clear], which would recompute the colour cache once per file and report a
+     * group emptied by the *last* of its members while saying nothing about the others removed in
+     * the same gesture. One pass answers with the whole batch's [AssignmentRemoval.emptiedGroups],
+     * each group named once, which is what a single empty-group prompt needs.
+     */
+    fun clearAll(fileUrls: Collection<String>): AssignmentRemoval {
+        val urls = fileUrls.toSet()
+        return removeAssignments { it in urls }
+    }
+
+    /**
      * Unassigns [rootUrl] and every assignment nested under it as a directory — the deletion
      * counterpart to [remapUrl], prefix-matched for the same reason: deleting a directory fires a
      * single VFS event for the directory itself, not one per descendant.

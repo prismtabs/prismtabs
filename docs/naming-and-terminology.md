@@ -68,7 +68,7 @@ keep it in sync with the source string.
 | `Tab Group…` (editor-tab right-click menu) | `plugin.xml`, `<action id="PrismTabs.AssignTabGroup" text="Tab Group…">` |
 | `New Group` (caption over the swatch row) | `TabGroupPopup.kt`, `ListSeparator("New Group")` |
 | `Add to Group…`, `Manage Groups…`, `Remove from Group` | `TabGroupPopup.kt`, `textFor(entry)` |
-| `Remove from Group` again, on a tool-window file row — deliberately the same words as the tab popup's, since it is the same operation | `TabGroupsToolWindow.kt`, `RemoveFromGroupAction` |
+| `Remove from Group` again, on a tool-window file row — deliberately the same words as the tab popup's, since it is the same operation; `Remove N Files from Group` / `Remove N Files from Their Groups` for a multi-selection | `TabGroupsToolWindow.kt`, `removeFromGroupText` |
 | `Files…` (a group's file list, in `Manage Groups…`) | `TabGroupPopup.kt`, `GroupActionsStep.getTextFor` |
 | `Files in <name>` (that list's own title), `missing` (its suffix on a member whose file is gone) | `TabGroupPopup.kt`, `showGroupFiles`, `MemberFileRenderer` |
 | `Mark as Active Group` / `Clear Active Group`, `Delete Group`, `Hide Group` / `Show Group` | `TabGroupPopup.kt`, `TabGroupsToolWindow.kt` |

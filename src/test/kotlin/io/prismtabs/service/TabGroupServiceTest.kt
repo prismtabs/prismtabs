@@ -47,6 +47,46 @@ class TabGroupServiceTest {
     }
 
     @Test
+    fun `clearAll unassigns every url in one pass`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+        service.assign("file:///B.kt", red)
+        service.assign("file:///C.kt", blue)
+
+        val removal = service.clearAll(listOf("file:///A.kt", "file:///C.kt"))
+
+        assertNull(service.groupFor("file:///A.kt"))
+        assertNull(service.groupFor("file:///C.kt"))
+        assertEquals(red, service.groupFor("file:///B.kt"), "an unselected member must stay put")
+        assertEquals(listOf("file:///A.kt", "file:///C.kt"), removal.removedUrls.sorted())
+        // Only blue was emptied: red still holds B.kt. A loop over `clear` would agree here, but
+        // not below.
+        assertEquals(listOf(blue), removal.emptiedGroups)
+    }
+
+    @Test
+    fun `clearAll names a group emptied by the batch once, not once per file`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+        service.assign("file:///B.kt", red)
+
+        val removal = service.clearAll(listOf("file:///A.kt", "file:///B.kt"))
+
+        assertEquals(listOf(red), removal.emptiedGroups, "the emptied group must be reported exactly once")
+    }
+
+    @Test
+    fun `clearAll ignores urls that were never assigned`() {
+        val service = TabGroupService()
+        service.assign("file:///A.kt", red)
+
+        val removal = service.clearAll(listOf("file:///A.kt", "file:///Never.kt"))
+
+        assertEquals(listOf("file:///A.kt"), removal.removedUrls)
+        assertEquals(listOf(red), removal.emptiedGroups)
+    }
+
+    @Test
     fun `groups lists every group that has been assigned, ordered`() {
         val service = TabGroupService()
         service.assign("file:///A.kt", red.copy(order = 1))

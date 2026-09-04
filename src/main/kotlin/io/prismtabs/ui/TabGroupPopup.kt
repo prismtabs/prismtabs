@@ -870,9 +870,23 @@ internal fun filesToAdd(files: Collection<VirtualFile>, service: TabGroupService
  * ([MemberFileRow] included), so the URL is the identity both surfaces already hold; the repaint is
  * simply skipped when nothing resolves, since a file that does not exist has no tab to repaint.
  */
-internal fun removeFromGroup(project: Project, service: TabGroupService, fileUrl: String) {
-    val emptied = service.clear(fileUrl)
-    VirtualFileManager.getInstance().findFileByUrl(fileUrl)?.let { TabRepaint.request(project, it) }
+internal fun removeFromGroup(project: Project, service: TabGroupService, fileUrl: String) =
+    removeFromGroups(project, service, listOf(fileUrl))
+
+/**
+ * [removeFromGroup] for a whole selection — the tool window's multi-select removal, and the single
+ * file's own route by way of a one-element list, so there is still exactly one removal path.
+ *
+ * The files need not share a group: each is unassigned from wherever it is. One
+ * [TabGroupService.clearAll] rather than a loop over `clear`, one notification, and one empty-group
+ * prompt for the batch — [promptToDeleteEmptied] is already built to ask about several groups in a
+ * single dialog (it is what a directory delete needs), and a queue of identical modals is the wrong
+ * way to ask.
+ */
+internal fun removeFromGroups(project: Project, service: TabGroupService, fileUrls: List<String>) {
+    val emptied = service.clearAll(fileUrls).emptiedGroups
+    val vfm = VirtualFileManager.getInstance()
+    fileUrls.forEach { url -> vfm.findFileByUrl(url)?.let { TabRepaint.request(project, it) } }
     TabGroupNotifier.notifyChanged(project)
     promptToDeleteEmptied(project, service, emptied)
 }

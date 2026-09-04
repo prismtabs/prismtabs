@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import java.awt.event.KeyEvent
 import java.time.Duration.ofSeconds
 
 /**
@@ -404,6 +405,125 @@ class TabGroupsToolWindowUiTest {
                     "...while still offering the group's own actions, got ${remoteRobot.contextMenuItemStates()}",
                 )
                 Keyboard(remoteRobot).escape()
+            } finally {
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
+     * Multi-select removal, driven with the gesture it exists for: Ctrl-click two of a group's
+     * three files, then remove both in one go. Three things are asserted that single-selection
+     * could not reach — the item states the count, the right-click *inside* an existing selection
+     * keeps that selection whole (without which the menu would discard the very rows it acts on),
+     * and the group's own actions stay live because every selected row belongs to one group.
+     */
+    @Test
+    fun `Ctrl-clicked files are removed together, and the item states the count`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                openFile("Third.kt")
+                assignFileToNewGroup("Sample.kt", "Bulk")
+                addFileToGroup("Second.kt", "Bulk")
+                addFileToGroup("Third.kt", "Bulk")
+                closeAllEditors()
+                waitFor(ofSeconds(10)) {
+                    remoteRobot.toolWindowGroupRows().any { it.contains("Bulk") && it.contains("3 files") }
+                }
+
+                remoteRobot.expandToolWindowGroup("Bulk")
+                val tree = remoteRobot.toolWindowGroupTree()
+                tree.clickRowWithText("Sample.kt", false)
+                Keyboard(remoteRobot).pressing(KeyEvent.VK_CONTROL) { tree.clickRowWithText("Second.kt", false) }
+                waitFor(ofSeconds(10)) { remoteRobot.toolWindowSelectionCount() == 2 }
+
+                // Right-click one of the two selected rows: the selection must survive it.
+                tree.findText("Second.kt").rightClick()
+                assertEquals(
+                    2,
+                    remoteRobot.toolWindowSelectionCount(),
+                    "right-clicking inside a selection must keep it, got ${remoteRobot.selectedToolWindowRows()}",
+                )
+                assertTrue(
+                    remoteRobot.contextMenuItemStates().any { it == "Remove 2 Files from Group=true" },
+                    "the item must state the count, got ${remoteRobot.contextMenuItemStates()}",
+                )
+                // Every selected row is in one group, so the group's own actions are unambiguous.
+                assertTrue(
+                    remoteRobot.contextMenuItemStates().any { it == "Delete Group=true" },
+                    "a selection within one group must leave its group actions live, got ${remoteRobot.contextMenuItemStates()}",
+                )
+
+                remoteRobot.actionMenuItem("Remove 2 Files from Group").click()
+
+                waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == null && groupNameFor("Second.kt") == null }
+                assertEquals("Bulk", groupNameFor("Third.kt"), "the unselected member must stay put")
+                waitFor(ofSeconds(10)) {
+                    remoteRobot.toolWindowGroupRows().any { it.contains("Bulk") && it.contains("1 file") }
+                }
+                assertEquals(
+                    listOf("Third.kt"),
+                    remoteRobot.toolWindowMemberRows("Bulk").map { it.trim().substringBefore("  ") },
+                    "only the unselected member may be left, got ${remoteRobot.toolWindowMemberRows("Bulk")}",
+                )
+            } finally {
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
+     * The other half of multi-selection: rows from *two* groups. "Remove from Group" still applies —
+     * unassigning is well defined however the selection is spread, and says so in its label — while
+     * the group actions must go grey, since "rename this group" has no answer for a selection that
+     * spans two. Emptying both in one gesture is also the batch case of the empty-group prompt:
+     * one dialog naming both groups, not one dialog each.
+     */
+    @Test
+    fun `a selection spanning two groups still removes, greys the group actions, and asks once`(
+        remoteRobot: RemoteRobot,
+    ) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                assignFileToNewGroup("Sample.kt", "SpanA")
+                assignFileToNewGroup("Second.kt", "SpanB")
+                closeAllEditors()
+                waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().size == 2 }
+
+                remoteRobot.expandToolWindowGroup("SpanA")
+                remoteRobot.expandToolWindowGroup("SpanB")
+                val tree = remoteRobot.toolWindowGroupTree()
+                tree.clickRowWithText("Sample.kt", false)
+                Keyboard(remoteRobot).pressing(KeyEvent.VK_CONTROL) { tree.clickRowWithText("Second.kt", false) }
+                waitFor(ofSeconds(10)) { remoteRobot.toolWindowSelectionCount() == 2 }
+
+                tree.findText("Second.kt").rightClick()
+                assertTrue(
+                    remoteRobot.contextMenuItemStates().any { it == "Remove 2 Files from Their Groups=true" },
+                    "the label must not claim one group, got ${remoteRobot.contextMenuItemStates()}",
+                )
+                assertTrue(
+                    remoteRobot.contextMenuItemStates().any { it == "Delete Group=false" },
+                    "a selection spanning groups must grey the group actions, got ${remoteRobot.contextMenuItemStates()}",
+                )
+
+                remoteRobot.actionMenuItem("Remove 2 Files from Their Groups").click()
+
+                // Both groups are left empty by the one gesture, so the prompt asks about both at
+                // once — the plural wording is the assertion that it is a single batched dialog.
+                dialog("Empty Tab Groups") {
+                    find<JButtonFixture>(JButtonFixture.byText("Keep")).click()
+                }
+                waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == null && groupNameFor("Second.kt") == null }
+                waitFor(ofSeconds(10)) {
+                    remoteRobot.toolWindowGroupRows().count { it.contains("0 files") } == 2
+                }
             } finally {
                 hideTabGroupsToolWindow()
             }
