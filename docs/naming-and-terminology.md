@@ -75,6 +75,8 @@ keep it in sync with the source string.
 | `N files` / `1 file` (tool window group row member count) | `TabGroupsToolWindow.kt`, `TabGroupsTreeRenderer` |
 | `In group: <name>` (caption over `Remove from Group`) | `TabGroupPopup.kt`, `currentGroupCaption` |
 | `New Tab Group`, `Rename Tab Group`, `Missing File` (dialog titles) | `TabGroupPopup.kt`, `RenameGroupDialog.kt` |
+| `Add to Tab Group "<name>"` (tab popup row, and the same item on the Project view's context menu) | `TabGroupPopup.kt`, `addToActiveGroupLabel`; `plugin.xml`, `<action id="PrismTabs.AddToActiveGroup">` |
+| `Add to Active Tab Group` (that action's static Keymap/Find Action listing — `update()` rewrites it to `Add to Tab Group "<name>"` wherever a group is actually active) | `plugin.xml`, `<action id="PrismTabs.AddToActiveGroup" text="…">` |
 
 `Tab Group…` in layer 3 and `tab group` in layer 2 co-exist on purpose: one is a
 button you click, the other is what you get. If a source string changes, update
