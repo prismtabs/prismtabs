@@ -262,7 +262,7 @@ private class RootStep(
             Entry.AddToGroup -> AddToGroupStep(project, file, service)
             Entry.ManageGroups -> ManageGroupsStep(project, service)
             Entry.RemoveFromGroup -> {
-                finalRunnable = Runnable { removeFromGroup(project, file, service) }
+                finalRunnable = Runnable { removeFromGroup(project, service, file.url) }
                 PopupStep.FINAL_CHOICE
             }
         }
@@ -861,10 +861,18 @@ internal fun addToActiveGroup(
 internal fun filesToAdd(files: Collection<VirtualFile>, service: TabGroupService): List<VirtualFile> =
     files.filter { !it.isDirectory && service.groupFor(it.url) == null }
 
-/** "Remove from Group"'s handler: unassign, repaint, and offer to delete a group left empty. */
-private fun removeFromGroup(project: Project, file: VirtualFile, service: TabGroupService) {
-    val emptied = service.clear(file.url)
-    TabRepaint.request(project, file)
+/**
+ * "Remove from Group"'s handler: unassign, repaint, and offer to delete a group left empty.
+ *
+ * Keyed by URL rather than by [VirtualFile], and `internal`, because the tool window's tree offers
+ * the same item on a member row (Phase 6c) — and a tree row can name a file that is no longer on
+ * disk, which has no `VirtualFile` to be reached through. Assignments are keyed by URL throughout
+ * ([MemberFileRow] included), so the URL is the identity both surfaces already hold; the repaint is
+ * simply skipped when nothing resolves, since a file that does not exist has no tab to repaint.
+ */
+internal fun removeFromGroup(project: Project, service: TabGroupService, fileUrl: String) {
+    val emptied = service.clear(fileUrl)
+    VirtualFileManager.getInstance().findFileByUrl(fileUrl)?.let { TabRepaint.request(project, it) }
     TabGroupNotifier.notifyChanged(project)
     promptToDeleteEmptied(project, service, emptied)
 }

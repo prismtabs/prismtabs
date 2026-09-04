@@ -107,17 +107,32 @@ private class TabGroupsPanel(
     private val toolbarComponent: JComponent
 
     init {
-        val actions = DefaultActionGroup(
+        // A list, so the two surfaces below can each wrap the *same* action instances: an
+        // ActionGroup is not meant to be re-parented, and copying children out of one with
+        // `getChildren(null)` is the deprecated route.
+        val groupActions = listOf(
             ToggleActiveAction(project, service, ::selectedGroup),
             ToggleVisibilityAction(project, service, ::selectedGroup),
             RenameAction(project, service, ::selectedGroup),
             RecolorAction(project, service, ::selectedGroup),
             DeleteAction(project, service, ::selectedGroup),
         )
-        val toolbar = ActionManager.getInstance().createActionToolbar("PrismTabs.TabGroupsToolWindow", actions, true)
+        val toolbar = ActionManager.getInstance()
+            .createActionToolbar("PrismTabs.TabGroupsToolWindow", DefaultActionGroup(groupActions), true)
         toolbar.setTargetComponent(tree)
         toolbarComponent = toolbar.component
-        installRowSelectingPopupMenu(tree, actions)
+
+        // The context menu is the toolbar's actions *plus* the one thing that acts on a file rather
+        // than on a group. It is deliberately not in the toolbar: the toolbar has no row under the
+        // cursor to speak of, so a file-only button there would sit disabled for most of the tree's
+        // life. Behind a separator for the same reason the menu needs it at all — "Remove from
+        // Group" unassigns one file and sits next to "Delete Group", which destroys the group the
+        // file is in, and those two must not read as neighbours in the same list.
+        val contextMenuActions = DefaultActionGroup(groupActions).apply {
+            addSeparator()
+            add(RemoveFromGroupAction(project, service, ::selectedMember))
+        }
+        installRowSelectingPopupMenu(tree, contextMenuActions)
 
         // Speed search over the member names as well as the group names, and `canExpand` so it
         // reaches into *collapsed* groups: finding a file whose tab is closed is the whole point of
@@ -242,6 +257,13 @@ private class TabGroupsPanel(
      * selected — and selecting a child is the ordinary way to use this tree.
      */
     private fun selectedGroup(): TabGroup? = (tree.selectionPath?.lastPathComponent as? TabGroupsNode)?.group
+
+    /**
+     * What the context menu's file action acts on: **the selected file**, and nothing else. The
+     * deliberate opposite of [selectedGroup]'s widening — a group row has no one member to remove,
+     * so the action hides itself there rather than guessing.
+     */
+    private fun selectedMember(): MemberNode? = tree.selectionPath?.lastPathComponent as? MemberNode
 
     /**
      * Double-click on [path]: **hide or show** a group row, open a file row. The group binding is
@@ -681,6 +703,43 @@ private class DeleteAction(project: Project, service: TabGroupService, selectedG
     override fun actionPerformed(e: AnActionEvent) {
         val group = selectedGroup() ?: return
         confirmAndDelete(project, group, service)
+    }
+}
+
+/**
+ * Unassigning the selected file — the same operation a tab's own right-click menu offers, brought
+ * here because the tool window is the only surface that shows a member whose tab is *closed*, and
+ * so the only one where the file to unassign may not have a tab to right-click at all. Without it,
+ * dropping a closed file from a group meant opening it first, just to close it again afterwards.
+ *
+ * `General.Remove`, the minus sign: taking a row out of a list, as opposed to [DeleteAction]'s
+ * waste-basket, which destroys what it points at. The pair sits in one menu, so the icons carry
+ * the distinction as much as the wording does.
+ *
+ * Hidden, not merely disabled, on a group row: the platform's own preference is to disable rather
+ * than hide, but that reads a file-only verb onto a row that has no file, and the menu already
+ * shows five items that *do* apply there. Nothing is lost — the row the user right-clicked is the
+ * row the menu describes.
+ *
+ * No confirmation, matching the tab popup: the assignment is one click to restore. Emptying the
+ * group is the case that does ask, in [promptToDeleteEmptied], which [removeFromGroup] reaches for
+ * both surfaces alike.
+ */
+private class RemoveFromGroupAction(
+    private val project: Project,
+    private val service: TabGroupService,
+    private val selectedMember: () -> MemberNode?,
+) : AnAction("Remove from Group", "Unassign this file from its tab group", AllIcons.General.Remove) {
+
+    override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+    override fun update(e: AnActionEvent) {
+        e.presentation.isEnabledAndVisible = selectedMember() != null
+    }
+
+    override fun actionPerformed(e: AnActionEvent) {
+        val member = selectedMember() ?: return
+        removeFromGroup(project, service, member.row.url)
     }
 }
 

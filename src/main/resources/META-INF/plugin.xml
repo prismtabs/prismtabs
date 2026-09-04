@@ -12,8 +12,10 @@
         files opened while a group is active join it automatically, and a file that was already
         open joins it in one click, from the same popup or the Project view's context menu.
         <br/><br/>
-        The PrismTabs tool window lists every group with its colour and member count, and can
-        hide a group (closing its tabs, remembering them) or show it again. Assignments and
+        The PrismTabs tool window lists every group with its colour and member count, expands each
+        one to the files it holds, and can hide a group (closing its tabs, remembering them) or show
+        it again. Right-clicking one of those files removes it from its group — no need to open the
+        file first, which is the one thing a tab's own menu cannot offer. Assignments and
         hidden state persist across restarts and follow a file through a rename or move. The preset
         palette itself is editable under <b>Settings | Tools | PrismTabs</b>.
         <br/><br/>

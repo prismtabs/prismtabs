@@ -341,4 +341,72 @@ class TabGroupsToolWindowUiTest {
             }
         }
     }
+
+    /**
+     * Phase 6c: dropping a file from its group without opening it first. The tool window is the
+     * only surface that lists a member whose tab is closed, so it has to be the one that can
+     * unassign it — before this, the operation lived on the editor tab's own right-click menu and
+     * a closed member had no tab to right-click.
+     *
+     * Driven from the state that makes the point: every tab closed, so nothing here could have gone
+     * through the tab popup. Both halves of the item's scoping are asserted from the same menu —
+     * it is offered, enabled, on a file row, and absent on a group row, where there is no one file
+     * for it to act on and "Delete Group" is the destructive neighbour it must not be confused
+     * with.
+     */
+    @Test
+    fun `a member row offers Remove from Group, and a group row does not`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                assignFileToNewGroup("Sample.kt", "Unassign")
+                addFileToGroup("Second.kt", "Unassign")
+                waitFor(ofSeconds(10)) {
+                    remoteRobot.toolWindowGroupRows().any { it.contains("Unassign") && it.contains("2 files") }
+                }
+
+                // The case the tab strip cannot serve: no tab is open for either member.
+                closeAllEditors()
+                waitFor(ofSeconds(10)) { openTabNames().isEmpty() }
+
+                remoteRobot.expandToolWindowGroup("Unassign")
+                remoteRobot.toolWindowGroupTree().findText("Sample.kt").rightClick()
+                assertTrue(
+                    remoteRobot.contextMenuItemStates().any { it == "Remove from Group=true" },
+                    "a member row must offer Remove from Group, enabled, got ${remoteRobot.contextMenuItemStates()}",
+                )
+
+                remoteRobot.actionMenuItem("Remove from Group").click()
+
+                // The assignment is gone, the group survives with its other member, and the tree
+                // says so — a removal the group list did not notice would be the real regression.
+                waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == null }
+                waitFor(ofSeconds(10)) {
+                    remoteRobot.toolWindowGroupRows().any { it.contains("Unassign") && it.contains("1 file") }
+                }
+                assertEquals("Unassign", groupNameFor("Second.kt"), "the other member must be untouched")
+                assertEquals(
+                    listOf("Second.kt"),
+                    remoteRobot.toolWindowMemberRows("Unassign").map { it.trim().substringBefore("  ") },
+                    "the removed file must be gone from the tree, got ${remoteRobot.toolWindowMemberRows("Unassign")}",
+                )
+
+                // ...and the item is a file's, not a group's: no group row offers it.
+                remoteRobot.toolWindowGroupTree().findText("Unassign").rightClick()
+                assertTrue(
+                    remoteRobot.contextMenuItemStates().none { it.startsWith("Remove from Group=") },
+                    "a group row must not offer Remove from Group, got ${remoteRobot.contextMenuItemStates()}",
+                )
+                assertTrue(
+                    remoteRobot.contextMenuItemStates().any { it.startsWith("Delete Group=") },
+                    "...while still offering the group's own actions, got ${remoteRobot.contextMenuItemStates()}",
+                )
+                Keyboard(remoteRobot).escape()
+            } finally {
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
 }
