@@ -58,6 +58,15 @@ cert ever needs reissuing off the same root before it expires in 2036) have been
 now-defunct Claude session scratch directory into permanent, encrypted storage (password manager).
 The scratch copy no longer exists.
 
+**Updated (2026-09-05):** the interim copy at `~/Documents/PrismTabs GitHub CI CD secrets/` was
+plaintext on disk, not actually encrypted — that's now closed too. All ten files are imported as
+attachments in a KeePassXC vault at `~/.local/share/keepassxc/prismtabs-secrets.kdbx`, group
+`PrismTabsCICD`, each verified byte-for-byte against the original before it was shredded (`shred
+-u -z`) and the plaintext directory removed. To rebuild `signPlugin`'s env vars from the vault:
+`keepassxc-cli attachment-export <db> PrismTabsCICD/chain.pem chain.pem <out>` (same pattern for
+`private_key.pem`/`private_key.pass`), then export their contents as `CERTIFICATE_CHAIN`/
+`PRIVATE_KEY`/`PRIVATE_KEY_PASSWORD`.
+
 ## ~~3. Wire (or deliberately skip) CI publishing — closed~~
 
 **Decision (2026-08-24):** automate, via a tag-triggered workflow, gated behind a manual approval
