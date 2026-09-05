@@ -159,18 +159,15 @@ pass:
   external links to be reachable).
 - Tags — proposed set (`User Interface`, `Editor`, `Productivity`) in `marketplace-listing.md`;
   JetBrains maps free text onto their controlled list at review.
-- **Screenshots.** All four shots (≥1200×760) live in `docs/marketplace/`, upload in filename
-  order: `01-swatch-popup-and-tabs-dark.png`, `02-tool-window-and-tabs-dark.png`,
-  `03-palette-settings-dark.png`, `04-tool-window-and-tabs-light.png`. The two tool-window shots
-  (`02-…` and `04-…`) were re-shot 2026-09-02 for the pin icon and active-group marker.
-  **They need one more re-shoot before upload,** and the window has changed twice since:
-  the row's member count now reads "1 file" / "3 files" rather than "1 tab" / "3 tabs" (a group's
-  members are files, and a group whose tabs are all closed still has them), and Phase 6a turned the
-  flat list into a tree whose group rows expand to their member files. Shoot the replacements with
-  one group **expanded** — that expansion is the window's headline now, and a shot of collapsed
-  rows alone would undersell it and still show the old shape. Consider a fifth shot of the free
-  `Files…` chooser while you are at it: membership visibility is a free-tier headline and nothing in
-  the listing shows it.
+- ~~**Screenshots.**~~ — closed 2026-09-05 (`70208f5`). All four shots (≥1200×760) live in
+  `docs/marketplace/`, upload in filename order: `01-swatch-popup-and-tabs-dark.png`,
+  `02-tool-window-and-tabs-dark.png`, `03-palette-settings-dark.png`,
+  `04-tool-window-and-tabs-light.png`. `01-`, `02-` and `04-` were re-shot against the current build
+  to show the expanded group tree and its member files (the "1 file"/"3 files" wording and Phase 6a's
+  flat-list-to-tree change are both reflected now); `03-palette-settings-dark.png` is unaffected by
+  that feature and was correctly left as-is. Not yet done: the fifth shot of the free `Files…`
+  chooser suggested here previously — membership visibility is a free-tier headline and nothing in
+  the listing shows it yet; still worth doing before upload but not blocking.
 
 ## ~~7. Choose and prepare a License/EULA for the paid listing — closed~~
 
