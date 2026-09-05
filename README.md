@@ -811,9 +811,11 @@ Done so far, none of it published anywhere:
     `config/disabled_plugins.txt`).
 
 **Done since, and what it changed:** `plugin.xml` gained
-`<product-descriptor code="PPRISMTABS" release-date="20260905" release-version="1" optional="true"/>`
+`<product-descriptor code="PPRISMTABS" release-date="20260905" release-version="14" optional="true"/>`
 on 2026-09-05, which armed every gate above. `release-date` is a placeholder until the real publish
-day — see `docs/release-readiness-gaps.md` item 1. It also means `runIde` and `runIdeForUiTests` now
+day, and `release-version` must stay in step with `pluginVersion` — it is the first two components
+with the dot dropped, and fewer than two digits makes the built zip an invalid plugin that
+`verifyPlugin` refuses to check at all. Both are covered by `docs/release-readiness-gaps.md` item 1. It also means `runIde` and `runIdeForUiTests` now
 behave as an unlicensed paid build, so anything exercising a paid feature by hand needs the trial or
 a licence first, and the uiTest suite entitles itself before each test.
 
