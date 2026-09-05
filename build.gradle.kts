@@ -165,6 +165,10 @@ intellijPlatform {
 tasks {
     test {
         useJUnitPlatform()
+        // ProductDescriptorTest asserts plugin.xml's release-version against the single source
+        // intellijPlatform.pluginConfiguration.version already reads; a `-D` on the ./gradlew
+        // command line would not reach this forked JVM, and neither would the property itself.
+        systemProperty("prismtabs.pluginVersion", providers.gradleProperty("pluginVersion").get())
     }
 
     // Handy while developing: opens a sandbox IDE with the plugin installed.
