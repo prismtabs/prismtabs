@@ -6,34 +6,35 @@ Each item below is written to be picked up standalone in its own session.
 
 ---
 
-## 1. Arm the paid-feature gate
+## ~~1. Arm the paid-feature gate — closed~~
 
-**Current state:** `plugin.xml` has no `<product-descriptor>` tag. `gradle.properties`'
-`pluginVersion` is `1.4.14-SNAPSHOT` (as of 2026-09-01). `PrismTabsLicense.paidFeaturesEnabled()`
-already returns `true` unconditionally while `getProductCode()` is null, so every gate is wired but
-inert. The `optional="true"` requirement in the first "To close" bullet was verified live this
-session — a bare `<product-descriptor>` was confirmed to disable the plugin outright under `runIde`.
+**Closed (2026-09-05):** `plugin.xml` now has
+`<product-descriptor code="PPRISMTABS" release-date="20260905" release-version="1" optional="true"/>`,
+right after `<vendor>`. `gradle.properties`'s `pluginVersion` is bumped off `-SNAPSHOT` to `1.4.14`.
+`release-date` is today's date as a placeholder — it's Marketplace-listing metadata, not validated
+against the actual publish date, but it must be bumped to the real day this is tagged and published
+(see item 3's "how to actually cut a release") before that tag goes out, since the listing/upload
+items (5, 6, 8) are still open and this isn't shipping today.
 
-**To close:**
-- Pick the actual release date.
-- Bump `pluginVersion` off `-SNAPSHOT` to the first paid release's version.
-- Add `<product-descriptor code="PPRISMTABS" release-date="YYYYMMDD" release-version="10"
-  optional="true"/>` to `plugin.xml`. The `optional="true"` is **not** cosmetic and must not be
-  dropped: it sets `IdeaPluginDescriptorImpl.isLicenseOptional`, which is what tells the platform
-  the plugin may load and run without a licence (the freemium contract). With a bare
-  `<product-descriptor>` the platform treats PrismTabs as fully paid and **disables the whole
-  plugin** the moment an unlicensed user dismisses the register dialog — the free tier never loads,
-  and `PrismTabsLicense.decide()`'s "fall back to the free tier" branch is unreachable in
-  production. Verified against the platform bytecode (`javap com.intellij.ide.plugins.IdeaPluginDescriptorImpl`
-  → `boolean isLicenseOptional`) and reproduced live under `runIde` on 2026-09-01.
-- Re-run `runIde` once afterwards specifically to see the free tier as an unsubscribed user would
-  — this is the first build where the gates do anything, so it's the first real chance to catch an
-  over-gating bug live rather than in `PaywallUiTest`. Confirm the plugin **stays loaded** (tool
-  window shows the upsell panel, paid actions raise the register dialog); if it vanishes from the
-  IDE instead, `optional="true"` is missing or wrong.
+Verified live under `runIde` on 2026-09-05: the plugin stays loaded, the tool window shows the
+free-tier upsell panel, and paid actions raise the register dialog — all three of the checklist's
+conditions, confirmed by eye, not just from clean logs. `./gradlew test` passes, and the
+`optional="true"` attribute was confirmed to survive `patchPluginXml` into the built
+`build/tmp/patchPluginXml/plugin.xml` unchanged.
 
-This is a purely mechanical, low-risk change but it's the one everything else below depends on
-being meaningful — do it first.
+**Original problem, for context:** `PrismTabsLicense.paidFeaturesEnabled()` returns `true`
+unconditionally while `getProductCode()` is null, so every gate was wired but inert without a
+`<product-descriptor>`. `optional="true"` is **not** cosmetic: it sets
+`IdeaPluginDescriptorImpl.isLicenseOptional`, which is what tells the platform the plugin may load
+and run without a licence (the freemium contract). With a bare `<product-descriptor>` the platform
+treats PrismTabs as fully paid and **disables the whole plugin** the moment an unlicensed user
+dismisses the register dialog — the free tier never loads, and `PrismTabsLicense.decide()`'s "fall
+back to the free tier" branch is unreachable in production. Verified against the platform bytecode
+(`javap com.intellij.ide.plugins.IdeaPluginDescriptorImpl` → `boolean isLicenseOptional`) and
+reproduced live under `runIde` on 2026-09-01, then again with the real `product-descriptor` in
+place on 2026-09-05.
+
+This was everything else below's precondition for being meaningful — done first, as planned.
 
 ## ~~2. Sign the plugin build — closed~~
 
