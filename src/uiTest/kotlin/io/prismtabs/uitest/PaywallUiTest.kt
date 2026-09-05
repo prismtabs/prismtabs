@@ -15,15 +15,18 @@ import java.time.Duration.ofSeconds
  * plugin (Freemium + Yearly Subscription — see the README's "Marketplace publishing prep").
  *
  * These are the only tests that exercise the locked side of the four paid-feature gates. Every
- * *other* uiTest here runs on an unlocked build and always will, because
- * `PrismTabsLicense.paidFeaturesEnabled()` returns `true` outright while `plugin.xml` carries no
- * `<product-descriptor>` — so without [IdeaFrame.simulateUnlicensedPaidBuild] the paywall would
- * have no automated coverage at all, in this suite or any other.
+ * *other* uiTest here runs entitled — [RemoteRobotExtension] installs that state before each test
+ * (see [IdeaFrame.simulateEntitled] for what "entitled" can and cannot stand in for) — so without
+ * [IdeaFrame.simulateUnlicensed] the paywall would have no automated coverage at all, in this suite
+ * or any other.
  *
- * Three conventions worth knowing before adding to this class:
+ * Four conventions worth knowing before adding to this class:
  *  - **Every test asserts [IdeaFrame.paidFeaturesEnabled] is `false` before asserting anything
  *    else.** A simulation that silently stopped working would otherwise turn every assertion below
  *    into a re-test of the unlocked path that still passes.
+ *  - **Every test that locks must unlock again in a `finally`.** The extension re-entitles before
+ *    the *next* test, so a leak is no longer catastrophic, but leaving the sandbox locked still
+ *    breaks the rest of the current test's own cleanup.
  *  - **Locked features are driven through their own choke points, not clicked** — and specifically
  *    through the choke point that *carries the gate*, never past it. [IdeaFrame.setGroupHidden]
  *    reaches `TabGroupVisibility` directly and so proves nothing about the paywall;
@@ -57,8 +60,8 @@ class PaywallUiTest {
                 waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().any { it.contains("Paywalled") } }
                 assertEquals("", toolWindowEmptyText(), "an unlocked tool window shows the list, not an empty state")
 
-                simulateUnlicensedPaidBuild()
-                assertFalse(paidFeaturesEnabled(), "the simulated paid build should read as unlicensed")
+                simulateUnlicensed()
+                assertFalse(paidFeaturesEnabled(), "the simulated lapse should read as unlicensed")
 
                 // Hidden, then shown — not show() on an already-visible window, which fires no
                 // toolWindowShown and would leave the panel on its last-read licence state. That is
@@ -84,8 +87,8 @@ class PaywallUiTest {
                     "the locked state must offer a way to subscribe, got: $locked",
                 )
 
-                restoreUnpaidBuild()
-                assertTrue(paidFeaturesEnabled(), "restoring the unpaid build should reopen the gate")
+                simulateEntitled()
+                assertTrue(paidFeaturesEnabled(), "restoring the subscription should reopen the gate")
 
                 // Hidden then shown again, for the same reason as above — this window is currently
                 // visible showing the upsell, so a bare show() would fire nothing to re-read on.
@@ -97,7 +100,7 @@ class PaywallUiTest {
                     "the group list must return once the plugin is licensed again",
                 )
             } finally {
-                restoreUnpaidBuild()
+                simulateEntitled()
                 hideTabGroupsToolWindow()
             }
         }
@@ -124,8 +127,8 @@ class PaywallUiTest {
                 setGroupHidden("Stranded", hidden = true)
                 waitFor(ofSeconds(10)) { !openTabNames().contains("Sample.kt") && !openTabNames().contains("Second.kt") }
 
-                simulateUnlicensedPaidBuild()
-                assertFalse(paidFeaturesEnabled(), "the simulated paid build should read as unlicensed")
+                simulateUnlicensed()
+                assertFalse(paidFeaturesEnabled(), "the simulated lapse should read as unlicensed")
 
                 showTabGroupsToolWindow()
                 waitFor(ofSeconds(10)) { toolWindowEmptyText().contains("paid feature") }
@@ -152,7 +155,7 @@ class PaywallUiTest {
                     "the window stays locked after the rescue, got: ${toolWindowEmptyText()}",
                 )
             } finally {
-                restoreUnpaidBuild()
+                simulateEntitled()
                 hideTabGroupsToolWindow()
             }
         }
@@ -167,15 +170,15 @@ class PaywallUiTest {
                 assignFileToNewGroup("Sample.kt", "Sticky")
 
                 toggleActiveGroup("Sticky")
-                assertEquals("Sticky", activeGroupName(), "marking active should work while unlicensed builds are ungated")
+                assertEquals("Sticky", activeGroupName(), "marking a group active must work while subscribed")
 
                 openFile("Second.kt")
                 waitFor(ofSeconds(10)) { groupNameFor("Second.kt") == "Sticky" }
 
                 // The group stays active across the lapse — it's session state, not a licence check
                 // — so this proves the listener itself declines, not that the setup was undone.
-                simulateUnlicensedPaidBuild()
-                assertFalse(paidFeaturesEnabled(), "the simulated paid build should read as unlicensed")
+                simulateUnlicensed()
+                assertFalse(paidFeaturesEnabled(), "the simulated lapse should read as unlicensed")
                 assertEquals("Sticky", activeGroupName(), "the active group should survive the lapse untouched")
 
                 openFile("Third.kt")
@@ -194,8 +197,24 @@ class PaywallUiTest {
                 // ...whereas re-marking one is refused.
                 toggleActiveGroup("Sticky")
                 assertNull(activeGroupName(), "marking a group active must be refused while unlicensed")
+
+                // The purchase direction, which nothing else covers: everything above would still
+                // pass if the gate had jammed shut, so the subscription is restored and the same
+                // two calls re-run. Auto-join in particular is read per file-open with no cached
+                // state, and this is what proves it.
+                simulateEntitled()
+                assertTrue(paidFeaturesEnabled(), "restoring the subscription should reopen the gate")
+
+                toggleActiveGroup("Sticky")
+                assertEquals("Sticky", activeGroupName(), "marking a group active must work again once subscribed")
+
+                // Closed and reopened, not just opened: auto-join hangs off `fileOpened`, and
+                // openFile on an already-open tab only selects it, firing nothing to join on.
+                closeAllEditors()
+                openFile("Third.kt")
+                waitFor(ofSeconds(10)) { groupNameFor("Third.kt") == "Sticky" }
             } finally {
-                restoreUnpaidBuild()
+                simulateEntitled()
                 restoreRegisterDialog()
                 closeAllEditors()
             }
@@ -229,9 +248,9 @@ class PaywallUiTest {
                 showTabGroupsToolWindow()
                 waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().any { it.contains("Gated") } }
 
-                simulateUnlicensedPaidBuild()
+                simulateUnlicensed()
                 suppressRegisterDialog()
-                assertFalse(paidFeaturesEnabled(), "the simulated paid build should read as unlicensed")
+                assertFalse(paidFeaturesEnabled(), "the simulated lapse should read as unlicensed")
 
                 // Hiding: refused, so the tabs stay open and the group stays shown.
                 invokeToggleVisibility("Gated")
@@ -257,14 +276,14 @@ class PaywallUiTest {
                 // The assertions above are all "nothing happened", which a helper that silently did
                 // nothing would also satisfy. Restoring the licence and re-running the *same* call
                 // is what proves they were the paywall refusing rather than the test misfiring.
-                restoreUnpaidBuild()
-                assertTrue(paidFeaturesEnabled(), "restoring the unpaid build should reopen the gate")
+                simulateEntitled()
+                assertTrue(paidFeaturesEnabled(), "restoring the subscription should reopen the gate")
 
                 invokeToggleVisibility("Gated")
                 waitFor(ofSeconds(10)) { !isGroupHidden("Gated") }
                 waitFor(ofSeconds(10)) { openTabNames().containsAll(listOf("Sample.kt", "Second.kt")) }
             } finally {
-                restoreUnpaidBuild()
+                simulateEntitled()
                 showAllHiddenGroups()
                 restoreRegisterDialog()
                 hideTabGroupsToolWindow()
@@ -308,9 +327,9 @@ class PaywallUiTest {
                 openFile("Second.kt")
                 openFile("Third.kt")
 
-                simulateUnlicensedPaidBuild()
+                simulateUnlicensed()
                 suppressRegisterDialog()
-                assertFalse(paidFeaturesEnabled(), "the simulated paid build should read as unlicensed")
+                assertFalse(paidFeaturesEnabled(), "the simulated lapse should read as unlicensed")
 
                 // Creating a group by clicking a colour dot: the popup's own flow, modal name prompt
                 // included, all while unlicensed.
@@ -343,20 +362,26 @@ class PaywallUiTest {
                 )
                 assertFalse(isGroupHidden("FreeGroup"), "a group created while locked must not come up hidden")
             } finally {
-                restoreUnpaidBuild()
+                simulateEntitled()
                 restoreRegisterDialog()
                 closeAllEditors()
             }
         }
     }
 
+    /**
+     * Both directions on one gate, in one test on purpose: the page reads its licence state **once
+     * per panel** (see `TabGroupPaletteConfigurable.createPanel`), so "editable again after
+     * subscribing" is a property of a *freshly built* panel and is worth nothing asserted against
+     * the panel that was built while locked. Each half here builds its own.
+     */
     @Test
-    fun `the palette settings page is read-only and refuses to persist edits when locked`(remoteRobot: RemoteRobot) {
+    fun `the palette settings page is read-only when locked, and editable again once the subscription returns`(remoteRobot: RemoteRobot) {
         remoteRobot.idea {
             try {
                 resetTabGroupPalette()
-                simulateUnlicensedPaidBuild()
-                assertFalse(paidFeaturesEnabled(), "the simulated paid build should read as unlicensed")
+                simulateUnlicensed()
+                assertFalse(paidFeaturesEnabled(), "the simulated lapse should read as unlicensed")
 
                 val checkpoints = exercisePaletteConfigurableLocked().associate {
                     val (label, value) = it.split(":", limit = 2)
@@ -374,11 +399,100 @@ class PaywallUiTest {
                     checkpoints["modifiedAfterApply"],
                     "the discarded edit must leave the page settled, not permanently modified",
                 )
+
+                simulateEntitled()
+                assertTrue(paidFeaturesEnabled(), "restoring the subscription should reopen the gate")
+
+                val unlocked = exercisePaletteConfigurable().associate {
+                    val (label, value) = it.split(":", limit = 2)
+                    label to value
+                }
+                assertEquals(
+                    "true",
+                    unlocked["modifiedBeforeApply"],
+                    "a page opened after subscribing must take an edit again",
+                )
+                assertEquals(
+                    "MyGrey",
+                    unlocked["serviceLabelAfterApply"],
+                    "an edit made after subscribing must reach TabGroupPaletteService this time",
+                )
             } finally {
-                restoreUnpaidBuild()
+                simulateEntitled()
                 resetTabGroupPalette()
             }
         }
     }
 
+    /**
+     * The full **subscribe → lapse → subscribe** cycle, which every test above covers only in
+     * fragments: each of those lapses once and asserts that a *feature* is withheld, so none of
+     * them can say what becomes of the state a subscriber built up before the lapse.
+     *
+     * What is asserted is the README's free/paid promise in its literal form — the free tier loses
+     * features, never data — and the failure it guards against is exactly the renewal surprise a
+     * paying user would report: groups quietly dropped, a hidden group forgotten so its tabs can
+     * never be recovered, a saved palette reverting to the factory one. Each of those would be
+     * invisible to the gate-by-gate tests, all of which would keep passing.
+     *
+     * Hidden state is the sharp end of it, and is set up through [IdeaFrame.invokeToggleVisibility]
+     * — the gated call site — rather than [IdeaFrame.setGroupHidden], because the point is a group
+     * hidden *by a subscriber exercising the paid feature*, not one placed there by a test.
+     */
+    @Test
+    fun `groups, hidden state and a saved palette all survive a lapse and are still there after resubscribing`(
+        remoteRobot: RemoteRobot,
+    ) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                resetTabGroupPalette()
+                closeAllEditors()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                assignFileToNewGroup("Sample.kt", "Renewal")
+                addFileToGroup("Second.kt", "Renewal")
+                waitFor(ofSeconds(10)) { groupNameFor("Second.kt") == "Renewal" }
+
+                // Everything below is what a subscriber leaves behind: a group, a paid-feature
+                // hide, and a saved palette override.
+                renamePalettePreset(0, "SubscriberGrey")
+                assertEquals("SubscriberGrey", palettePresetLabel(0), "the subscriber's palette edit should have saved")
+
+                invokeToggleVisibility("Renewal")
+                waitFor(ofSeconds(10)) { isGroupHidden("Renewal") }
+                waitFor(ofSeconds(10)) { !openTabNames().contains("Sample.kt") && !openTabNames().contains("Second.kt") }
+
+                simulateUnlicensed()
+                assertFalse(paidFeaturesEnabled(), "the simulated lapse should read as unlicensed")
+
+                assertEquals(1, groupCount(), "a lapse must not delete the subscriber's groups")
+                assertEquals("Renewal", groupNameFor("Sample.kt"), "a lapse must not drop group membership")
+                assertTrue(isGroupHidden("Renewal"), "a lapse must not silently un-hide, or forget, a hidden group")
+                assertEquals(
+                    "SubscriberGrey",
+                    palettePresetLabel(0),
+                    "a saved palette must keep being used while locked — editing it is what is paid for, not keeping it",
+                )
+
+                simulateEntitled()
+                assertTrue(paidFeaturesEnabled(), "restoring the subscription should reopen the gate")
+
+                assertEquals(1, groupCount(), "resubscribing must find the same groups, not a fresh slate")
+                assertEquals("SubscriberGrey", palettePresetLabel(0), "the saved palette must survive the round trip intact")
+                assertTrue(isGroupHidden("Renewal"), "the group must still be hidden, and so still recoverable")
+
+                // Not just present but usable again: the hide the subscriber left behind unwinds
+                // through the same gated call that refused it while lapsed.
+                invokeToggleVisibility("Renewal")
+                waitFor(ofSeconds(10)) { !isGroupHidden("Renewal") }
+                waitFor(ofSeconds(10)) { openTabNames().containsAll(listOf("Sample.kt", "Second.kt")) }
+            } finally {
+                simulateEntitled()
+                showAllHiddenGroups()
+                resetTabGroupPalette()
+                closeAllEditors()
+            }
+        }
+    }
 }

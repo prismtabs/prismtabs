@@ -178,7 +178,12 @@ class TabGroupsToolWindowUiTest {
                 assignFileToNewGroup("Second.kt", "RightClickB")
                 waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().size == 2 }
 
-                // Nothing has ever been selected in this tree, so this is the plain form of the bug.
+                // Nothing selected, so this is the plain form of the bug — and *made* so rather
+                // than assumed: the tree outlives each test and `refresh` deliberately falls a
+                // stale selection onto a surviving row, so whether this precondition holds on its
+                // own depends on which class ran before this one (see
+                // [IdeaFrame.clearToolWindowSelection]).
+                clearToolWindowSelection()
                 val tree = remoteRobot.toolWindowGroupTree()
                 assertTrue(tree.collectSelectedPaths().isEmpty(), "precondition: the tree starts with no selection")
                 tree.findText("RightClickA").rightClick()

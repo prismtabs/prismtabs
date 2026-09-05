@@ -652,77 +652,50 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     }
 
     /**
-     * Makes the running sandbox behave as an **unlicensed paid build**, which is the only way to
-     * reach the paywall paths at all: `PrismTabsLicense.paidFeaturesEnabled()` is unconditionally
-     * `true` while `plugin.xml` has no `<product-descriptor>` (see that function's doc, and the
-     * README's "Marketplace publishing prep" for why the tag isn't added yet).
+     * Makes the running sandbox behave as a **lapsed (or never-started) subscription**: a paid
+     * build the user holds no licence for, which is the only state in which the paywall paths are
+     * reachable.
      *
      * Simulated entirely from the test side — no test-only seam in production code — by supplying
-     * the two inputs the real gate reads:
-     *  - `IdeaPluginDescriptorImpl.productCode`, the field behind `PluginDescriptor.getProductCode()`
-     *    that the `<product-descriptor code="">` tag populates. `private final`, so it's written
-     *    reflectively; `setAccessible(true)` permits that for a non-static final instance field.
-     *  - `LicensingFacade.INSTANCE`, installed via its own `public static setInstance` with an empty
-     *    `confirmationStamps` map — exactly what a real IDE holds for a paid plugin the user has no
-     *    licence for, so `isLicensed()` returns `false` through its genuine code path rather than a
-     *    stubbed one.
+     * the one input the gate still has a choice about. `plugin.xml` ships the
+     * `<product-descriptor code="PPRISMTABS" … optional="true"/>` since the gate was armed, so
+     * `PluginDescriptor.getProductCode()` already answers `PPRISMTABS` in the sandbox and nothing
+     * here needs to forge it; what is installed is `LicensingFacade.INSTANCE`, via its own
+     * `public static setInstance`, holding an empty `confirmationStamps` map. That is exactly what
+     * a real IDE holds for a paid plugin the user has no licence for, so `isLicensed()` returns
+     * `false` through its genuine code path rather than a stubbed one.
      *
-     * The reverse ([restoreUnpaidBuild]) is not optional: both mutations are global to the IDE
-     * process and would otherwise leave every later test running against a locked plugin.
+     * The reverse ([simulateEntitled]) is not optional: the facade is global to the IDE process and
+     * would otherwise leave every later test running against a locked plugin — though
+     * [RemoteRobotExtension] now re-entitles before each test as a backstop, so a test that dies
+     * before its `finally` no longer poisons the rest of the run.
      */
-    fun simulateUnlicensedPaidBuild() {
-        runJs(
-            """
-            importPackage(com.intellij.ide.plugins)
-            importPackage(com.intellij.openapi.extensions)
-            importClass(com.intellij.ui.LicensingFacade)
+    fun simulateUnlicensed() = remoteRobot.simulateUnlicensed()
 
-            // Resolved exactly as PrismTabsLicense.isPaidBuild does — getPluginByClass on that very
-            // class — not by plugin id: were the two ever to return different descriptor objects,
-            // setting the field on the wrong one would leave the gate open and quietly turn every
-            // locked-path assertion into a test of the unlocked path.
-            const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
-            const licenseClass = java.lang.Class.forName('io.prismtabs.license.PrismTabsLicense', true, pluginLoader)
-            const descriptor = PluginManager.getPluginByClass(licenseClass)
-            const field = descriptor.getClass().getDeclaredField('productCode')
-            field.setAccessible(true)
-            field.set(descriptor, 'PPRISMTABS')
-
-            // A real facade object, not a mock: getConfirmationStamp(code) reads this very map, so an
-            // empty one is precisely "no licence for PPRISMTABS" as the platform would represent it.
-            const facade = new LicensingFacade()
-            facade.confirmationStamps = new java.util.HashMap()
-            LicensingFacade.setInstance(facade)
-            """,
-            true,
-        )
-    }
-
-    /** Undoes [simulateUnlicensedPaidBuild]. Must run in a `finally` — see its doc. */
-    fun restoreUnpaidBuild() {
-        runJs(
-            """
-            importPackage(com.intellij.ide.plugins)
-            importPackage(com.intellij.openapi.extensions)
-            importClass(com.intellij.ui.LicensingFacade)
-
-            // Resolved identically to simulateUnlicensedPaidBuild — see the note there. An
-            // asymmetric lookup here would clear the field on a different descriptor than the one it
-            // was set on, leaving the gate permanently armed for every later test with nothing to
-            // fail: LicensingFacade.setInstance(null) alone makes isLicensed() null, which reads as
-            // licensed, so the leak would be invisible.
-            const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
-            const licenseClass = java.lang.Class.forName('io.prismtabs.license.PrismTabsLicense', true, pluginLoader)
-            const descriptor = PluginManager.getPluginByClass(licenseClass)
-            const field = descriptor.getClass().getDeclaredField('productCode')
-            field.setAccessible(true)
-            field.set(descriptor, null)
-
-            LicensingFacade.setInstance(null)
-            """,
-            true,
-        )
-    }
+    /**
+     * The inverse of [simulateUnlicensed], and the state **every test in this suite runs in by
+     * default** — see [RemoteRobotExtension.beforeTestExecution], which installs it before each
+     * test.
+     *
+     * That default is not a convenience either: since `plugin.xml` gained its `<product-descriptor>`
+     * the sandbox IDE boots as a paid build with no licence (measured: `productCode=PPRISMTABS
+     * licenseOptional=true isLicensed=false paid=false`), so without this every test of a paid
+     * feature — the whole tool window, collapse/expand, active-group auto-join, palette editing —
+     * would run against the free tier and fail on an upsell panel.
+     *
+     * **What it actually simulates, precisely.** A genuine subscription cannot be simulated: a
+     * `key:`/`stamp:` confirmation stamp only passes [io.prismtabs.license.LicenseSignatureVerification]
+     * if JetBrains signed it, and forging one is the thing that verifier exists to prevent. What is
+     * installed instead is `LicensingFacade.setInstance(null)`, which drives the gate down
+     * `decide(isPaidBuild = true, isLicensed = null)` — the "facade hasn't answered yet" row, which
+     * is open by design (see `PrismTabsLicense.isLicensed`). Every gate reads exactly the one
+     * boolean `paidFeaturesEnabled()` returns, so at the call sites this is indistinguishable from a
+     * paid subscriber, and unlike clearing `productCode` it keeps the plugin a *paid build* while it
+     * does so. What it therefore cannot prove is that a real signed stamp is accepted — nothing
+     * automated can; that is the manual "activate a real licence" step in
+     * `docs/cross-platform-manual-verification.md`.
+     */
+    fun simulateEntitled() = remoteRobot.simulateEntitled()
 
     /** The real gate, read over the wire — asserted in each paywall test so a simulation that
      * silently stopped working (a renamed field, say) fails loudly there instead of quietly turning
@@ -1102,6 +1075,94 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     ).ifEmpty { null }
 
     /**
+     * Clears the tool-window tree's selection, on the EDT, by walking the frame for the `JTree` the
+     * panel names `PrismTabs.GroupTree` (the same component [toolWindowGroupTree] locates by
+     * XPath).
+     *
+     * Needed because the tree — and its selection — outlive any one test: `TabGroupsPanel.refresh`
+     * deliberately *falls* a selection onto a surviving row rather than clearing it (that is the
+     * behaviour `right-clicking a group row…` exists to protect), so a row selected by an earlier
+     * test survives `resetTabGroups` and lands on whatever group the next test creates. A test that
+     * needs "nothing is selected" therefore has to make that true rather than inherit it; inherited,
+     * it passes or fails on class ordering alone.
+     */
+    fun clearToolWindowSelection() {
+        runJs(
+            """
+            importClass(com.intellij.openapi.application.ApplicationManager)
+
+            function findTree(c) {
+                if (c instanceof javax.swing.JTree && c.getName() == 'PrismTabs.GroupTree') return c
+                if (!c.getComponentCount) return null
+                const n = c.getComponentCount()
+                for (let i = 0; i < n; i++) {
+                    var found = findTree(c.getComponent(i))
+                    if (found != null) return found
+                }
+                return null
+            }
+
+            const tree = findTree(component)
+            if (tree != null) {
+                ApplicationManager.getApplication().invokeAndWait(new Runnable({
+                    run: function() { tree.clearSelection() }
+                }))
+            }
+            """,
+            true,
+        )
+    }
+
+    /**
+     * Saves a renamed preset straight through [io.prismtabs.service.TabGroupPaletteService] — the
+     * state a subscriber's palette edit leaves behind, without going through the Configurable that
+     * writes it (which [exercisePaletteConfigurable] covers). Used by the tests that ask what
+     * happens to a *saved* palette when the subscription lapses: the free tier is meant to lose
+     * features, never data.
+     */
+    fun renamePalettePreset(index: Int, label: String) {
+        runJs(
+            """
+            importClass(com.intellij.openapi.application.ApplicationManager)
+            importPackage(com.intellij.ide.plugins)
+            importPackage(com.intellij.openapi.extensions)
+
+            const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
+            const paletteService = ApplicationManager.getApplication().getService(
+                java.lang.Class.forName('io.prismtabs.service.TabGroupPaletteService', true, pluginLoader)
+            )
+
+            const presets = paletteService.presets()
+            const edited = new java.util.ArrayList()
+            for (let i = 0; i < presets.size(); i++) {
+                var preset = presets.get(i)
+                // The data class's own copy(), so an unlisted field can never be dropped here the
+                // way a hand-rolled constructor call would drop it.
+                edited.add(i === $index ? preset.copy(preset.getId(), '$label', preset.getLight(), preset.getDark()) : preset)
+            }
+            paletteService.setPresets(edited)
+            """,
+            true,
+        )
+    }
+
+    /** The label [renamePalettePreset] writes, read back off the service. */
+    fun palettePresetLabel(index: Int): String = callJs<String>(
+        """
+        importClass(com.intellij.openapi.application.ApplicationManager)
+        importPackage(com.intellij.ide.plugins)
+        importPackage(com.intellij.openapi.extensions)
+
+        const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
+        const paletteService = ApplicationManager.getApplication().getService(
+            java.lang.Class.forName('io.prismtabs.service.TabGroupPaletteService', true, pluginLoader)
+        )
+        paletteService.presets().get($index).getLabel()
+        """,
+        true,
+    )
+
+    /**
      * [exercisePaletteConfigurable]'s locked counterpart: drives the same Configurable the same way,
      * but asserts the paywall — that the bound editing controls come up disabled, and that an
      * `apply()` forced past them (a licence lapsing mid-dialog is the real-world route) discards the
@@ -1299,3 +1360,35 @@ fun RemoteRobot.toolWindowGroupRows(): List<String> {
  * literal in step with the source constant.
  */
 private const val GROUP_TREE_XPATH = "//div[@name='PrismTabs.GroupTree']"
+
+/**
+ * [IdeaFrame.simulateUnlicensed]'s implementation, on [RemoteRobot] rather than the frame fixture so
+ * [RemoteRobotExtension] can call it before a test has looked the frame up. See that member's doc
+ * for what is installed and why.
+ */
+fun RemoteRobot.simulateUnlicensed() {
+    runJs(
+        """
+        importClass(com.intellij.ui.LicensingFacade)
+
+        // A real facade object, not a mock: getConfirmationStamp(code) reads this very map, so an
+        // empty one is precisely "no licence for PPRISMTABS" as the platform would represent it.
+        const facade = new LicensingFacade()
+        facade.confirmationStamps = new java.util.HashMap()
+        LicensingFacade.setInstance(facade)
+        """,
+        true,
+    )
+}
+
+/** [IdeaFrame.simulateEntitled]'s implementation — see that member's doc, which is where the
+ * "what this can and cannot stand in for" reasoning lives. */
+fun RemoteRobot.simulateEntitled() {
+    runJs(
+        """
+        importClass(com.intellij.ui.LicensingFacade)
+        LicensingFacade.setInstance(null)
+        """,
+        true,
+    )
+}
