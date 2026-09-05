@@ -98,6 +98,29 @@ already covered continuously by local development.
    shut still reads "hidden" after a restart because none of its members is open, and **Show
    Group** must reopen the set that was last open, which is the part that is persisted.
 
+9. **Licence activation, and a lapse across a restart** — the two paywall questions no automated
+   test can reach. `PaywallUiTest` covers everything downstream of
+   `PrismTabsLicense.paidFeaturesEnabled()`, in both directions and across a full subscribe → lapse
+   → subscribe cycle, but it can only *simulate* entitlement (`LicensingFacade.setInstance(null)`,
+   the "facade hasn't answered yet" row): a real confirmation stamp verifies only if JetBrains
+   signed it, and no test can forge one. It also cannot restart the sandbox mid-test. So, by hand:
+   - **Unlicensed start.** Launch with no licence for `PPRISMTABS`. The plugin must stay *enabled*
+     (not in `config/disabled_plugins.txt`) with the tool window showing its upsell panel, and
+     colouring, grouping and unlimited groups must all still work from the tab right-click menu.
+   - **Trial, then a real key.** Start the 30-day trial from the register dialog a paid action
+     raises, and confirm the paid features unlock. Note the tool window picks its licence state up
+     the next time it is *shown* (or on the next group change), not the instant the dialog closes —
+     that is by design, since nothing broadcasts a licence change. Repeat with a genuine
+     subscription key once the plugin is listed; this is the only check that the signature
+     verification accepts a real licence.
+   - **Lapse across a restart.** While licensed, mark a group active, hide another group, and
+     rename a palette preset. Remove the licence, restart the IDE, and confirm: the plugin still
+     loads into the free tier; the groups, their colours and the renamed preset all survived; a
+     newly opened file does *not* auto-join the still-active group; and the locked tool window
+     offers **Reopen the tabs of N hidden groups**, which brings the hidden group's tabs back.
+     Nothing may be left recoverable only by resubscribing.
+
+
 ## macOS: automated remote-robot suite on real hardware
 
 Unlike Windows, there's no CI workflow for this — it has to be run by hand on an actual Mac, once per

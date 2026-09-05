@@ -16,6 +16,14 @@ against the actual publish date, but it must be bumped to the real day this is t
 (see item 3's "how to actually cut a release") before that tag goes out, since the listing/upload
 items (5, 6, 8) are still open and this isn't shipping today.
 
+One consequence worth knowing, handled the same day: arming the gate also made
+`runIdeForUiTests` an unlicensed paid build, which locked the paid features out from under the
+whole uiTest suite (measured in the sandbox: `productCode=PPRISMTABS licenseOptional=true
+isLicensed=false paid=false`). `RemoteRobotExtension` now entitles the plugin before each test and
+`PaywallUiTest` un-entitles it deliberately — see `IdeaFrame.simulateEntitled` for what that state
+can and cannot stand in for, and checklist item 9 in `docs/cross-platform-manual-verification.md`
+for the real-licence checks that stay manual.
+
 Verified live under `runIde` on 2026-09-05: the plugin stays loaded, the tool window shows the
 free-tier upsell panel, and paid actions raise the register dialog — all three of the checklist's
 conditions, confirmed by eye, not just from clean logs. `./gradlew test` passes, and the

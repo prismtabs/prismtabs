@@ -772,26 +772,36 @@ Done so far, none of it published anywhere:
   as Active Group" item and the tool window's `Active Group` toggle call), and
   `TabGroupPaletteConfigurable`. A `false` there means "fall back to the free tier", never "block
   the plugin". Two consequences worth knowing:
-  - **The locked side is covered by `PaywallUiTest`.** Every other test runs against an unlocked
-    build and always will (no `<product-descriptor>` ⇒ the gate is open), so that class simulates an
-    unlicensed paid build inside the running sandbox — setting the descriptor's `productCode` and
-    installing a stamp-less `LicensingFacade`, both real platform state, no test-only seam in
-    production code — and asserts what a free user actually gets. It covers both directions: that
-    each paid feature is withheld, *and* that the free tier still works — the latter guards against
-    over-gating, which every locked-side assertion in the class would otherwise pass right through.
-    All but that free-tier case are script-driven rather than mouse-driven, so they run on Wayland
-    too (see "These tests need an X11 display").
+  - **Both sides are covered by `PaywallUiTest`, and the whole suite now has to say which side it
+    is on.** Since the `<product-descriptor>` landed, the sandbox IDE boots as a paid build holding
+    no licence (measured: `productCode=PPRISMTABS licenseOptional=true isLicensed=false
+    paid=false`), so *every* uiTest of a paid feature would otherwise run against the free tier and
+    fail on an upsell panel. `RemoteRobotExtension` therefore entitles the plugin before each test,
+    and `PaywallUiTest` is the class that deliberately un-entitles it again. Both states are real
+    platform state installed from the test side, with no test-only seam in production code:
+    "lapsed" is a stamp-less `LicensingFacade`, "entitled" is `LicensingFacade.setInstance(null)`,
+    which drives the gate down `decide(isPaidBuild = true, isLicensed = null)` — the "facade hasn't
+    answered yet" row, open by design. A genuine subscription cannot be simulated at all (a
+    confirmation stamp only verifies if JetBrains signed it), so *"a real key unlocks the plugin"*
+    stays a manual step; everything downstream of `paidFeaturesEnabled()` is covered here.
+    `PaywallUiTest` covers each paid feature being withheld, the purchase direction that reopens it,
+    a full subscribe → lapse → subscribe cycle that asserts groups, hidden state and a saved palette
+    all survive, *and* that the free tier still works — the last guards against over-gating, which
+    every locked-side assertion in the class would otherwise pass right through. All but that
+    free-tier case are script-driven rather than mouse-driven, so they run on Wayland too (see
+    "These tests need an X11 display").
   - **Nothing is ever held hostage.** *Clearing* an active group stays free even though setting one
     is paid, and the locked tool window still offers a one-click "reopen the tabs of N hidden
     groups" — otherwise a lapsed subscription would leave tabs closed behind the very window needed
     to reopen them. `TabGroupFileListener` re-checks per file open, so auto-join stops the moment a
     subscription lapses rather than at the next restart.
-  - **The gates are inert until the plugin is actually for sale.** `paidFeaturesEnabled()` returns
-    `true` outright when our own `PluginDescriptor.getProductCode()` is `null`, i.e. when
-    `plugin.xml` carries no `<product-descriptor>`. Without that clause every locally built plugin —
-    `runIde`, `uiTest` — would lock its own paid features, since `LicensingFacade` has no product to
-    issue a stamp for and `isLicensed()` answers `false` for everyone. With it, the gates go live by
-    themselves on the day the tag lands.
+  - **The gates were inert until the plugin was actually for sale, and are now live.**
+    `paidFeaturesEnabled()` returns `true` outright when our own `PluginDescriptor.getProductCode()`
+    is `null`, i.e. while `plugin.xml` carried no `<product-descriptor>`; the clause is what let the
+    call sites be written and merged early without every locally built plugin locking its own paid
+    features. The tag landed on 2026-09-05, so that branch no longer fires in this repo's own
+    builds — `runIde` and `runIdeForUiTests` are unlicensed paid builds like any user's would be,
+    which is why the uiTest suite has to entitle itself (see the bullet above).
   - **That tag must be `<product-descriptor … optional="true"/>`, not a bare one.** `optional="true"`
     sets `IdeaPluginDescriptorImpl.isLicenseOptional` (verified in the 2024.2 bytecode), which is
     what permits the plugin to load and run unlicensed so these gates can do their free-tier
@@ -800,28 +810,24 @@ Done so far, none of it published anywhere:
     gating above ever executes. Confirmed live under `runIde` on 2026-09-01 (the plugin dropped into
     `config/disabled_plugins.txt`).
 
-**Deliberately not done yet, and why:** `plugin.xml` has **no `<product-descriptor>`** tag.
-`<product-descriptor release-date="">` has to be the actual date this version ships, which doesn't
-exist yet — writing today's date would just be a fabricated fact sitting in the repo. Adding the tag
-is also the thing that would make the IDE start treating `runIde`/`uiTest` as running an unlicensed
-paid plugin, which would block the plugin functionality that the completed
-[cross-platform manual verification pass](docs/cross-platform-manual-verification.md) needed to
-exercise — which is why the gating call sites above are written to key off the tag's presence rather
-than being held back alongside it.
+**Done since, and what it changed:** `plugin.xml` gained
+`<product-descriptor code="PPRISMTABS" release-date="20260905" release-version="1" optional="true"/>`
+on 2026-09-05, which armed every gate above. `release-date` is a placeholder until the real publish
+day — see `docs/release-readiness-gaps.md` item 1. It also means `runIde` and `runIdeForUiTests` now
+behave as an unlicensed paid build, so anything exercising a paid feature by hand needs the trial or
+a licence first, and the uiTest suite entitles itself before each test.
 
 **What's left, roughly in order:**
 
-1. Pick the real release date, bump `pluginVersion` off `-SNAPSHOT` (currently `1.2.1-SNAPSHOT`) to
-   the first paid release's version, and add `<product-descriptor code="PPRISMTABS"
-   release-date="YYYYMMDD" release-version="10" optional="true"/>` to `plugin.xml` — which is also
-   what arms the already-wired gating call sites. **`optional="true"` is mandatory for the freemium
-   model** (it sets `IdeaPluginDescriptorImpl.isLicenseOptional`, verified in the 2024.2 bytecode):
-   without it the platform treats PrismTabs as fully paid and disables the entire plugin for an
-   unlicensed user once they dismiss the register dialog, so the free tier never loads and
+1. ~~Add the `<product-descriptor>`~~ — **done 2026-09-05**, except for bumping `release-date` to
+   the real publish day when the release is cut. Kept here for the reasoning, which still applies to
+   that bump: **`optional="true"` is mandatory for the freemium model** (it sets
+   `IdeaPluginDescriptorImpl.isLicenseOptional`, verified in the 2024.2 bytecode): without it the
+   platform treats PrismTabs as fully paid and disables the entire plugin for an unlicensed user
+   once they dismiss the register dialog, so the free tier never loads and
    `PrismTabsLicense.decide()`'s free-tier branch is dead code in production. Reproduced live under
-   `runIde` on 2026-09-01. Re-run `runIde` once afterwards to see the free tier as an unsubscribed
-   user would, since that's the first build where the gates do anything — and confirm the plugin
-   **stays loaded** (upsell panel, not a missing plugin).
+   `runIde` on 2026-09-01, and the correct tag confirmed live on 2026-09-05: the plugin stays
+   loaded, the tool window shows the upsell panel, and paid actions raise the register dialog.
 2. Create the JetBrains Marketplace vendor profile, set it to **trader** status, and submit banking
    details (Sales Info tab) — external, account-level, only Andrzej can do this.
 3. Upload the plugin (first release, not an update), then in **Sales Info → Add to Marketplace**:
@@ -1200,7 +1206,7 @@ no matter what the tests say:
 
 **Most of `PaywallUiTest` is the one exception** — its script-driven cases were verified 2026-08-11
 running under a live GNOME Wayland session (`$XDG_SESSION_TYPE=wayland`), all 4 tests of the day
-passing; the class has since grown to 6. Their paywall-specific interactions go through `IdeaFrame`'s
+passing; the class has since grown to 7. Their paywall-specific interactions go through `IdeaFrame`'s
 `runJs`/`callJs` helpers (in-process method calls inside the sandbox IDE, same mechanism
 `resetTabGroups`/`setGroupHidden` already used) rather than a popup or dialog click, so none of
 *that* needs `java.awt.Robot`.
