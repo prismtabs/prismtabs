@@ -3,6 +3,15 @@
     <name>PrismTabs</name>
     <vendor email="yendrrek@protonmail.com" url="https://prismtabs.com/">Andrzej Piontek</vendor>
 
+    <!-- Item 1 of docs/release-readiness-gaps.md: arms PrismTabsLicense's paid-feature gate.
+         optional="true" is load-bearing, not cosmetic — it sets isLicenseOptional, which is what
+         lets the plugin load and fall back to the free tier for an unlicensed user. A bare
+         product-descriptor makes the platform disable the whole plugin instead once the register
+         dialog is dismissed, verified live under runIde. release-date/release-version are metadata
+         shown on the Marketplace listing, not validated against the actual publish date — bump
+         release-date to the day this is actually tagged and published (see gap doc item 1). -->
+    <product-descriptor code="PPRISMTABS" release-date="20260905" release-version="1" optional="true"/>
+
     <description><![CDATA[
         Colour-coded tab groups for IntelliJ editor tabs.
         <br/><br/>
