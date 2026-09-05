@@ -9,12 +9,21 @@ Each item below is written to be picked up standalone in its own session.
 ## ~~1. Arm the paid-feature gate — closed~~
 
 **Closed (2026-09-05):** `plugin.xml` now has
-`<product-descriptor code="PPRISMTABS" release-date="20260905" release-version="1" optional="true"/>`,
+`<product-descriptor code="PPRISMTABS" release-date="20260905" release-version="14" optional="true"/>`,
 right after `<vendor>`. `gradle.properties`'s `pluginVersion` is bumped off `-SNAPSHOT` to `1.4.14`.
 `release-date` is today's date as a placeholder — it's Marketplace-listing metadata, not validated
 against the actual publish date, but it must be bumped to the real day this is tagged and published
 (see item 3's "how to actually cut a release") before that tag goes out, since the listing/upload
 items (5, 6, 8) are still open and this isn't shipping today.
+
+`release-version`, unlike `release-date`, **is** validated, and the tag first landed with `1`, which
+made the built zip an invalid plugin outright — `verifyPlugin` refused it with *"The
+`<release-version>` parameter (1) format is invalid. Ensure it is an integer with at least two
+digits"* and ran zero of its eight verifications. Corrected to `14`: `pluginVersion`'s first two
+components with the dot dropped (1.4.14 → 14), which is the Marketplace convention and means it
+moves on a minor bump and stays put across patch releases — the boundary a licence is sold up to, so
+a patch stays free to existing subscribers. Keep it in step with `pluginVersion` at release time,
+and re-run `verifyPlugin` after touching the descriptor: nothing else in the build catches this.
 
 One consequence worth knowing, handled the same day: arming the gate also made
 `runIdeForUiTests` an unlicensed paid build, which locked the paid features out from under the
