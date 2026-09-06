@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
-import java.awt.event.KeyEvent
 import java.time.Duration.ofSeconds
 
 /**
@@ -417,14 +416,15 @@ class TabGroupsToolWindowUiTest {
     }
 
     /**
-     * Multi-select removal, driven with the gesture it exists for: Ctrl-click two of a group's
-     * three files, then remove both in one go. Three things are asserted that single-selection
-     * could not reach — the item states the count, the right-click *inside* an existing selection
+     * Multi-select removal, driven with the gesture it exists for: toggle-click two of a group's
+     * three files, then remove both in one go. The modifier held is the platform's own — Ctrl on
+     * Linux and Windows, ⌘ on macOS — see [toggleSelectionKey]. Three things are asserted that
+     * single-selection could not reach — the item states the count, the right-click *inside* an existing selection
      * keeps that selection whole (without which the menu would discard the very rows it acts on),
      * and the group's own actions stay live because every selected row belongs to one group.
      */
     @Test
-    fun `Ctrl-clicked files are removed together, and the item states the count`(remoteRobot: RemoteRobot) {
+    fun `multi-selected files are removed together, and the item states the count`(remoteRobot: RemoteRobot) {
         remoteRobot.idea {
             try {
                 resetTabGroups()
@@ -442,7 +442,9 @@ class TabGroupsToolWindowUiTest {
                 remoteRobot.expandToolWindowGroup("Bulk")
                 val tree = remoteRobot.toolWindowGroupTree()
                 tree.clickRowWithText("Sample.kt", false)
-                Keyboard(remoteRobot).pressing(KeyEvent.VK_CONTROL) { tree.clickRowWithText("Second.kt", false) }
+                Keyboard(remoteRobot).pressing(remoteRobot.toggleSelectionKey()) {
+                    tree.clickRowWithText("Second.kt", false)
+                }
                 waitFor(ofSeconds(10)) { remoteRobot.toolWindowSelectionCount() == 2 }
 
                 // Right-click one of the two selected rows: the selection must survive it.
@@ -505,7 +507,9 @@ class TabGroupsToolWindowUiTest {
                 remoteRobot.expandToolWindowGroup("SpanB")
                 val tree = remoteRobot.toolWindowGroupTree()
                 tree.clickRowWithText("Sample.kt", false)
-                Keyboard(remoteRobot).pressing(KeyEvent.VK_CONTROL) { tree.clickRowWithText("Second.kt", false) }
+                Keyboard(remoteRobot).pressing(remoteRobot.toggleSelectionKey()) {
+                    tree.clickRowWithText("Second.kt", false)
+                }
                 waitFor(ofSeconds(10)) { remoteRobot.toolWindowSelectionCount() == 2 }
 
                 tree.findText("Second.kt").rightClick()
