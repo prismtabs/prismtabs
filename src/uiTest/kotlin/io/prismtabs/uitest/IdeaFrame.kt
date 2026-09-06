@@ -1189,6 +1189,142 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     ).ifEmpty { null }
 
     /**
+     * Subscribes a counting probe to `TabGroupsChangedListener.TOPIC` until [removeTopicProbe].
+     *
+     * This is what lets a test pin the auto-join refresh *at its mechanism* rather than at its
+     * symptom. The symptom — the tool window's tree showing the new member — is reachable
+     * without the fix whenever the message bus happens to call `TabGroupFileListener` before
+     * `TabGroupsPanel`, which is what this sandbox does, so no tree assertion can fail on the
+     * defect here. What the fix actually added is the publication itself, and a count of it is true
+     * or false regardless of subscriber order.
+     *
+     * Deliberately a probe left *running* across a separate [openFile] rather than one script that
+     * opens the file itself and reads the counter at the end: `FileEditorManager` finishes an open
+     * on a later event-queue turn, so a count read at the end of the opening script is read before
+     * the listener it is counting has run. Every other helper here opens files with `invokeLater`
+     * and lets the caller `waitFor` the result, and the probe has to outlive that wait.
+     *
+     * The listener is a `java.lang.reflect.Proxy` rather than a JS-implemented interface, because
+     * `TabGroupsChangedListener` lives in the plugin's own class loader and is reachable from here
+     * only by name; `Object`'s three methods are answered explicitly, since the message bus is free
+     * to call them on a subscriber. The connection and counter are parked on the project under a
+     * [com.intellij.openapi.util.Key] looked up by name — `Key.create` registers the name, so a
+     * later `findKeyByName` returns that same key and the two scripts share one probe.
+     */
+    fun installTopicProbe() {
+        runJs(
+            """
+            importPackage(com.intellij.openapi.wm.impl)
+            importPackage(com.intellij.ide.plugins)
+            importPackage(com.intellij.openapi.extensions)
+            importClass(com.intellij.openapi.util.Key)
+
+            const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+            const project = frameHelper.getProject()
+            const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
+
+            const iface = java.lang.Class.forName('io.prismtabs.service.TabGroupsChangedListener', true, pluginLoader)
+            const companion = iface.getField('Companion').get(null)
+            const topic = companion.getClass().getMethod('getTOPIC').invoke(companion)
+
+            const counter = new java.util.concurrent.atomic.AtomicInteger(0)
+            const handler = new java.lang.reflect.InvocationHandler({
+                invoke: function(proxy, method, args) {
+                    const name = method.getName()
+                    if (name == 'tabGroupsChanged') { counter.incrementAndGet(); return null }
+                    if (name == 'hashCode') return java.lang.Integer.valueOf(java.lang.System.identityHashCode(proxy))
+                    if (name == 'equals') return java.lang.Boolean.valueOf(proxy === args[0])
+                    if (name == 'toString') return 'PrismTabs uiTest topic probe'
+                    return null
+                }
+            })
+            const interfaces = java.lang.reflect.Array.newInstance(java.lang.Class, 1)
+            interfaces[0] = iface
+            const probe = java.lang.reflect.Proxy.newProxyInstance(pluginLoader, interfaces, handler)
+
+            const connection = project.getMessageBus().connect()
+            connection.subscribe(topic, probe)
+
+            let key = Key.findKeyByName('$TOPIC_PROBE_KEY')
+            if (key == null) key = Key.create('$TOPIC_PROBE_KEY')
+            const parked = new java.util.ArrayList()
+            parked.add(connection)
+            parked.add(counter)
+            key.set(project, parked)
+            """,
+            true,
+        )
+    }
+
+    /** How many times the topic has been published since [installTopicProbe]. */
+    fun topicProbeCount(): Int = callJs<Int>(
+        """
+        importPackage(com.intellij.openapi.wm.impl)
+        importClass(com.intellij.openapi.util.Key)
+
+        const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+        const project = frameHelper.getProject()
+        const parked = Key.findKeyByName('$TOPIC_PROBE_KEY').get(project)
+        parked.get(1).get()
+        """,
+        true,
+    )
+
+    /**
+     * Disconnects the probe and forgets it. Must run in a `finally`: the connection is parented to
+     * the project, so a probe left behind would go on counting through every later test in the
+     * session.
+     */
+    fun removeTopicProbe() {
+        runJs(
+            """
+            importPackage(com.intellij.openapi.wm.impl)
+            importClass(com.intellij.openapi.util.Key)
+
+            const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+            const project = frameHelper.getProject()
+            const key = Key.findKeyByName('$TOPIC_PROBE_KEY')
+            if (key != null) {
+                const parked = key.get(project)
+                if (parked != null) parked.get(0).disconnect()
+                key.set(project, null)
+            }
+            """,
+            true,
+        )
+    }
+
+    /**
+     * [groupName]'s `rememberedTabUrls` — the arrangement "Show Group" will reopen, read straight
+     * off the model rather than inferred from what a Show happened to put back. Whole URLs, split
+     * to file names by the caller: a failed assertion on these is far easier to read when it names
+     * the paths. Same comma-joined transport as [openTabNames].
+     */
+    fun rememberedTabUrlsOf(groupName: String): List<String> = callJs<String>(
+        """
+        importPackage(com.intellij.openapi.wm.impl)
+        importPackage(com.intellij.ide.plugins)
+        importPackage(com.intellij.openapi.extensions)
+
+        const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+        const project = frameHelper.getProject()
+        const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
+        const service = project.getService(java.lang.Class.forName('io.prismtabs.service.TabGroupService', true, pluginLoader))
+
+        const groups = service.groups()
+        let target = null
+        for (let i = 0; i < groups.size(); i++) {
+            if (groups.get(i).getName() == '$groupName') target = groups.get(i)
+        }
+        const urls = target != null ? target.getRememberedTabUrls() : new java.util.ArrayList()
+        const joined = []
+        for (let i = 0; i < urls.size(); i++) joined.push(urls.get(i))
+        joined.join(',')
+        """,
+        true,
+    ).split(',').filter { it.isNotEmpty() }
+
+    /**
      * Clears the tool-window tree's selection, on the EDT, by walking the frame for the `JTree` the
      * panel names `PrismTabs.GroupTree` (the same component [toolWindowGroupTree] locates by
      * XPath).
@@ -1505,6 +1641,14 @@ fun RemoteRobot.toolWindowGroupRows(): List<String> {
  * literal in step with the source constant.
  */
 private const val GROUP_TREE_XPATH = "//div[@name='PrismTabs.GroupTree']"
+
+/**
+ * The name [IdeaFrame.installTopicProbe] parks its probe under on the project. A name rather than a
+ * shared `Key` instance because the two scripts that use it are separate `runJs` calls with no
+ * common scope: `Key.create` registers the name, so `Key.findKeyByName` hands the second script the
+ * very key the first one made.
+ */
+private const val TOPIC_PROBE_KEY = "prismtabs.uitest.topicProbe"
 
 /**
  * [IdeaFrame.simulateUnlicensed]'s implementation, on [RemoteRobot] rather than the frame fixture so
