@@ -8,7 +8,7 @@
 
 # PrismTabs End-User Licence Agreement
 
-**Last updated: 31 August 2026**
+**Last updated: 6 September 2026**
 
 This End-User Licence Agreement ("Agreement") is a legal agreement between you (either an
 individual or a single entity, "you" or "Licensee") and Andrzej Piontek, an individual trader
@@ -28,8 +28,17 @@ charge, without a subscription, for as long as you use the Software.
 Additional ("paid") features are made available only while you hold an active subscription or an
 active free trial, purchased or activated through the JetBrains Marketplace. Subject to your
 compliance with this Agreement, the Licensor grants you a non-exclusive, non-transferable,
-non-sublicensable, revocable licence to install and use the paid features on any number of devices
-you personally use, for the duration of your active subscription or trial.
+non-sublicensable, revocable licence to install and use the paid features for the duration of your
+active subscription or trial, on the following basis:
+
+- Under an individual subscription, one named individual may use the paid features on any number of
+  devices that individual personally uses.
+- Under an organisation subscription, the paid features are licensed per user: each subscription
+  entitles one named individual to use the paid features on any number of devices that individual
+  personally uses, and the organisation must hold a separate subscription for every individual who
+  uses the paid features. A subscription may be reassigned to a different individual when the
+  original user no longer needs it, but not on a rotating basis to serve more individuals than the
+  number of subscriptions held.
 
 ### 1.3 No fallback licence
 This subscription does not include a fallback licence. When your subscription or trial lapses,
