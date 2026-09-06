@@ -5,6 +5,7 @@ import com.intellij.remoterobot.fixtures.JButtonFixture
 import com.intellij.remoterobot.utils.Keyboard
 import com.intellij.remoterobot.utils.waitFor
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -200,6 +201,142 @@ class TabGroupsToolWindowUiTest {
     }
 
     /**
+     * Hide followed by Show is an identity for a group only *some* of whose files are open. That is
+     * what `TabGroupVisibility.hide` recording the exact set it is about to close provides, and it
+     * is the case neither hide/show test above reaches — in both of those every member is on the
+     * strip when the group goes, so recording the open set and recording the membership would be
+     * indistinguishable.
+     *
+     * Third.kt is closed by hand first, leaving a three-file group with two tabs open. Show has to
+     * bring back those two and leave the third where the user put it. Reopening all three is the
+     * visible shape of a lost memory: `show` falls back to opening every member when it has nothing
+     * remembered, which would resurrect a tab the user had deliberately closed.
+     *
+     * What it guards is that the two halves of the hidden-groups fix stay together. Against the
+     * exact code before that fix — `fileClosed` upkeep *and* `hide` recording after its close loop
+     * — this passes, so it is a pin on that history rather than a reproduction of it. Against
+     * either half alone it fails, measured: restore `fileClosed` while `hide` records first, and
+     * the close loop narrows the just-recorded list to one file before the empty-set skip freezes
+     * it, so Show brings back Sample.kt on its own.
+     */
+    @Test
+    fun `hiding a group with only some of its files open brings back exactly those`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                openFile("Third.kt")
+                assignFileToNewGroup("Sample.kt", "PartlyOpen")
+                addFileToGroup("Second.kt", "PartlyOpen")
+                addFileToGroup("Third.kt", "PartlyOpen")
+                waitFor(ofSeconds(10)) {
+                    remoteRobot.toolWindowGroupRows().any { it.contains("PartlyOpen") && it.contains("3 files") }
+                }
+
+                closeFile("Third.kt")
+                waitFor(ofSeconds(10)) { openTabNames().sorted() == listOf("Sample.kt", "Second.kt") }
+
+                setGroupHidden("PartlyOpen", hidden = true)
+                waitFor(ofSeconds(10)) { openTabNames().isEmpty() }
+
+                setGroupHidden("PartlyOpen", hidden = false)
+
+                waitFor(ofSeconds(10)) { openTabNames().size == 2 }
+                assertEquals(
+                    listOf("Sample.kt", "Second.kt"),
+                    openTabNames().sorted(),
+                    "Show must reopen the tabs the group had open, not every file it holds",
+                )
+                // The unopened file was never unassigned, only not reopened: still a three-file group.
+                assertTrue(
+                    remoteRobot.toolWindowGroupRows().any { it.contains("PartlyOpen") && it.contains("3 files") },
+                    "the member left closed must remain a member, got ${remoteRobot.toolWindowGroupRows()}",
+                )
+            } finally {
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
+     * The other half of dropping `fileClosed`: without it the memory still has to stay *bounded*.
+     * It is rewritten on every open of a member with the open set as it stands at that moment, so a
+     * tab the user closed and did not go back to falls out the next time they open anything in the
+     * group — and Show does not resurrect it.
+     *
+     * Past its setup it is driven by closing and opening tabs alone, with no PrismTabs action until
+     * the final Show, so what it pins is the listener rather than `TabGroupVisibility`: the group
+     * ends up hidden because its last tab went, and the only thing to have written the memory by
+     * then is an editor open.
+     *
+     * It fails in both directions, which is what makes it worth its runtime. With the old
+     * `fileClosed` upkeep the one-at-a-time closes whittle the memory down and Show brings back
+     * Second.kt alone; with no on-open recording at all the memory is never written, `show` falls
+     * back to every member, and Third.kt comes back too.
+     */
+    @Test
+    fun `a tab closed and not returned to drops out of the group's memory`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                openFile("Third.kt")
+                assignFileToNewGroup("Sample.kt", "Whittle")
+                addFileToGroup("Second.kt", "Whittle")
+                addFileToGroup("Third.kt", "Whittle")
+                waitFor(ofSeconds(10)) {
+                    remoteRobot.toolWindowGroupRows().any { it.contains("Whittle") && it.contains("3 files") }
+                }
+
+                // Closed and never returned to — the tab that has to be forgotten.
+                closeFile("Third.kt")
+                waitFor(ofSeconds(10)) { openTabNames().sorted() == listOf("Sample.kt", "Second.kt") }
+
+                // Closed and returned to, which is the event that rewrites the memory: reopening
+                // Sample.kt records the group's open set as it stands — Sample.kt and Second.kt,
+                // with no Third.kt in it. Note the assignments above all happened *after* their
+                // files were opened, so this is the first open of a member the listener has seen.
+                closeFile("Sample.kt")
+                waitFor(ofSeconds(10)) { openTabNames() == listOf("Second.kt") }
+                openFile("Sample.kt")
+                waitFor(ofSeconds(10)) { openTabNames().sorted() == listOf("Sample.kt", "Second.kt") }
+                // The property itself, read off the model: that open rewrote the memory, and
+                // Third.kt is not in it.
+                waitFor(ofSeconds(10)) { rememberedTabUrlsOf("Whittle").size == 2 }
+                val remembered = rememberedTabUrlsOf("Whittle")
+                assertEquals(
+                    listOf("Sample.kt", "Second.kt"),
+                    remembered.map { it.substringAfterLast('/') }.sorted(),
+                    "opening a member must re-record the group's open set, dropping the tab left " +
+                        "closed — got $remembered",
+                )
+
+                // Hidden by hand, so nothing but that open has written the memory.
+                closeFile("Sample.kt")
+                closeFile("Second.kt")
+                waitFor(ofSeconds(10)) { openTabNames().isEmpty() }
+                waitFor(ofSeconds(10)) {
+                    remoteRobot.toolWindowGroupRows().any { it.contains("Whittle") && it.contains("hidden") }
+                }
+
+                setGroupHidden("Whittle", hidden = false)
+
+                waitFor(ofSeconds(10)) { openTabNames().size == 2 }
+                assertEquals(
+                    listOf("Sample.kt", "Second.kt"),
+                    openTabNames().sorted(),
+                    "Show must reopen the group's last open arrangement — both tabs that were open, " +
+                        "and not the one closed and left closed",
+                )
+            } finally {
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
      * The context menu must act on the row the user right-clicked, whatever was selected before —
      * the regression guarded here is a menu that comes up entirely greyed out, which is what
      * happens when a right-click doesn't move the tree's selection (Swing moves it for the left
@@ -383,6 +520,63 @@ class TabGroupsToolWindowUiTest {
                 // reach it — a failure here must not poison the rest of the suite.
                 clearActiveGroup()
                 hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
+     * The mechanism behind the test above, and the half of it that can actually fail on the defect.
+     *
+     * `TabGroupFileListener` and `TabGroupsPanel` both react to `fileOpened`, so whether the tree is
+     * rebuilt after the auto-join or a moment before it is the message bus's choice rather than the
+     * plugin's — on this sandbox it calls the auto-join first, which is why the tree assertion above
+     * passes even against the unfixed plugin and can only pin the behaviour. What the fix adds is
+     * the announcement itself: `autoJoinActiveGroup` publishes on `TabGroupsChangedListener.TOPIC`,
+     * exactly as every hand-driven assignment path does, putting a refresh after the mutation in
+     * either order. Counting that publication holds whatever the platform does with its subscriber
+     * list — delete the `TabGroupNotifier.notifyChanged` line and this test fails on any machine.
+     *
+     * The tool window is deliberately left closed: the probe counts publications on the topic, and
+     * keeping the panel out of it leaves the count attributable to the auto-join alone.
+     */
+    @Test
+    fun `auto-joining the active group announces the change on the topic`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                openFile("Sample.kt")
+                assignFileToNewGroup("Sample.kt", "Announced")
+                toggleActiveGroup("Announced")
+                waitFor(ofSeconds(10)) { activeGroupName() == "Announced" }
+
+                // Both preconditions matter, and `resetTabGroups` closing every editor is what
+                // gives us them: an already-open file fires no `fileOpened` at all, and an
+                // already-assigned one returns from the auto-join before the announcement.
+                val openBefore = openTabNames()
+                assertTrue("Second.kt" !in openBefore, "Second.kt must not already be open, got $openBefore")
+                assertNull(groupNameFor("Second.kt"), "Second.kt must start out unassigned")
+
+                installTopicProbe()
+                openFile("Second.kt")
+                // Waited for rather than assumed: the open lands on a later event-queue turn, and
+                // the publication being counted happens inside the listener that this wait is
+                // observing the other half of.
+                waitFor(ofSeconds(10)) { groupNameFor("Second.kt") == "Announced" }
+
+                // Read once: the assertion message is built whether or not it fails, and a second
+                // call would be a second reading of a live counter rather than the one asserted on.
+                val publications = topicProbeCount()
+                assertTrue(
+                    publications >= 1,
+                    "auto-join must publish TabGroupsChangedListener.TOPIC, so the tool window's tree " +
+                        "refreshes after the membership change whichever order the message bus calls " +
+                        "its subscribers in — got $publications publications",
+                )
+            } finally {
+                removeTopicProbe()
+                // No tool window to put away, but the active group would otherwise swallow every
+                // file the next test opens. See the test above.
+                clearActiveGroup()
             }
         }
     }
