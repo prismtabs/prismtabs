@@ -347,8 +347,9 @@ to be opened and then closed again just to be dropped.
   row naming a file that is gone from disk can be unassigned too (assignments are URL-keyed
   throughout); the repaint is skipped when nothing resolves, since a missing file has no tab.
 - **Multi-select**, which is why the tree becomes `DISCONTIGUOUS_TREE_SELECTION`: the files worth
-  dropping together are rarely adjacent, and gathering them by Ctrl-click is the gesture every
-  platform tree offers for exactly this. Three consequences, each load-bearing:
+  dropping together are rarely adjacent, and gathering them by the platform's toggle-click (Ctrl,
+  or ⌘ on macOS) is the gesture every platform tree offers for exactly this. Three consequences,
+  each load-bearing:
   - The **group** actions must stay unambiguous, so `selectedGroup()` now answers only when every
     selected row resolves to *one* group — one group row, or any number of its files. A selection
     spanning two groups greys Rename, Recolour, Delete and both toggles rather than acting on
@@ -375,7 +376,7 @@ to be opened and then closed again just to be dropped.
   **Delivered** in `TabGroupsToolWindow.kt` as `RemoveFromGroupAction`, with the toolbar and context
   menu now built from one shared list of action instances. Driven end-to-end in
   `TabGroupsToolWindowUiTest` — `a member row offers Remove from Group, and a group row does not`
-  (every tab closed, so nothing in it could have gone through the tab popup), `Ctrl-clicked files
+  (every tab closed, so nothing in it could have gone through the tab popup), `multi-selected files
   are removed together, and the item states the count`, and `a selection spanning two groups still
   removes, greys the group actions, and asks once`.
 

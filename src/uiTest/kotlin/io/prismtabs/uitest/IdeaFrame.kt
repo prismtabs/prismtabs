@@ -1302,6 +1302,37 @@ fun RemoteRobot.toolWindowSelectionCount(): Int =
     toolWindowGroupTree().callJs<String>("'' + component.getSelectionCount()", true).toInt()
 
 /**
+ * The key held down to toggle one more row into a tree selection — `VK_CONTROL` on Linux and
+ * Windows, `VK_META` (⌘) on macOS.
+ *
+ * Not a hardcoded `VK_CONTROL`, which is what the multi-select tests shipped with and what made
+ * both of them fail on macOS with a `WaitForConditionTimeoutException` on the selection count. The
+ * gesture is not the plugin's to choose: `TabGroupsToolWindow` only asks for
+ * `DISCONTIGUOUS_TREE_SELECTION`, and Swing decides the modifier per platform in
+ * `BasicTreeUI.isToggleSelectionEvent`, which delegates to `SwingUtilities2.isMenuShortcutKeyDown`
+ * — i.e. to exactly the mask read below. So Ctrl-click cannot extend a selection on macOS however
+ * the plugin is written, and it is a popup trigger there besides.
+ *
+ * Read off the **IDE**, not the client JVM: `Keyboard(...).pressing` and every `Robot` click run on
+ * the machine hosting `runIdeForUiTests`, so its toolkit is the one whose answer decides what the
+ * tree sees. (Client-side `os.name` — the idiom [MacSettingsShortcutUiTest] uses to *skip* itself —
+ * would happen to agree here, since this suite drives the local desktop, but it is answering a
+ * different question.) Asking for the mask rather than matching an OS name also keeps this correct
+ * on any platform whose look-and-feel picks a third modifier.
+ */
+fun RemoteRobot.toggleSelectionKey(): Int {
+    val isMeta = callJs<String>(
+        """
+        importPackage(java.awt)
+        importPackage(java.awt.event)
+        '' + (Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx() === InputEvent.META_DOWN_MASK)
+        """,
+        true,
+    )
+    return if (isMeta.toBoolean()) KeyEvent.VK_META else KeyEvent.VK_CONTROL
+}
+
+/**
  * The rows under [groupName] once it is expanded — the group's member files, as rendered. Sliced
  * out of the whole tree rather than read off the node, because a rendered row is what this phase is
  * actually about: name, greyed directory, and any "missing" suffix.

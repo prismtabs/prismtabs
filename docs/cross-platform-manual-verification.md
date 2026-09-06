@@ -84,11 +84,13 @@ already covered continuously by local development.
 6. **PrismTabs tool window** — opens from its stripe button; lists every group as `N files`;
    expanding a group row shows one row per member — file-type icon, name, greyed relative
    directory — with the open ones in bold and the closed ones still listed, and double-clicking a
-   member row opens it. Right-clicking a member offers **Remove from Group**, and a Ctrl-clicked
-   selection of several states the count (`Remove 3 Files from Group`); the item is absent on a
-   group row. Hiding closes member tabs and marks the row "hidden"; showing reopens them in their
-   original order. Confirm the stripe icon and swatch icons aren't blurry at this OS's default
-   scaling.
+   member row opens it. Right-clicking a member offers **Remove from Group**, and a multi-selected
+   set of several states the count (`Remove 3 Files from Group`); the item is absent on a
+   group row. Gather that selection with the platform's own toggle modifier — Ctrl-click on Linux
+   and Windows, **⌘-click on macOS**, which is what Swing's `BasicTreeUI` honours (Ctrl-click on a
+   Mac is a secondary click, not a selection toggle). Hiding closes member tabs and marks the row
+   "hidden"; showing reopens them in their original order. Confirm the stripe icon and swatch icons
+   aren't blurry at this OS's default scaling.
 7. **Settings | Tools | PrismTabs** — reachable both via the Settings/Preferences menu item and
    (macOS only) via ⌘,. Rename a preset, **Apply**, then **Restore Defaults** and confirm the
    preset label actually reverts.

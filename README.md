@@ -979,11 +979,12 @@ carries the same item on a **file** row.
   resolves — a missing file has no tab to repaint.
 
 **And it takes a whole selection**, which is why the tree is `DISCONTIGUOUS_TREE_SELECTION`: the
-files worth dropping together are rarely adjacent, so they are gathered by Ctrl-click the way every
-platform tree gathers them. The label follows the selection — `Remove from Group` for one file,
-`Remove 3 Files from Group`, or `Remove 4 Files from Their Groups` when the selection spans several,
-because claiming one group there would be a lie about where they came from. It is a pure function
-(`removeFromGroupText`), unit-tested like `addToActiveGroupLabel`.
+files worth dropping together are rarely adjacent, so they are gathered by the platform's own
+toggle-click — Ctrl, or ⌘ on macOS — the way every platform tree gathers them. The label follows
+the selection — `Remove from Group` for one file, `Remove 3 Files from Group`, or `Remove 4 Files
+from Their Groups` when the selection spans several, because claiming one group there would be a lie
+about where they came from. It is a pure function (`removeFromGroupText`), unit-tested like
+`addToActiveGroupLabel`.
 
 Multi-selection dragged three other things with it, each load-bearing rather than incidental:
 
@@ -1012,7 +1013,7 @@ same operation on a tab's own right-click menu.
 
 Driven end-to-end in `TabGroupsToolWindowUiTest`: `a member row offers Remove from Group, and a group
 row does not` (with every tab closed — the state in which nothing could have gone through the tab
-popup), `Ctrl-clicked files are removed together, and the item states the count`, and `a selection
+popup), `multi-selected files are removed together, and the item states the count`, and `a selection
 spanning two groups still removes, greys the group actions, and asks once`, which also pins the
 batched empty-group dialog naming both groups at once.
 
