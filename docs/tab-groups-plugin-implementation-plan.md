@@ -492,18 +492,21 @@ hidden at all.
   tool window's suffix, the Hide/Show toggle, the delete warning, the paywall escape hatch. The tree
   takes it from the member rows it has just built, so the group row cannot contradict the bold rows
   beneath it.
-- **Keep the memory, maintain it continuously.** `rememberedTabUrls` (was `collapsedFileUrls`) is
-  written by `TabGroupFileListener` on every editor open and close — never when the resulting set is
-  empty, which is what leaves it holding the arrangement from just before the group went hidden,
-  regardless of *how* it got there. `hide()` records after closing, not before, so that upkeep can't
-  overwrite it mid-loop. `show()` filters the memory against current membership and falls back to
-  every member file when nothing is remembered.
+- **Keep the memory, maintain it on opens.** `rememberedTabUrls` (was `collapsedFileUrls`) is
+  written by `TabGroupFileListener` on every editor *open*, recording the group's whole open set at
+  that moment; `hide()` records the set it is about to close. Closes never touch it. Writing on
+  closes too was the first attempt and it broke the ordinary way a group goes hidden: closing three
+  tabs one at a time rewrote the memory on each close, so the record was whittled down to the last
+  survivor and Show reopened one file out of three. Recording on opens alone holds the last full
+  arrangement without growing without bound — the next open in the group re-records the open set as
+  it stands then, so a tab closed and not returned to drops out. `show()` filters the memory against
+  current membership and falls back to every member file when nothing is remembered.
 - **Empty groups are neither.** With no members there is nothing to close and nothing to reopen, so
   the Hide/Show toggle is disabled rather than left as a no-op that the stored flag used to let
   through — an empty group could sit there reading `0 files · hidden`.
 - **Acceptance:** reopen one member of a hidden group from the tree → the row stops reading
   `hidden` and the toggle offers Hide; close its tabs one at a time → the row reads `hidden` again
-  once the last one goes, and Show reopens exactly the set that was last open.
+  once the last one goes, and Show reopens **all** of them, not just the last one closed.
 - **Rejected:** wording that reconciles the flag with reality (`group hidden, 1 tab visible`) — it
   narrates a state machine the user should not have to know exists. Also rejected: a per-file `S`/`H`
   letter or eye icon on member rows. Bold already carries "this one is open"; a letter reads as a

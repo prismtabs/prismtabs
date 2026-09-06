@@ -26,6 +26,15 @@ import io.prismtabs.service.TabRepaint
  * one at a time by hand — which, now that hidden is derived from the strip rather than stored (see
  * [TabGroupVisibility]), is a perfectly ordinary way for a group to end up hidden.
  *
+ * That memory is written on editor **opens only** — this class deliberately has no `fileClosed`.
+ * Narrowing it as tabs close was the design before, and it is what left "Show Group" reopening a
+ * single file: closing a group's tabs one at a time rewrote the memory on every close, so by the
+ * time the last one went the record had been whittled down to just that tab, and the empty-set skip
+ * in [rememberOpenTabsOf] then preserved the whittled record rather than the arrangement the user
+ * had. Recording on open alone holds the group's last full arrangement, and still cannot grow
+ * without bound: the next open of any member re-records *the open set at that moment*, so a tab the
+ * user closed and did not return to drops out the next time they open anything in the group.
+ *
  * Registered via `<projectListeners>` in plugin.xml, not a manual `MessageBusConnection.subscribe`
  * in a startup activity — dynamic-plugin-safe, no `<component>` needed, and the platform handles
  * subscribing per-project for us.
@@ -38,21 +47,6 @@ internal class TabGroupFileListener : FileEditorManagerListener {
         autoJoinActiveGroup(project, service, file)
         // After the auto-join, so a file that just joined the active group is counted as one of its
         // open tabs on this very event rather than only on the next one.
-        rememberOpenTabsOf(project, service, service.groupFor(file.url)?.id)
-    }
-
-    /**
-     * The counterpart to [fileOpened]'s upkeep: it is closing tabs that narrows the set worth
-     * restoring. Without this, closing three of a group's four tabs and then the fourth would
-     * remember all four, and showing the group again would reopen tabs the user had deliberately
-     * got rid of.
-     *
-     * Closing the *last* one records nothing (see [rememberOpenTabsOf]), which is what leaves the
-     * memory holding the arrangement as it stood a moment before the group went hidden.
-     */
-    override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
-        val project = source.project
-        val service = project.service<TabGroupService>()
         rememberOpenTabsOf(project, service, service.groupFor(file.url)?.id)
     }
 
@@ -86,9 +80,13 @@ internal class TabGroupFileListener : FileEditorManagerListener {
      *
      * The empty case is the one that has to be skipped rather than written: a group with no open
      * tabs is exactly a hidden group, and overwriting the memory there would erase the only record
-     * of what to bring back. Deliberately **not** licence-gated, unlike auto-join: this is
-     * bookkeeping, and a lapsed subscriber whose memory silently stopped updating would find the
-     * locked tool window's "reopen the tabs" escape hatch restoring a stale set of files.
+     * of what to bring back. Now that only opens reach here the set is all but always non-empty —
+     * the file whose opening triggered this is itself a member — so the guard is there for the
+     * platform paths where `getOpenFiles()` does not yet list it, not as a routine branch.
+     *
+     * Deliberately **not** licence-gated, unlike auto-join: this is bookkeeping, and a lapsed
+     * subscriber whose memory silently stopped updating would find the locked tool window's
+     * "reopen the tabs" escape hatch restoring a stale set of files.
      */
     private fun rememberOpenTabsOf(project: Project, service: TabGroupService, groupId: String?) {
         if (groupId == null) return

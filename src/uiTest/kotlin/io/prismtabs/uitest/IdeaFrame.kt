@@ -185,6 +185,31 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     }
 
     /**
+     * Closes the single tab for `path`, the way the user's own middle-click or Ctrl+F4 does —
+     * [closeAllEditors] cannot stand in for it, because the defect it exists to catch is the
+     * *sequence* of one-at-a-time closes that walks a group into hidden.
+     */
+    fun closeFile(path: String) {
+        runJs(
+            """
+            importPackage(com.intellij.openapi.wm.impl)
+            importPackage(com.intellij.openapi.vfs)
+            importClass(com.intellij.openapi.fileEditor.ex.FileEditorManagerEx)
+            importClass(com.intellij.openapi.application.ApplicationManager)
+
+            const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+            const project = frameHelper.getProject()
+            const file = LocalFileSystem.getInstance().findFileByPath(project.getBasePath() + '/$path')
+            const task = new Runnable({
+                run: function() { FileEditorManagerEx.getInstanceEx(project).closeFile(file) }
+            })
+            ApplicationManager.getApplication().invokeAndWait(task)
+            """,
+            true,
+        )
+    }
+
+    /**
      * Hides the "PrismTabs" tool window. Not cosmetic cleanup: while it is open it takes width
      * from the editor, which narrows the tab strip enough that `EditorTabLabel`s clip and a
      * `rightClick()` on one lands somewhere that never opens the context menu — confirmed live by

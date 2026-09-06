@@ -50,21 +50,19 @@ internal object TabGroupVisibility {
     /**
      * Closes every open tab belonging to [group], after which [isHidden] reports it hidden.
      *
-     * The recording happens **after** the closes, not before, and that order is load-bearing: each
-     * `closeFile` notifies [io.prismtabs.listener.TabGroupFileListener], which keeps
-     * [TabGroup.rememberedTabUrls] up to date as tabs come and go. Recording first would have that
-     * upkeep overwrite this list with whatever was still open midway through the loop — hide two
-     * tabs and only the second would ever come back. Recording last wins whether those
-     * notifications arrive synchronously (they do) or not, because the upkeep never records an
-     * empty list and every member is closed by the time it could run again.
+     * Recording the exact set being closed is what makes Hide followed by Show an identity even for
+     * a group only half of whose files were open. Nothing in the close loop can undo it:
+     * [io.prismtabs.listener.TabGroupFileListener] maintains [TabGroup.rememberedTabUrls] on editor
+     * *opens* only, precisely so that closing tabs — here or one at a time by hand — never whittles
+     * the memory down as it goes.
      */
     fun hide(project: Project, service: TabGroupService, group: TabGroup) {
         val openUrls = openMemberUrls(project, service, group.id)
         if (openUrls.isEmpty()) return
+        service.rememberOpenTabs(group.id, openUrls)
         val fileEditorManager = FileEditorManager.getInstance(project)
         val virtualFileManager = VirtualFileManager.getInstance()
         openUrls.forEach { url -> virtualFileManager.findFileByUrl(url)?.let { fileEditorManager.closeFile(it) } }
-        service.rememberOpenTabs(group.id, openUrls)
         TabGroupNotifier.notifyChanged(project)
     }
 

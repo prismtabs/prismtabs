@@ -152,6 +152,54 @@ class TabGroupsToolWindowUiTest {
     }
 
     /**
+     * The bug: a group whose tabs were closed **one at a time** came back with only the last-closed
+     * file, whatever order they went in. Every close used to re-record the group's still-open tabs,
+     * so the memory was whittled down to the final survivor, and Show faithfully reopened just it —
+     * on a row the tool window was still showing as three files.
+     *
+     * Closed in the order 2, 1, 3 rather than left-to-right, because that is the report's own order
+     * and it also rules out a fix that merely happens to keep the first or the last tab.
+     */
+    @Test
+    fun `a group hidden by closing its tabs one at a time comes back whole`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                openFile("Third.kt")
+                assignFileToNewGroup("Sample.kt", "OneByOne")
+                addFileToGroup("Second.kt", "OneByOne")
+                addFileToGroup("Third.kt", "OneByOne")
+                waitFor(ofSeconds(10)) {
+                    remoteRobot.toolWindowGroupRows().any { it.contains("OneByOne") && it.contains("3 files") }
+                }
+
+                // No PrismTabs action anywhere in this sequence — just the user closing tabs.
+                closeFile("Second.kt")
+                waitFor(ofSeconds(10)) { openTabNames().sorted() == listOf("Sample.kt", "Third.kt") }
+                closeFile("Sample.kt")
+                waitFor(ofSeconds(10)) { openTabNames() == listOf("Third.kt") }
+                closeFile("Third.kt")
+                waitFor(ofSeconds(10)) { openTabNames().isEmpty() }
+                waitFor(ofSeconds(10)) {
+                    remoteRobot.toolWindowGroupRows().any { it.contains("OneByOne") && it.contains("hidden") }
+                }
+
+                setGroupHidden("OneByOne", hidden = false)
+                waitFor(ofSeconds(10)) { openTabNames().size == 3 }
+                assertEquals(
+                    listOf("Sample.kt", "Second.kt", "Third.kt"),
+                    openTabNames().sorted(),
+                    "Show must reopen every file the group had open, not just the last one closed",
+                )
+            } finally {
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
      * The context menu must act on the row the user right-clicked, whatever was selected before —
      * the regression guarded here is a menu that comes up entirely greyed out, which is what
      * happens when a right-click doesn't move the tree's selection (Swing moves it for the left
