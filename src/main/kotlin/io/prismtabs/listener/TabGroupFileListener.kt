@@ -7,6 +7,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import io.prismtabs.license.PrismTabsLicense
 import io.prismtabs.model.TabGroup
+import io.prismtabs.service.TabGroupNotifier
 import io.prismtabs.service.TabGroupService
 import io.prismtabs.service.TabGroupVisibility
 import io.prismtabs.service.TabRepaint
@@ -65,6 +66,19 @@ internal class TabGroupFileListener : FileEditorManagerListener {
         if (!PrismTabsLicense.paidFeaturesEnabled()) return
         service.assign(file.url, active)
         TabRepaint.request(project, file)
+        // Announce the membership change, exactly as every hand-driven assignment path announces
+        // it (see TabGroupPopup.addToActiveGroup). The tool window also refreshes on `fileOpened`
+        // of its own accord — but that is the *same* event this listener is handling, so whether
+        // its tree sees the new member depends on which of the two subscribers the message bus
+        // calls first, and that order is not ours to set: TabGroupFileListener is declared in
+        // `projectListeners`, and the platform subscribes such listeners lazily, the first time the
+        // topic's subscriber list is computed (CompositeMessageBus.subscribeLazyListeners). Called
+        // in the other order the panel rebuilds the tree from the assignments as they stood a
+        // moment before this auto-join, and the file only shows up on the next unrelated group
+        // event — which is the defect this line closes. Publishing here puts a refresh after the
+        // mutation whatever the subscriber order, and costs one extra rebuild of a few dozen rows
+        // in the order that was already working.
+        TabGroupNotifier.notifyChanged(project)
     }
 
     /**

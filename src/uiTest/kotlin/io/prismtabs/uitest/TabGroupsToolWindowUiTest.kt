@@ -268,6 +268,78 @@ class TabGroupsToolWindowUiTest {
     }
 
     /**
+     * The reported defect: with a group marked active, opening a file from the Project view joins
+     * it to that group — the tab takes the colour and the service agrees — while the tool window's
+     * tree goes on showing the group's old membership and count, catching up only on the next
+     * group event, which is why deactivating or hiding the group appears to "fix" it.
+     *
+     * Two subscribers to one event decide it. The panel refreshes on `fileOpened` as well as on
+     * PrismTabs' own change topic, and the auto-join happens on that very same `fileOpened`, so
+     * whether the tree is rebuilt before or after the file joins comes down to the order the
+     * message bus calls them in — and that order is the platform's to choose, since
+     * `TabGroupFileListener` is a lazily-subscribed `projectListeners` entry. `TabGroupFileListener`
+     * now publishes the change itself, as every hand-driven assignment path does, so the refresh
+     * lands after the mutation either way.
+     *
+     * Measured on the sandbox IDE (2024.2, plugin loaded at startup), the platform happens to call
+     * the auto-join first, so this test passes against the unfixed plugin there too — it pins the
+     * behaviour rather than reproducing the ordering. What it does cover outright is the scenario
+     * itself, which had none: the existing active-group tests assert the *service*, never the tree.
+     *
+     * Driven through the Project view because that is where it was reported, and asserted with
+     * nothing else touched in between: every step after the open is a pure read of the tree, since
+     * selecting a row, hiding the window or toggling the group would each republish a change and
+     * hand the tree the refresh whose absence is the defect.
+     */
+    @Test
+    fun `a file that auto-joins the active group shows up in the tree at once`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                // Opened *first*, before any file — the state a user who keeps this window
+                // open is in, and the one that puts the panel's own `fileOpened` refresh closest
+                // to racing the auto-join.
+                showTabGroupsToolWindow()
+                openFile("Sample.kt")
+                assignFileToNewGroup("Sample.kt", "AutoJoined")
+                waitFor(ofSeconds(10)) {
+                    remoteRobot.toolWindowGroupRows().any { it.contains("AutoJoined") && it.contains("1 file") }
+                }
+
+                // Marked active through the same choke point the tool window's "Active Group"
+                // toggle and the tab popup's item both call. That the *menu* reaches it is
+                // already covered above; going through the menu here would leave a popup on
+                // screen swallowing the expand key pressed a moment later.
+                toggleActiveGroup("AutoJoined")
+                waitFor(ofSeconds(10)) { activeGroupName() == "AutoJoined" }
+
+                // Expanded *before* the open, so the members below are already on screen: an
+                // expansion done afterwards would be a fresh click on the tree and could mask a
+                // missing refresh.
+                remoteRobot.expandToolWindowGroup("AutoJoined")
+
+                openFromProjectView("Second.kt")
+
+                waitFor(ofSeconds(10)) { groupNameFor("Second.kt") == "AutoJoined" }
+                waitFor(ofSeconds(10)) {
+                    remoteRobot.toolWindowGroupRows().any { it.contains("AutoJoined") && it.contains("2 files") }
+                }
+                assertTrue(
+                    remoteRobot.toolWindowGroupRows().any { it.trim().startsWith("Second.kt") },
+                    "the auto-joined file must appear under its group without any further event, " +
+                        "got ${remoteRobot.toolWindowGroupRows()}",
+                )
+            } finally {
+                // The active group outlives the test otherwise, and would silently swallow every
+                // file the next class opens. resetTabGroups clears it, but only for tests that
+                // reach it — a failure here must not poison the rest of the suite.
+                clearActiveGroup()
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
      * Phase 6a's acceptance criterion, driven as the plan states it: a group's members are files,
      * and the tool window has to say which — *especially* once none of them is open, which is the
      * case the tab strip cannot answer at all.
