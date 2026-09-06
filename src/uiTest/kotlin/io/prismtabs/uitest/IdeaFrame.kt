@@ -764,6 +764,27 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
      * is application-global, so a missed restore would silently strip the registration actions from
      * every later test in the same sandbox session — and worse, from any *manual* poke at that IDE
      * afterwards.
+     *
+     * **This logs one expected warning per run, and it is not a PrismTabs bug.** The sandbox's
+     * `idea.log` gets `WARN - #c.i.o.a.AnAction - ShortcutSet of global AnActions should not be
+     * changed outside of KeymapManager … Action: Register Plugins… [Plugin:
+     * com.intellij.marketplace]`, from the platform's own `registerAction` calling
+     * `registerCustomShortcutSet` -> `AnAction.setShortcutSet` on the way in.
+     *
+     * It is logged as a `PluginException`, so it reads like the cause of the red "IDE error
+     * occurred" balloon that the sandbox shows during a run. It is not: this is `WARN`, and only
+     * error-level logging opens that notification. The balloon comes from the unrelated
+     * `GradleJvmSupportMatrix` JDK-25 parse failure — see README "Expected sandbox noise".
+     *
+     * It cannot be avoided from here, which is why this documents it rather than working around it.
+     * `AnAction.setShortcutSet` warns (verified against 2024.2 bytecode, not guessed) when
+     * `myShortcutSet != CustomShortcutSet.EMPTY` and `ActionManager.getId(this) != null` — and by
+     * that point `registerAction` has already put the id back, so the second test is true for us.
+     * Both `ActionManager.registerAction` overloads route through the same path, so there is no
+     * quieter API to switch to. The only two ways to silence it are worse than the warning:
+     * blanking the stock action's `ShortcutSet` to `EMPTY` first would permanently strip ⌘/Ctrl
+     * bindings the sandbox's own user might rely on afterwards, and not restoring at all is the
+     * global-state leak this method exists to prevent.
      */
     fun restoreRegisterDialog() {
         runJs(

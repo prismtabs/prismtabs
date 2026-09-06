@@ -1163,6 +1163,29 @@ skipped rather than failing or being silently left out. `MacSettingsShortcutUiTe
 `-Dprismtabs.manualVerification=true` that neither local dev nor `ui-tests.yml` ever passes (see its
 own doc comment, and `docs/cross-platform-manual-verification.md` for how to run it deliberately).
 
+### Expected sandbox noise — an error balloon and a warning, neither a PrismTabs bug
+
+A fully green run still leaves the sandbox IDE showing the red **"IDE error occurred"** notification,
+so a failure screenshot taken afterwards shows one too. Measured on the 2026-09-06 Windows pass, no
+`io.prismtabs` frame appears anywhere in that day's log. Two separate things, worth telling apart:
+
+- **What actually raises the balloon** is the single error-level entry in the run:
+  `SEVERE … Cannot init component state (componentName=GradleJvmSupportMatrix) … Caused by:
+  java.lang.IllegalArgumentException: 25` — the same JDK-25 version-parser bug already listed under
+  "Noisy but harmless log output" above. It fires once per IDE start under `runIdeForUiTests` too,
+  not only under `buildPlugin`/`runIde`.
+- **A warning that does not raise it**, but shows up when reading the log for the cause:
+  `WARN - #c.i.o.a.AnAction - ShortcutSet of global AnActions should not be changed outside of
+  KeymapManager … Action: Register Plugins… [Plugin: com.intellij.marketplace]`. It is logged as a
+  `PluginException`, which makes it look like the culprit, but `WARN` never opens a notification —
+  it comes from [`IdeaFrame.restoreRegisterDialog`](src/uiTest/kotlin/io/prismtabs/uitest/IdeaFrame.kt)
+  putting back the stock action `suppressRegisterDialog` removed, and is unavoidable through any
+  supported API. That method's doc comment has the bytecode-level reasoning and why every way of
+  silencing it is worse.
+
+So the balloon proves nothing on its own. To tell a real plugin failure from this, grep `idea.log`
+for an `io.prismtabs` frame rather than trusting the notification or the screenshot.
+
 **Locally this runs on Linux and Windows.** Linux needs the X11 workaround below. Windows needs
 none: `runIdeForUiTests` boots the sandbox IDE and `remote-robot`'s mouse/keyboard automation works
 directly against the real desktop, so the same two commands above are all it takes — no manual

@@ -7,12 +7,13 @@ import org.junit.jupiter.api.extension.BeforeTestExecutionCallback
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.api.extension.ParameterContext
 import org.junit.jupiter.api.extension.ParameterResolver
+import org.opentest4j.TestAbortedException
 import java.io.File
 
 /**
  * Resolves a [RemoteRobot] test parameter pointed at `runIdeForUiTests` (see README "UI testing")
- * and, on failure, saves a screenshot to `build/reports` — the only debugging aid available once
- * the IDE under test has already moved on.
+ * and, on failure — but not on a skip, see [afterTestExecution] — saves a screenshot to
+ * `build/reports`, the only debugging aid available once the IDE under test has already moved on.
  *
  * [beforeTestExecution] also entitles the plugin's paid features before every test — see
  * [IdeaFrame.simulateEntitled]. Since `plugin.xml` gained its `<product-descriptor>` the sandbox
@@ -116,7 +117,17 @@ class RemoteRobotExtension : BeforeTestExecutionCallback, AfterTestExecutionCall
      * and therefore on top, which is what a failing popup test needs to show.
      */
     override fun afterTestExecution(context: ExtensionContext) {
-        if (!context.executionException.isPresent) return
+        val outcome = context.executionException.orElse(null) ?: return
+        // A skipped test is not a failed one. JUnit signals an `assumeTrue` opt-out by throwing
+        // TestAbortedException, which arrives in executionException exactly like a real failure —
+        // so without this guard every self-gating class photographs a perfectly idle IDE into
+        // build/reports under its own test name. That is not merely wasted work: `ui-tests.yml`
+        // uploads build/reports as an artefact, so a PNG named after a test that never ran is
+        // waiting there for whoever opens it, reading as a failure that did not happen. Measured on
+        // the 2026-09-06 Windows pass — all three designed skips each left one behind:
+        // MacSettingsShortcutUiTest off macOS, and WindowsManualVerificationUiTest's two cases
+        // without `-Dprismtabs.manualVerification=true`.
+        if (outcome is TestAbortedException) return
         val bytes = remoteRobot.callJs<ByteArray>(
             """
             importPackage(java.awt)
