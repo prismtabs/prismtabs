@@ -902,6 +902,52 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
         )
     }
 
+    /**
+     * Opens a file the way a user most often does: double-clicking its row in the **Project view**.
+     *
+     * Not interchangeable with [openFile] for anything testing what happens *around* the open:
+     * both end in `FileEditorManagerListener.fileOpened`, but this one gets there through a real
+     * double-click on a real tree, which is the gesture the auto-join defect was reported for — see
+     * `a file that auto-joins the active group shows up in the tree at once` in
+     * [TabGroupsToolWindowUiTest].
+     *
+     * The Project view is opened by script (the same reasoning as [showTabGroupsToolWindow]: a
+     * `java.awt.Robot` click on a stripe coordinate is the least reliable step available), and it is
+     * anchored left while PrismTabs is anchored right, so showing it leaves the group tree on screen
+     * — load-bearing here, since hiding and re-showing that tool window is itself one of the events
+     * that would refresh the tree and paper over the very bug under test.
+     *
+     * [label] is the row's *rendered* text, which is not always the file name — the Kotlin plugin
+     * presents a file holding a single top-level declaration as that declaration instead. Same
+     * reason `EmptyGroupOnDiskDeleteUiTest.deleteFromProjectView` takes one.
+     */
+    fun openFromProjectView(label: String) {
+        runJs(
+            """
+            importPackage(com.intellij.openapi.wm.impl)
+            importClass(com.intellij.openapi.wm.ToolWindowManager)
+            importClass(com.intellij.openapi.application.ApplicationManager)
+
+            const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+            const project = frameHelper.getProject()
+            const task = new Runnable({
+                run: function() {
+                    const window = ToolWindowManager.getInstance(project).getToolWindow('Project')
+                    if (window != null) window.activate(null)
+                }
+            })
+            ApplicationManager.getApplication().invokeAndWait(task)
+            """,
+            true,
+        )
+
+        val tree = find<JTreeFixture>(byXpath("//div[@class='ProjectViewTree']"), Duration.ofSeconds(20))
+        waitFor(Duration.ofSeconds(20), errorMessage = "no '$label' row in the project tree") {
+            runCatching { tree.collectRows().any { it.trim() == label } }.getOrDefault(false)
+        }
+        tree.doubleClickRowWithText(label, true)
+    }
+
     /** Invokes the locked tool window's "reopen the tabs of N hidden groups" escape hatch —
      * [io.prismtabs.ui.showAllHiddenGroups], the same function that link calls. Driven directly
      * rather than clicked for the reason given on [setGroupHidden]. */
@@ -1072,6 +1118,28 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
 
             const task = new Runnable({ run: function() { method.invoke(null, project, target, service) } })
             ApplicationManager.getApplication().invokeAndWait(task)
+            """,
+            true,
+        )
+    }
+
+    /**
+     * Clears the active group, whichever it is — the one line of [resetTabGroups] a test needs on
+     * its way *out*. An active group left behind silently swallows every file the next test opens
+     * into it, and a test that failed before its own cleanup never reaches [resetTabGroups].
+     */
+    fun clearActiveGroup() {
+        runJs(
+            """
+            importPackage(com.intellij.openapi.wm.impl)
+            importPackage(com.intellij.ide.plugins)
+            importPackage(com.intellij.openapi.extensions)
+
+            const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+            const project = frameHelper.getProject()
+            const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
+            const service = project.getService(java.lang.Class.forName('io.prismtabs.service.TabGroupService', true, pluginLoader))
+            service.setActiveGroup(null)
             """,
             true,
         )
