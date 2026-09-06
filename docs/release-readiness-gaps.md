@@ -146,9 +146,9 @@ generated and is now set as the `PUBLISH_TOKEN` repo secret (closes item 3). Acc
 **To close, once items 1–4 are done:**
 - Upload the plugin as a **first release** (not an update).
 - Under **Sales Info → Add to Marketplace**: confirm/register product code `PPRISMTABS`, choose
-  **Freemium**, then the **Yearly Subscription without a Fallback License** scheme, set price to
-  $9/year (matches the website's pricing card as of `fix(pricing)`, 2026-08-26), leave the trial at
-  its 30-day default.
+  **Freemium**, then the **Yearly Subscription without a Fallback License** scheme, set the
+  personal price to $14/year and the commercial price to $29/year per user (matches the website's
+  pricing card as of `fix(pricing)`, 2026-09-06), leave the trial at its 30-day default.
 - Attach the licence (item 7): paste the `prismtabs.com/eula` URL into the licence field at upload
   time (per the best-practices doc it's added here, not via a `plugin.xml` tag); paste the full
   EULA text as the fallback if the form wants text rather than a link.
