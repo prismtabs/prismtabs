@@ -14,6 +14,7 @@ import java.awt.datatransfer.Clipboard
 import java.awt.datatransfer.ClipboardOwner
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
+import java.awt.datatransfer.UnsupportedFlavorException
 import java.awt.image.BufferedImage
 import java.lang.ref.WeakReference
 import java.util.concurrent.CountDownLatch
@@ -160,6 +161,38 @@ class PrismTabsUnloadListenerTest {
      * builds a fresh `ClipboardTransferable` per call when another application does. Pinned here
      * because the ownership test this replaced was also a reading of `SunClipboard`, was wrong, and
      * failed by doing nothing at all.
+     *
+     * Asserted on the *system* clipboard rather than the primary selection so that it runs on every
+     * desktop this plugin ships to, not only the X11/Wayland one it was written on — the test below
+     * covers the same behaviour on the sibling clipboard and skips everywhere else. That matters
+     * because `SunClipboard` is abstract: what a Windows JVM actually owns is a `WClipboard` and a
+     * macOS one a `CClipboard`, each with its own native transfer path, and neither is exercised by
+     * the tests above — those construct a plain [Clipboard], which inherits none of that. Were the
+     * identity to fail on one of them, [PrismTabsUnloadListener.releaseClipboard] would return early
+     * on that platform and release nothing, silently, exactly as the reading it replaced did.
+     *
+     * Confirmed live against `sun.awt.windows.WClipboard` on Windows 11 before this test existed.
+     */
+    @Test
+    fun `the system clipboard reads back as one instance while this JVM owns it`() {
+        val clipboard = systemClipboard()
+
+        withContentsRestored(clipboard) {
+            clipboard.setContents(StringSelection("prismtabs ownership probe"), null)
+
+            assertSame(clipboard.getContents(null), clipboard.getContents(null))
+        }
+    }
+
+    /**
+     * The same ownership reading as the test above, on the clipboard whose owner
+     * [PrismTabsUnloadListener.releaseClipboard]'s second release step exists to displace. Kept
+     * alongside rather than folded into it because the primary selection is a separate JDK
+     * implementation — `WLClipboard`/`XClipboard` reached through `Toolkit.getSystemSelection`
+     * rather than `getSystemClipboard` — and a platform is free to get one right and the other
+     * wrong.
+     *
+     * Skipped where there is no primary selection to own: headless (CI), Windows and macOS.
      */
     @Test
     fun `the primary selection reads back as one instance while this JVM owns it`() {
@@ -180,17 +213,85 @@ class PrismTabsUnloadListenerTest {
     }
 
     /**
-     * Puts the developer's own selection text back after [body]. The primary selection is shared
-     * with every other window on the desktop, and a middle-click paste after a test run should
-     * still produce what it produced before one; ownership cannot be handed back, but the text can.
+     * The system clipboard, skipping the test — assumption recorded — where there is no desktop to
+     * own one on. Guarded rather than caught: `getSystemClipboard` raises [java.awt.HeadlessException]
+     * on a headless JVM, which is CI's, and a skip states that platform limit where a swallowed
+     * exception would only hide it.
+     */
+    private fun systemClipboard(): Clipboard {
+        assumeTrue(!GraphicsEnvironment.isHeadless(), "no system clipboard: headless")
+        return Toolkit.getDefaultToolkit().systemClipboard
+    }
+
+    /**
+     * Puts the developer's own clipboard contents back after [body]. Both clipboards this exercises
+     * are shared with every other window on the desktop, and a paste after a test run should still
+     * produce what it produced before one; ownership cannot be handed back, but the contents can.
+     *
+     * Contents rather than *text*, because one of the two is the system clipboard: the primary
+     * selection only ever holds text, but a developer's system clipboard routinely holds a
+     * screenshot or a file list, and restoring a plain-text reading of one of those would quietly
+     * destroy it on every `./gradlew test`.
      */
     private fun withContentsRestored(clipboard: Clipboard, body: () -> Unit) {
-        val previous = runCatching { clipboard.getData(DataFlavor.stringFlavor) as String }.getOrDefault("")
+        val previous = snapshot(clipboard)
         try {
             body()
         } finally {
-            clipboard.setContents(StringSelection(previous), null)
+            clipboard.setContents(previous ?: StringSelection(""), null)
         }
+    }
+
+    /**
+     * [clipboard]'s current contents read eagerly into memory, so that they can be published again
+     * once a test has overwritten them — or null where there was nothing to save, in which case an
+     * empty clipboard is the faithful restoration.
+     *
+     * Eagerly is the whole point: what [Clipboard.getContents] hands back for a clipboard another
+     * application owns fetches its data from that application lazily, per flavour, and would read
+     * back *this test's* contents if it were held and replayed instead of copied.
+     *
+     * Stream-valued flavours are dropped rather than saved. Their data is served as a one-shot
+     * [java.io.InputStream] or [java.io.Reader], so reading one here to save it would consume it,
+     * and what was saved could be published only once. Every flavour that carries a whole object —
+     * [DataFlavor.stringFlavor], [DataFlavor.imageFlavor], [DataFlavor.javaFileListFlavor] and the
+     * JVM-local reference forms — survives, which between them is everything a paste can actually
+     * produce; the stream spellings that are dropped duplicate text kept via [DataFlavor.stringFlavor].
+     */
+    private fun snapshot(clipboard: Clipboard): Transferable? {
+        val contents = clipboard.getContents(null) ?: return null
+        val saved = contents.transferDataFlavors
+            .filterNot { it.isStreamValued }
+            .mapNotNull { flavor ->
+                // Narrowly, and per flavour, for the reason the production listener catches that
+                // way: a flavour this JDK cannot serve is one to skip, not to fail a test run over,
+                // but an Error is nobody's to swallow.
+                try {
+                    flavor to contents.getTransferData(flavor)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            .toMap()
+        return if (saved.isEmpty()) null else SnapshotContents(saved)
+    }
+
+    /** Whether this flavour serves its data as a one-shot stream — see [snapshot]. */
+    private val DataFlavor.isStreamValued: Boolean
+        get() = isRepresentationClassInputStream ||
+            isRepresentationClassReader ||
+            isRepresentationClassCharBuffer ||
+            isRepresentationClassByteBuffer
+
+    /** A [snapshot]'s saved flavours, ready to go back on the clipboard as many times as needed. */
+    private class SnapshotContents(private val saved: Map<DataFlavor, Any>) : Transferable {
+
+        override fun getTransferDataFlavors(): Array<DataFlavor> = saved.keys.toTypedArray()
+
+        override fun isDataFlavorSupported(flavor: DataFlavor): Boolean = flavor in saved
+
+        override fun getTransferData(flavor: DataFlavor): Any =
+            saved[flavor] ?: throw UnsupportedFlavorException(flavor)
     }
 
     /** A clipboard content with a flavour [PrismTabsUnloadListener.releaseClipboard] must not touch. */
