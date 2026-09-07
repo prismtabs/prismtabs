@@ -95,6 +95,14 @@
                                   instance="io.prismtabs.ui.TabGroupPaletteConfigurable"/>
     </extensions>
 
+    <!-- Flushes the platform's derived-icon caches so this plugin's class loader can actually be
+         collected on uninstall/update/disable. See PrismTabsUnloadListener for the retention path
+         and why the platform's own unload cleanup does not cover it. -->
+    <applicationListeners>
+        <listener class="io.prismtabs.listener.PrismTabsUnloadListener"
+                  topic="com.intellij.ide.plugins.DynamicPluginListener"/>
+    </applicationListeners>
+
     <!-- Phase 3's "sticky active group" inheritance: dynamic-plugin-safe registration (no
          <component>, no manual MessageBusConnection.subscribe in a startup activity). -->
     <projectListeners>
