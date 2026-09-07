@@ -12,9 +12,31 @@ There is **no** platform sources jar on this machine — only the extracted IDE.
 `plugins/`, so a single-jar classpath will falsely report "class not found".
 
 ```bash
-IDE=$(find ~/.gradle/caches/*/transforms -maxdepth 3 -name 'ideaIC-*' -type d | head -1)
-javap -cp "$(find "$IDE" -name '*.jar' | tr '\n' ':')" com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
+IDE=$(find ~/.gradle/caches/*/transforms -maxdepth 6 -name 'ideaIC-*' -type d | head -1)
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) SEP=';'; CONV='cygpath -m -f -';; *) SEP=':'; CONV='cat';; esac
+CP=$(find "$IDE" -name '*.jar' | sed 's|/[^/]*$||' | sort -u | $CONV | sed 's|$|/*|' | tr '\n' "$SEP")
+javap -cp "$CP" com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
 ```
+
+Three details in that recipe are load-bearing on Windows, and all three fail *silently or misleadingly*
+— as "class not found", the very symptom the paragraph above warns about:
+
+- **`-maxdepth 6`, not 3.** The Windows transform puts the IDE four levels below `transforms/`
+  (`<hash>/workspace/transformed/ideaIC-2024.2-win`), so a shallower search sets `IDE` to the empty
+  string and every lookup fails.
+- **The classpath lists *directories* with a trailing `/*`, not the jars themselves.** Spelled out,
+  this IDE's 394 jars are 66 KB of command line — past Windows' ~32 KB limit, so `javap` never runs
+  ("Argument list too long"), and it takes no `@argfile` to get around it. The 102 directories that
+  hold them are 15 KB, and Java expands `dir/*` to the same jars. Derive that list from the recursive
+  `find` rather than hardcoding `lib`, `lib/modules` and `plugins/*/lib`: 28 further directories hold
+  jars, including a top-level `modules/`. `sed` strips the filename rather than `find -printf '%h\n'`,
+  which is GNU-only and would break the recipe on the macOS box the UI suite also targets.
+- **`;` and `C:/…` paths off Unix.** `javap` here is the Windows JDK's, so it wants a `;` separator
+  and cannot read a Git Bash `/c/…` path. `cygpath -m` gives the mixed form, whose forward slashes
+  need no further escaping.
+
+Verified end to end on Windows 11 (`FileEditorManagerEx`, `DynamicPluginListener`, `IconLoader` all
+resolve); the counts above are this machine's `ideaIC-2024.2-win`.
 
 ## Build
 
