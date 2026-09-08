@@ -1,7 +1,7 @@
 # Release readiness gaps
 
 Audit taken 2026-08-24, against the README, the implementation plan, `plugin.xml`, `gradle.properties`, `build.gradle.kts` and `.github/workflows/` as they stood at that point — not a snapshot to trust blindly later; re-check each item's "current state" line before acting on it if much time has passed.
-Feature work (Phases 0–4) and hardening (Phase 5: dynamic-plugin loading, Plugin Verifier CI matrix, VFS rename remap, palette settings, licence module + gating, cross-platform manual verification) are all done and verified — none of that is repeated here.
+Feature work (Phases 0–4, plus Phases 6–7: group membership visibility and the active-group / auto-join UI) and hardening (Phase 5: dynamic-plugin loading, Plugin Verifier CI matrix, VFS rename remap, palette settings, licence module + gating, cross-platform manual verification) are all done and verified — none of that is repeated here.
 Each item below is written to be picked up standalone in its own session.
 
 ---
@@ -148,7 +148,8 @@ generated and is now set as the `PUBLISH_TOKEN` repo secret (closes item 3). Acc
 - Under **Sales Info → Add to Marketplace**: confirm/register product code `PPRISMTABS`, choose
   **Freemium**, then the **Yearly Subscription without a Fallback License** scheme, set the
   personal price to $14/year and the commercial price to $29/year per user (matches the website's
-  pricing card as of `fix(pricing)`, 2026-09-06), leave the trial at its 30-day default.
+  pricing card as of `docs(pricing)` / `d57b11b`, 2026-09-06), leave the trial at its 30-day
+  default.
 - Attach the licence (item 7): paste the `prismtabs.com/eula` URL into the licence field at upload
   time (per the best-practices doc it's added here, not via a `plugin.xml` tag); paste the full
   EULA text as the fallback if the form wants text rather than a link.
@@ -179,6 +180,14 @@ pass:
   description's first line as the summary. That line ("Colour-coded tab groups for IntelliJ editor
   tabs.") is fit for purpose as-is.
 
+**Updated (2026-09-07):** the "copy done, upload is a paste job" conclusion still holds, but the
+2026-09-02 snapshot above predates two passes of feature copy. Since then `plugin.xml`'s
+`<description>` and `CHANGELOG.md`'s `[Unreleased]` entry have both absorbed the Phases 6–7 wording
+("mark a group active", the PrismTabs tool window expanding to a group's files, "Remove from
+Group") and the already-open-file one-click join (`a10055f`); `983296d` also dropped the Project
+View active-group entry, leaving only the tab-popup row. Both are still single-sourced from
+`plugin.xml` / `CHANGELOG.md` — re-read them at upload time rather than trusting the bullets above.
+
 **To close:**
 - Under **Technical Information**, fill the dedicated link fields (values in `marketplace-listing.md`):
   *Issue tracker* → the feedback repo, *Documentation* → `prismtabs.com/docs`, *Website* →
@@ -195,6 +204,10 @@ pass:
   that feature and was correctly left as-is. Not yet done: the fifth shot of the free `Files…`
   chooser suggested here previously — membership visibility is a free-tier headline and nothing in
   the listing shows it yet; still worth doing before upload but not blocking.
+  **Re-verify before upload (noted 2026-09-07):** the paid-feature gate was armed the same day
+  (`267202a`) and `983296d` changed the active-group UI afterwards, so confirm the four shots still
+  match the shipped build — in particular that any tool-window shot shows the licensed/trial UI,
+  not the free-tier upsell panel.
 
 ## ~~7. Choose and prepare a License/EULA for the paid listing — closed~~
 
