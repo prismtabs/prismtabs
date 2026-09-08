@@ -816,3 +816,69 @@ Result:      PASS — macOS half of the verification for "offer to delete a tab 
              single test ran. The daemon chain was `<- launchd` throughout, as on 2026-08-19, and
              again predicted nothing.
 ```
+
+```
+Date:        2026-09-08
+OS:          Windows 11 Pro (10.0.26200)
+IDE build:   IC-242.20224.300 (JBR 21.0.3), plugin 1.4.14
+Theme(s):    dark (New UI "Dark" theme), DPI 120 (125% Windows scaling), screen 1536x864
+Result:      PASS — pre-Marketplace-upload pass: the first sign-off-log entry, and the first full
+             test + verifyPlugin + uiTest + driven-walkthrough pass, since the paid-feature gate
+             was armed (267202a, `<product-descriptor code="PPRISMTABS" … optional="true"/>` now in
+             plugin.xml; the 2026-09-06 re-verification noted in README "UI testing" covered the
+             automated `uiTest` suite only). Nothing outstanding.
+
+             `./gradlew test`: 108 tests, 0 failures (2 skipped by design in
+             PrismTabsUnloadListenerTest). `./gradlew verifyPlugin`: green across all eight IDEs it
+             now resolves — IU-242.26775.15, 243.28141.41, 251.29188.72, 252.28539.97,
+             253.33813.55, 261.27258.48, 262.10315.125, 263.3889.65 (263 is new since the
+             2026-08-21 entry's seven) — every one "Compatible", zero COMPATIBILITY_PROBLEMS and
+             zero OVERRIDE_ONLY_API_USAGES. The only findings are the accepted set: SeparatorWithText
+             (deprecated), ActionUtil.invokeAction (deprecated 243+), FileEditorManagerImpl
+             .queueUpdateFile and PluginManager.getPluginByClass (internal, both excluded from
+             failureLevel on purpose), plus VFilePropertyChangeEvent.isRename() (experimental, and
+             only flagged on IU-242 — gone from 243 on).
+
+             Automated `./gradlew uiTest`: 43 tests, 40 run and green, 3 skipped as designed —
+             EmptyGroupOnDiskDeleteUiTest (3), PaywallUiTest (7), TabGroupPaletteConfigurableUiTest
+             (1), TabGroupPopupUiTest (16), TabGroupsToolWindowUiTest (13); MacSettingsShortcutUiTest
+             skipped off macOS and both WindowsManualVerificationUiTest methods skipped without the
+             opt-in flag, no `--tests` curation anywhere. The suite self-entitled before each test
+             (RemoteRobotExtension.simulateEntitled) — confirmed working now that the sandbox boots
+             as an unlicensed paid build.
+
+             Both WindowsManualVerificationUiTest methods then run deliberately with
+             `-Dprismtabs.manualVerification=true`, as two separate invocations with a real
+             `runIdeForUiTests` force-kill and relaunch between them. Persistence was tested on the
+             first-write path as the "dispatched off the EDT with ModalityState.nonModal()" finding
+             instructs: `.idea/tabGroups.xml` was deleted before part 1, so forceSaveSettings had to
+             create the file rather than overwrite one. It did (1167 bytes), and part 2 read back
+             `[Blue 0 files, TeamWindows 2 files]` with both Second.kt and Third.kt still in
+             TeamWindows after the kill-and-relaunch. The emptied-but-kept Blue group round-trips as
+             a bare GroupEntry with no assignments to reconstruct it from — "Keep" means kept across
+             restarts.
+
+             Item detail matches the previous Windows entries exactly where it should: all 8 presets
+             present and legible with the "New Group" caption above the swatch row; Blue tinted the
+             tab at full strength when selected (r=46,g=92,b=156, zero drift) and at the documented
+             ~50% blend when unselected (r=37,g=61,b=94 vs. an untinted tab's r=30,g=31,b=34) —
+             identical to the 2026-08-09, 2026-08-19 and 2026-08-21 Windows readings; the New Group
+             dialog had focus immediately (typed and Enter-submitted with no prior click);
+             rename to TeamWindows + recolour to Cyan propagated to every member and Third.kt
+             inherited via the active group; Remove from Group cleared Sample.kt and raised the
+             empty-group prompt, kept, then listed as "0 files"; the tool window listed membership,
+             hide closed the tabs and marked the row hidden, show reopened them; Settings | Tools |
+             PrismTabs rendered and Restore Defaults reverted a renamed preset (palette checkpoints
+             `[initialLabel:Grey … serviceLabelAfterRestoreApply:Grey]`). Screenshots (10):
+             build/reports/manual/01-…-08-after-restart.png; logs: part1-log.txt / part2-log.txt.
+             No failure screenshots written.
+
+             No PrismTabs defects found, and no harness defects — the walkthrough needed no changes.
+             idea.log for the whole pass carries only environment/harness SEVEREs, all previously
+             recorded and all with zero io.prismtabs frames: the GradleJvmSupportMatrix parser error
+             (`IllegalArgumentException: 25`, this machine's default `java` on PATH being JDK 25 —
+             the one that renders as the red "IDE error occurred" balloon) and two SlowOperations
+             raised while the Settings dialog enumerated configurables for item 7, blamed on
+             "Robot server version: 0.11.23". Zero "Write-unsafe context!" and zero "Save settings
+             failed" anywhere in the session.
+```
