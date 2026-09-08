@@ -1197,10 +1197,20 @@ locally on Windows on 2026-09-06 (multi-select toggle-click fix, `a402462`, and 
 two were then run deliberately with that flag, across a real forced kill and relaunch of
 `runIdeForUiTests` between them exactly as the class's doc comment describes — both green, including
 the selected-tab pixel read matching Blue exactly (`r=46,g=92,b=156`, zero drift) and group name,
-colour and membership (plus a kept empty group) all surviving the restart. In CI it also runs on
-Windows, via a manual-trigger-only workflow ([`.github/workflows/ui-tests.yml`](.github/workflows/ui-tests.yml), `workflow_dispatch`,
-not run on every push — Windows runner minutes carry a 2x plan-minute multiplier) that boots
-`runIdeForUiTests` and drives it exactly as described above. macOS has no CI path: `remote-robot`
+colour and membership (plus a kept empty group) all surviving the restart.
+
+**Hosted-runner CI is not a working Windows path — do not treat it as a release gate.**
+[`.github/workflows/ui-tests.yml`](.github/workflows/ui-tests.yml) (`workflow_dispatch`, not on
+every push — Windows runner minutes carry a 2x plan-minute multiplier) boots `runIdeForUiTests` on
+a GitHub-hosted `windows-latest` runner and drives it as above, but the suite fails there. Tried end
+to end on 2026-09-08: two back-to-back runs failed identically, 12 of 43, with the tool-window-tree
+assertions in `TabGroupsToolWindowUiTest` and `PaywallUiTest` timing out. The likely cause is that
+the hosted runner's session is not the real interactive desktop `remote-robot`'s `java.awt.Robot`
+needs (`RemoteRobotExtension`'s frame de-iconify/raise workaround is calibrated to a real local
+session and does not carry over) — not yet confirmed from the sandbox log, which the workflow's
+upload step now captures alongside the failure screenshots. It has never passed on a hosted runner;
+every green Windows result on record is a local `./gradlew uiTest` on real hardware. The workflow is
+kept only as a debugging aid, not as proof. macOS has no CI path: `remote-robot`
 needs Screen Recording/Accessibility TCC permission that cannot be granted non-interactively on
 GitHub's hosted macOS images (SIP blocks it — see the workflow file for the specifics). The same
 automated suite still runs there, just by hand on real hardware, since that TCC permission is a

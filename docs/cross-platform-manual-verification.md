@@ -8,10 +8,17 @@ behaves identically everywhere.
 It proves nothing about *rendering or interaction* on its own, and the `uiTest` suite (a real
 `java.awt.Robot` driving a real desktop session) needed real, OS-specific effort to get reliable even
 on Linux (see README "These tests need an X11 display" — Wayland silently drops all robot input).
-Windows turned out solvable in CI: GitHub's hosted `windows-latest` runners provide a real
-interactive session, so `.github/workflows/ui-tests.yml` runs the automated `uiTest` suite there —
-manually triggered (`workflow_dispatch`), not on every push, since Windows runner minutes carry a 2x
-plan-minute multiplier and this is meant for occasional use, not continuous coverage.
+Windows was expected to be solvable in CI — GitHub's hosted `windows-latest` runners were assumed to
+provide a real enough interactive session — but that turned out to be wrong when it was finally
+tried. `.github/workflows/ui-tests.yml` runs the automated `uiTest` suite there
+(`workflow_dispatch`, not on every push, since Windows runner minutes carry a 2x plan-minute
+multiplier), and on 2026-09-08 two back-to-back runs failed identically: 12 of 43, with the
+tool-window-tree assertions in `TabGroupsToolWindowUiTest` / `PaywallUiTest` timing out — most
+likely because the hosted runner's session is not the real desktop `remote-robot`'s `java.awt.Robot`
+needs, though that is not yet confirmed from the sandbox log (which the workflow now uploads). So
+**Windows verification is a local `./gradlew uiTest` on real hardware**, same as this doc's checklist
+— the workflow is kept only as a debugging aid, not as a gate. See README "UI testing" for the
+fuller writeup.
 
 macOS is not solvable **unattended, in CI** the same way: `remote-robot` needs Screen
 Recording/Accessibility TCC permission, and every current GitHub-hosted macOS image runs with SIP
