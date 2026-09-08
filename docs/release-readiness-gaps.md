@@ -121,17 +121,33 @@ that's created by hand once).
 cross-platform pass is done):
 
 ```bash
-# 1. bump pluginVersion in gradle.properties off -SNAPSHOT, commit it on master, push it
-git tag -a v1.4.8 -m "Release 1.4.8"
-git push origin v1.4.8
+# 1. On master, in one commit: set the release version + descriptor, stamp the changelog.
+#    `pluginVersion` in gradle.properties has been a plain number since 267202a (2026-09-05) —
+#    there is no -SNAPSHOT suffix to strip and no per-commit bump. Move it only here, and only
+#    if the number changes: derive it from the Conventional Commits since the last release tag
+#    (feat -> minor, fix/perf/revert -> patch, ! or BREAKING CHANGE -> major; see the
+#    `create-commit` skill).
+#      - gradle.properties: pluginVersion -> the release number (if it moves)
+#      - plugin.xml <product-descriptor>: release-date -> real ship date YYYYMMDD;
+#        release-version -> the version's first two components with the dot dropped
+#        (1.4.x -> "14", 1.5.x -> "15"), always >= 2 digits or verifyPlugin rejects the zip
+#        (see item 1). It is the licence boundary: moves on a minor, stays put across patches.
+#      - ./gradlew patchChangelog  — stamps [Unreleased] with the version and date
+#    Then ./gradlew verifyPlugin (nothing else in the build catches a bad release-version),
+#    commit on master, push the commit.
+# 2. Tag that commit and push the tag.
+git tag -a v1.4.14 -m "Release 1.4.14"
+git push origin v1.4.14
 ```
 
 - Annotated tag (`-a`/`-m`), not lightweight — matches the `v*` pattern `publish.yml` triggers on,
   and should match `pluginVersion` so the built artifact's version lines up with the tag.
-- `git push origin v1.4.8` pushes only the tag, not commits — the commit it points to must already
+- `git push origin v1.4.14` pushes only the tag, not commits — the commit it points to must already
   be on `master` and pushed.
-- To undo an accidental push: `git push origin :refs/tags/v1.4.8` then `git tag -d v1.4.8` — but
+- To undo an accidental push: `git push origin :refs/tags/v1.4.14` then `git tag -d v1.4.14` — but
   the workflow may already be running by the time you do this, since there's no approval pause.
+- There is no post-release step: the version stays at the released number through the next
+  development cycle until the next release cut moves it again.
 
 ## ~~4. JetBrains Marketplace vendor account — closed~~
 
