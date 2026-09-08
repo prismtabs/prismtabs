@@ -1,9 +1,17 @@
 name: UI Tests
 
 # Manual only, deliberately: driving java.awt.Robot needs a real interactive desktop, and Windows
-# runner minutes carry a 2x plan-minute multiplier — not something to spend on every push. Trigger
-# this by hand when debugging a platform-specific UI issue or before a release. See README "UI
-# testing" and docs/cross-platform-manual-verification.md for the fuller picture.
+# runner minutes carry a 2x plan-minute multiplier — not something to spend on every push.
+#
+# This is a DEBUGGING AID, NOT A RELEASE GATE. Tried end to end on 2026-09-08: the suite does not
+# pass on a GitHub-hosted `windows-latest` runner — two back-to-back runs failed identically, 12 of
+# 43, with the tool-window-tree assertions in TabGroupsToolWindowUiTest and PaywallUiTest timing
+# out. The likely cause is that the hosted runner's session is not the real interactive desktop
+# remote-robot's java.awt.Robot needs (RemoteRobotExtension's frame de-iconify/raise workaround is
+# calibrated to a real local session and does not carry over), but that has not been confirmed from
+# the sandbox log yet — which is what the artifact paths below now capture. It has never passed on a
+# hosted runner. The Windows verification that actually counts is a local `./gradlew uiTest` on real
+# hardware plus docs/cross-platform-manual-verification.md. See README "UI testing".
 on:
   workflow_dispatch:
 
@@ -65,7 +73,19 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ui-test-reports-windows
+          # The Gradle HTML report is only half the picture on a hosted-runner failure. The two
+          # paths that actually let you diagnose one:
+          #   - build/reports/*.png    — RemoteRobotExtension.afterTestExecution paints one per
+          #                              failed test, named after the method, straight into
+          #                              build/reports (not under tests/uiTest). Without this line
+          #                              they were generated and thrown away.
+          #   - .intellijPlatform/sandbox/**/log*/idea.log — the sandbox IDE's own log; grep it for
+          #                              an `io.prismtabs` frame to tell a real plugin failure from
+          #                              the expected GradleJvmSupportMatrix noise (README "UI
+          #                              testing" → "Expected sandbox noise").
           path: |
             build/reports/tests/uiTest
             build/reports/manual
+            build/reports/*.png
+            .intellijPlatform/sandbox/**/log*/idea.log
           retention-days: 14
