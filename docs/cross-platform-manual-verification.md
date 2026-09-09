@@ -882,3 +882,44 @@ Result:      PASS — pre-Marketplace-upload pass: the first sign-off-log entry,
              "Robot server version: 0.11.23". Zero "Write-unsafe context!" and zero "Save settings
              failed" anywhere in the session.
 ```
+
+```
+Date:        2026-09-09
+OS:          macOS 26.6.2 (Apple Silicon, arm64), Retina @ 2x — same machine as the 2026-08-21
+             macOS pass
+IDE build:   IC-242.20224.300 (JBR 21.0.3), plugin 1.4.14
+Theme(s):    dark (New UI "Dark" theme)
+Result:      PASS — automated pass confirming the commits pulled from the Windows/Linux machines
+             (through 50a8cc2) are green on macOS, immediately ahead of the Marketplace upload.
+             Narrower than the 2026-09-08 Windows entry: `./gradlew test` and `./gradlew uiTest`
+             only — `verifyPlugin` (a host-independent bytecode check, last run green on Windows
+             2026-09-08 with no source change to the plugin since) and the driven
+             WindowsManualVerificationUiTest walkthrough were not re-run here, and neither was the
+             manual checklist. Nothing outstanding from what was run.
+
+             `./gradlew test` (forced with `--rerun-tasks --no-build-cache`, so the results are
+             this machine's and not served from the shared build cache): 108 tests, 0 failures,
+             0 errors, 2 skipped — PrismTabsUnloadListenerTest's two primary-selection cases,
+             which `assumeTrue`-abort with "no primary selection: headless, or not an X11/Wayland
+             session", i.e. expected on macOS (there is no X11 primary selection here).
+
+             `./gradlew uiTest` (also forced with `--rerun-tasks --no-build-cache`): 43 tests,
+             41 run and green, 2 skipped — EmptyGroupOnDiskDeleteUiTest (3, 13.2s),
+             MacSettingsShortcutUiTest (1, 9.5s — runs here, the ⌘, path), PaywallUiTest (7, 31.1s),
+             TabGroupPaletteConfigurableUiTest (1, 1.9s), TabGroupPopupUiTest (16, 142.0s),
+             TabGroupsToolWindowUiTest (13, 88.0s); both WindowsManualVerificationUiTest methods
+             skipped without the `-Dprismtabs.manualVerification=true` opt-in. Bare `./gradlew
+             uiTest`, no `--tests` curation. Total ~4m 54s. The skip set is exactly what a macOS
+             run should show — only the two Windows opt-in cases, with MacSettingsShortcutUiTest
+             picked up automatically where the Windows/Linux passes skip it.
+
+             Robot input was live from the start — no TCC/Accessibility issue on this machine (see
+             "Which permission actually blocks the run"); every mouse/keyboard-driven case in the
+             suite genuinely exercised the UI rather than timing out on a dropped event.
+
+             No PrismTabs defects found, and no harness changes needed. The sandbox `idea.log`
+             carries one SEVERE, the already-recorded environment-only GradleJvmSupportMatrix
+             parser error (`IllegalArgumentException: 25`, this machine's default `java` on PATH
+             being JDK 25); zero io.prismtabs frames anywhere in the log, and zero "Write-unsafe
+             context!" / "Save settings failed" entries.
+```
