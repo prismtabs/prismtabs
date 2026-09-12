@@ -1,6 +1,9 @@
 package io.prismtabs.listener
 
+import io.prismtabs.model.TabGroup
+import io.prismtabs.provider.TabGroupColorProvider
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -32,6 +35,9 @@ import javax.xml.parsers.DocumentBuilderFactory
  * listener exists to prevent. The last of the three is not hypothetical: the first version of
  * [PrismTabsUnloadListener.releaseClipboard] tested the clipboard's contents for a type they can
  * never have and returned early every single time.
+ *
+ * The tab-colour half of an unload is here too, for the same reason: forgetting it costs nobody a
+ * stack trace, it just leaves the strip painted by a plugin that is gone.
  *
  * The `plugin.xml` assertions read `src/main/resources`' own copy off the test classpath, like [
  * io.prismtabs.license.ProductDescriptorTest], so it asserts on the file a developer edits rather
@@ -65,6 +71,38 @@ class PrismTabsUnloadListenerTest {
         assertEquals(
             listOf(PrismTabsUnloadListener::class.java.name to "com.intellij.ide.plugins.DynamicPluginListener"),
             registered,
+        )
+    }
+
+    /**
+     * The other half of an uninstall, and the half the user sees: once the plugin is going, it must
+     * stop answering for tab colours, so that the repaint it asks for next leaves every tab the
+     * colour the platform's own providers give it. Without this the strip keeps the colours of a
+     * plugin that is no longer installed until the IDE is restarted — and a *disable* never prompts
+     * for a restart at all.
+     *
+     * Both directions are asserted in one test on purpose. The gate is deliberately one-way (see
+     * [TabGroupColorProvider.stop]), so "still colouring beforehand" and "no longer colouring
+     * afterwards" cannot be separate tests without making them order-dependent on each other in a
+     * shared JVM — exactly the flake that passes locally and fails in CI on a different shuffle.
+     *
+     * Driven through [PrismTabsUnloadListener.stopColouringTabs] rather than the gate directly: the
+     * gate closing itself is not the regression worth guarding, the unload forgetting to close it
+     * is.
+     */
+    @Test
+    fun `unload stops the provider handing out group colours`() {
+        val group = TabGroup(id = "g", name = "Docs", lightRgb = 0x8AB4F8, darkRgb = 0x1A73E8)
+        assertNotNull(
+            TabGroupColorProvider.colorOf(group),
+            "a loaded plugin must colour a tab whose file is in a group",
+        )
+
+        PrismTabsUnloadListener().stopColouringTabs()
+
+        assertNull(
+            TabGroupColorProvider.colorOf(group),
+            "an unloading plugin must hand back no colour, or the tab keeps it until a restart",
         )
     }
 

@@ -682,6 +682,33 @@ construction, not verified until now. Checked live in `runIdeForUiTests`
    confirming the reloaded classes are the ones actually running the feature, not just that
    `isEnabled()` reports `true`.
 
+**That check was real but not sufficient, and the gap is worth naming.** It unloaded a plugin that
+had never opened an editor *itself*, and that is precisely the case that works. On 2026-09-12 a
+plain **Disable** on 2026.2 produced "Plugin io.prismtabs is not unload-safe because class loader
+cannot be unloaded" and an 862 MB heap snapshot. Reading that snapshot back — parsing the `.hprof`
+directly rather than trusting the single retention path the IDE prints — found twelve live
+toolbars (`ActionToolbarImpl`, `EditorInspectionsActionToolbar`, `LayoutActionsFloatingToolbar`)
+whose `myCreationTrace` `Throwable` held a PrismTabs class, plus 25 `cancelOnDispose` disposables
+holding the same stacks. `ActionToolbarImpl`'s constructor captures `new Throwable("toolbar
+creation trace")` into a private final field it never clears; a `Throwable` holds the `Class` of
+every frame on the stack; a class holds its loader. So every toolbar the platform builds while the
+plugin is on the stack pins the plugin for the life of that toolbar — and
+`FileEditorManager.openFile` ends in `waitBlockingAndPumpEdt`, which pumps the editor-building
+coroutine *nested inside the caller's own stack*. See `TabOpener` for the fix and the full
+reasoning; `PluginUnloadUiTest` is the regression test, and it fails against the code as it was.
+
+Two things that bound how far that generalises, both measured rather than assumed:
+
+- **`java.awt.Component` captures an `AccessControlContext` too**, and a captured context holds a
+  `ProtectionDomain` per class loader on the stack — so on a JDK that still has the security
+  manager, *any* Swing component built while a plugin is on the stack pins it, which no plugin can
+  design around. JEP 486 (JDK 24) disables the security manager permanently and the capture goes
+  with it. Both dumps confirm it: the JDK 25 one has no `AccessControlContext` holding PrismTabs's
+  domain at all, the JDK 21 sandbox one does. `PluginUnloadUiTest` therefore asserts the toolbar
+  creation traces unconditionally — that is the plugin's own bug and is the same on every JDK — and
+  the class-loader collection only from JDK 24 up.
+- The unload is still driven through `unloadPlugin` under `invokeAndWait`, as below.
+
 One nuance worth recording honestly: the log for this run also has 9 `SEVERE` entries from
 `#c.i.u.SlowOperations`, each reading "Plugin to blame: Robot server version: 0.11.23" — this is
 the platform's assertion that a slow call happened on the EDT, and every one of them blames the

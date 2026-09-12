@@ -2,9 +2,13 @@ package io.prismtabs.listener
 
 import com.intellij.ide.plugins.DynamicPluginListener
 import com.intellij.ide.plugins.IdeaPluginDescriptor
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.extensions.PluginId
+import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.util.IconLoader
+import io.prismtabs.provider.TabGroupColorProvider
+import io.prismtabs.service.TabRepaint
 import java.awt.Toolkit
 import java.awt.datatransfer.Clipboard
 import java.awt.datatransfer.DataFlavor
@@ -12,10 +16,13 @@ import java.awt.datatransfer.StringSelection
 import java.awt.datatransfer.Transferable
 
 /**
- * Lets this plugin actually unload. Without it, uninstalling (or updating, or disabling) PrismTabs
- * leaves the plugin's class loader alive, which the platform reports as "not unload-safe because
- * class loader cannot be unloaded", dumps a ~400 MB heap snapshot for, and recovers from only by
- * asking the user to restart the IDE.
+ * Everything PrismTabs has to do on its way out: leave no coloured tab behind, and leave nothing
+ * holding its class loader.
+ *
+ * The second half is what "leaves the IDE needing a restart" actually means. Without it,
+ * uninstalling (or updating, or disabling) PrismTabs leaves the plugin's class loader alive, which
+ * the platform reports as "not unload-safe because class loader cannot be unloaded", dumps a
+ * several-hundred-megabyte heap snapshot for, and recovers from only by asking the user to restart.
  *
  * Nothing this plugin itself holds is at fault in any of the cases below. Each is an
  * *application-global singleton owned by the platform or the JDK* that keeps a strong reference to
@@ -25,8 +32,13 @@ import java.awt.datatransfer.Transferable
  * listener's own registration down (and well before its `IconLoader.detachClassLoader` and the
  * class-loader liveness check). [DynamicPluginListener.pluginUnloaded] is too late to be reached.
  *
- * Each release step is guarded independently: a failure to drop one reference must not stop the
- * others from being dropped, and none of them is worth failing an uninstall over.
+ * Not every retention can be dropped from here, and the one that cannot is the reason
+ * [io.prismtabs.service.TabOpener] exists: a toolbar the platform built while a PrismTabs frame was
+ * on the stack holds that frame's class in a creation-trace `Throwable` for as long as the toolbar
+ * lives, and there is no handle on it to release. That one has to be *avoided*, not cleaned up.
+ *
+ * Each step is guarded independently: a failure to drop one reference must not stop the others from
+ * being dropped, and none of them is worth failing an uninstall over.
  */
 internal class PrismTabsUnloadListener : DynamicPluginListener {
 
@@ -35,6 +47,11 @@ internal class PrismTabsUnloadListener : DynamicPluginListener {
 
         // Caught narrowly, and separately per step: an uninstall must not fail over a reference we
         // could not drop, but nor should this swallow an Error or a control-flow exception.
+        try {
+            stopColouringTabs()
+        } catch (e: Exception) {
+            thisLogger().warn("Could not clear the tab colours on unload", e)
+        }
         try {
             clearIconCaches()
         } catch (e: Exception) {
@@ -50,6 +67,34 @@ internal class PrismTabsUnloadListener : DynamicPluginListener {
         } catch (e: Exception) {
             thisLogger().warn("Could not release the primary selection on unload", e)
         }
+    }
+
+    /**
+     * Takes this plugin out of the tab-colour business and asks every open project to repaint what
+     * it had coloured — the second of the two things a user sees when PrismTabs goes.
+     *
+     * The platform unregisters the `editorTabColorProvider` extension point as part of the unload
+     * but repaints nothing afterwards, and a tab's background is cached on its `TabInfo` rather
+     * than recomputed on every paint. So without this the strip keeps the colours of a plugin that
+     * is no longer installed until the next IDE start — and on a *disable*, which never prompts for
+     * a restart, that can be a very long time.
+     *
+     * Both halves are needed, and in this order. [TabGroupColorProvider.stop] settles what the
+     * answer is if the provider is asked once more before the platform drops it;
+     * [TabRepaint.requestAll] is what makes anything ask. The repaint is queued rather than
+     * immediate, which is exactly what makes it safe here: what sits on that queue is a
+     * `VirtualFile`, so it cannot become the reference that keeps this class loader alive.
+     *
+     * The application is read through a null check rather than assumed, so that
+     * [PrismTabsUnloadListenerTest] can call this with no IDE around it: with no application there
+     * are no projects and no tabs, and closing the gate is the whole of the work.
+     *
+     * Internal rather than private for that same reason.
+     */
+    internal fun stopColouringTabs() {
+        TabGroupColorProvider.stop()
+        ApplicationManager.getApplication() ?: return
+        ProjectManager.getInstanceIfCreated()?.openProjects?.forEach(TabRepaint::requestAll)
     }
 
     /**
