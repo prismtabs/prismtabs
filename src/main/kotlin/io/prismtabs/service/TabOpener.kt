@@ -3,10 +3,10 @@ package io.prismtabs.service
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
-import com.intellij.openapi.fileEditor.impl.FileEditorOpenOptions
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.diagnostic.thisLogger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
@@ -52,7 +52,9 @@ import kotlinx.coroutines.launch
  *
  * The options are the platform's own defaults with `requestFocus` set, which is byte-for-byte what
  * `FileEditorManager.openFile(file, focus)` builds (its bytecode passes argument 3 and defaults the
- * other nine). Opening is otherwise unchanged; only the stack it happens on is.
+ * other nine). They are built by [PlatformOpenOptions] rather than here, because constructing them
+ * *from Kotlin* is what broke this on every IDE from 2025.2 on — see that class. Opening is
+ * otherwise unchanged; only the stack it happens on is.
  */
 @Service(Service.Level.PROJECT)
 internal class TabOpener(private val project: Project, private val scope: CoroutineScope) {
@@ -85,11 +87,22 @@ internal class TabOpener(private val project: Project, private val scope: Corout
                 // Per request, and narrowly: a file that cannot be opened — gone from disk between
                 // the caller resolving it and this running, or refused by every provider — must not
                 // kill the queue and silently strand every later request.
+                //
+                // `Throwable`, not `Exception`, and that width is the whole point: a linkage error
+                // against a platform member this plugin was compiled against is exactly the failure
+                // that *does* arrive as an `Error`, and letting one past here does not fail one
+                // open — it ends the coroutine draining this channel, so every open for the rest of
+                // the session is stranded silently. That is what a `NoSuchMethodError` from
+                // [PlatformOpenOptions]' constructor did in 1.4.14. Cancellation is rethrown
+                // because it is not a failure to report: it is this scope being shut down with the
+                // project, and swallowing it would leave the loop running past its own death.
                 try {
                     val manager = FileEditorManagerEx.getInstanceEx(project)
-                    val options = FileEditorOpenOptions().withRequestFocus(request.requestFocus)
+                    val options = PlatformOpenOptions.withRequestFocus(request.requestFocus)
                     request.files.forEach { manager.openFile(it, options) }
-                } catch (e: Exception) {
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
                     thisLogger().warn("Could not open a tab group's files", e)
                 }
                 ApplicationManager.getApplication()

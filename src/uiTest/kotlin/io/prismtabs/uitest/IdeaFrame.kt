@@ -739,6 +739,26 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     )
 
     /**
+     * Whether the running build is a **paid build** — whether its `plugin.xml` carries a
+     * `<product-descriptor>`, which is the same thing `PrismTabsLicense.isPaidBuild` reads.
+     *
+     * Not a licence question but a *platform capability* one, which is why it is asked separately
+     * from [paidFeaturesEnabled]: `DynamicPlugins.checkCanUnloadWithoutRestart` refuses outright for
+     * a plugin with a product code that is neither bundled nor JetBrains' own — "Plugin io.prismtabs
+     * is a paid plugin" — so on a paid build neither an unload nor a dynamic load can succeed at
+     * all. [PluginUnloadUiTest] gates itself on this.
+     */
+    fun isPaidBuild(): Boolean = callJs<Boolean>(
+        """
+        importPackage(com.intellij.ide.plugins)
+        importPackage(com.intellij.openapi.extensions)
+
+        PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getProductCode() != null
+        """,
+        true,
+    )
+
+    /**
      * Unregisters the IDE's registration actions for the duration of a test, so a gated action's
      * `PrismTabsLicense.requestLicense` upsell finds nothing to open and returns silently.
      *
@@ -1867,6 +1887,23 @@ fun RemoteRobot.toolWindowGroupRows(): List<String> {
     }
     waitFor(Duration.ofSeconds(10)) { findAll<JTreeFixture>(byXpath(GROUP_TREE_XPATH)).isNotEmpty() }
     return find<JTreeFixture>(byXpath(GROUP_TREE_XPATH)).collectRows()
+}
+
+/**
+ * The tool window's own toolbar button named [name] — "Hide Group"/"Show Group" and its neighbours
+ * — addressed by the accessible name the platform takes from the action's presentation. Opens the
+ * tool window first, exactly as [toolWindowGroupRows] does.
+ *
+ * That name is *live*, which is what makes it the right locator here rather than a position:
+ * `ToggleVisibilityAction` rewrites its own text and icon on every update, so asking for
+ * "Show Group" is asking for the button in the state where it offers to show — the toggle's whole
+ * contract, and a coordinate would say nothing about it.
+ */
+fun RemoteRobot.toolWindowToolbarButton(name: String): ComponentFixture {
+    toolWindowGroupRows()
+    val locator = byXpath("//div[@class='ActionButton' and @accessiblename='$name']")
+    waitFor(Duration.ofSeconds(10)) { findAll<ComponentFixture>(locator).isNotEmpty() }
+    return find(locator)
 }
 
 /**

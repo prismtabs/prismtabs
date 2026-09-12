@@ -81,6 +81,61 @@ class TabGroupsToolWindowUiTest {
     }
 
     /**
+     * The toolbar's eye, driven the way a user drives it: select the group, click Hide Group, then
+     * click the very same button once it has relabelled itself Show Group.
+     *
+     * Every other hide/show test in this file goes through [IdeaFrame.setGroupHidden], which calls
+     * `TabGroupVisibility` directly for the reason given there — and which leaves the *button*, the
+     * control most users reach for, driven by nothing. What that gap hid was worse than an unclicked
+     * button: in 1.4.14, Show Group could not open a single tab on any IDE from 2025.2 on (see
+     * `PlatformOpenOptions`), and the whole suite stayed green, because this sandbox runs the 2024.2
+     * baseline the plugin compiles against, where the call it made still resolved. This test cannot
+     * catch *that* — only `verifyPlugin` and `PlatformDefaultArgumentCallsTest` can — but it is what
+     * notices the day the button stops reaching the toggle at all.
+     *
+     * The group is re-selected between the two clicks on purpose: hiding republishes a change, the
+     * panel rebuilds its model wholesale, and the toolbar is enabled by the selection that survives
+     * that. Asserting the survival is `right-clicking a group row...`'s job; this test is about the
+     * button, and re-selecting keeps it about the button.
+     */
+    @Test
+    fun `the toolbar's eye hides a group and shows it again`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                assignToNewGroup("EyeToggle", listOf("Sample.kt", "Second.kt"))
+                waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().any { it.contains("EyeToggle") } }
+
+                remoteRobot.toolWindowGroupTree().clickRowWithText("EyeToggle", false)
+                remoteRobot.toolWindowToolbarButton("Hide Group").click()
+                waitFor(ofSeconds(20), errorMessage = "the toolbar's eye did not close the group's tabs") {
+                    openTabNames().none { it == "Sample.kt" || it == "Second.kt" }
+                }
+                assertTrue(
+                    remoteRobot.toolWindowGroupRows().any { it.contains("EyeToggle") && it.contains("hidden") },
+                    "expected EyeToggle to read as hidden, got ${remoteRobot.toolWindowGroupRows()}",
+                )
+
+                remoteRobot.toolWindowGroupTree().clickRowWithText("EyeToggle", false)
+                remoteRobot.toolWindowToolbarButton("Show Group").click()
+                waitFor(ofSeconds(20), errorMessage = "the toolbar's eye did not reopen the group's tabs") {
+                    openTabNames().containsAll(listOf("Sample.kt", "Second.kt"))
+                }
+                assertTrue(
+                    remoteRobot.toolWindowGroupRows().none { it.contains("EyeToggle") && it.contains("hidden") },
+                    "expected EyeToggle to stop reading as hidden once its tabs were back, " +
+                        "got ${remoteRobot.toolWindowGroupRows()}",
+                )
+            } finally {
+                setGroupHidden("EyeToggle", hidden = false)
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
      * "Hidden" follows the tab strip, not a flag — the Phase 7 amendment, driven exactly the way the
      * bug was found: hide a group, then reopen one of its files from the tree, which is what that
      * tree is *for*.

@@ -1440,6 +1440,31 @@ Compile against the **oldest** supported platform and run forward. `sinceBuild =
 hard ceiling. Raising `platformVersion` in `gradle.properties` drops older IDEs — don't do it
 casually.
 
+### Never omit a default argument on a platform Kotlin API
+
+Compiling forward has one trap, and it costs a working feature rather than a compile error. When
+Kotlin calls a function or constructor of *another module* and omits a parameter that has a default,
+it does not call the signature you read: it calls a generated `foo$default(...)` static, or a
+constructor carrying every parameter plus a bitmask and a `DefaultConstructorMarker`. Those
+descriptors list **every** parameter the callee declares, so they change shape the moment the
+platform adds one — and the call is linked at runtime, against whatever IDE the user is on.
+
+`TabOpener` shipped exactly that in 1.4.14: `FileEditorOpenOptions()`, whose synthetic constructor
+gained a parameter on 2025.2, another on 2025.3 and another on 2026.1. On 2026.2 the first tab it
+tried to open threw `NoSuchMethodError`, which — being an `Error` — escaped the per-request `catch`
+and killed the coroutine draining its queue, so Show Group and "open this member" did nothing at all
+for the rest of the session. Nothing at compile time says a word about it, and the uiTest suite
+cannot see it either: the sandbox runs the 2024.2 baseline, where the call resolves.
+
+So: pass every argument explicitly, or — where the stable entry point is the zero-argument
+constructor Kotlin generates but refuses to call — build the value in Java, as
+`PlatformOpenOptions` does. Two things check this. `verifyPlugin` reports it against the whole
+matrix ("Invocation of unresolved constructor … can lead to **NoSuchMethodError**"), which is the
+authority but costs eight IDE downloads; `PlatformDefaultArgumentCallsTest` reads the same calls
+out of the built plugin's own bytecode in a second, for the classes the platform makes no promise
+about. Reflection would also dodge the synthetic and is the wrong answer — it hides the call from
+the Verifier.
+
 ## Renaming
 
 The name lives in `gradle.properties` (`pluginName`, `pluginGroup`) plus the `<id>`/`<name>` in
