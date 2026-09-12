@@ -6,7 +6,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 
 /**
- * Forces the editor tab strip to re-ask TabGroupColorProvider for this file's colour.
+ * Forces the editor tab strip to re-ask TabGroupColorProvider for a file's colour.
  *
  * No stable public API exists for this — see README §"repaint". `FileEditorManagerImpl
  * .queueUpdateFile` is the call verified in Phase 0 to actually move the tab *background*
@@ -22,6 +22,25 @@ import com.intellij.openapi.vfs.VirtualFile
 internal object TabRepaint {
 
     fun request(project: Project, file: VirtualFile) {
-        (FileEditorManagerEx.getInstanceEx(project) as? FileEditorManagerImpl)?.queueUpdateFile(file)
+        manager(project)?.queueUpdateFile(file)
     }
+
+    /**
+     * The same request for every tab currently on the strip — what unload needs, and the one caller
+     * that cannot name its files: [io.prismtabs.listener.PrismTabsUnloadListener] is repainting
+     * *because* this plugin is about to stop answering for any of them.
+     *
+     * `queueUpdateFile` is a queue, not a paint: it hands the file to `FileEditorManagerImpl`'s
+     * own `MergingUpdateChannel` (confirmed in the platform bytecode) and the recolour happens a
+     * beat later, on the platform's coroutine. That is what makes it safe to call from unload —
+     * what is left on the queue is a [VirtualFile] and nothing of this plugin's, so the queue
+     * cannot itself become the reference that keeps the class loader alive.
+     */
+    fun requestAll(project: Project) {
+        val manager = manager(project) ?: return
+        manager.openFiles.forEach(manager::queueUpdateFile)
+    }
+
+    private fun manager(project: Project): FileEditorManagerImpl? =
+        FileEditorManagerEx.getInstanceEx(project) as? FileEditorManagerImpl
 }

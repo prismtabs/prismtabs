@@ -3,7 +3,6 @@ package io.prismtabs.ui
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.components.service
-import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.InputValidator
 import com.intellij.openapi.ui.MessageDialogBuilder
@@ -31,6 +30,7 @@ import io.prismtabs.service.TabGroupNotifier
 import io.prismtabs.service.TabGroupPaletteService
 import io.prismtabs.service.TabGroupService
 import io.prismtabs.service.TabGroupVisibility
+import io.prismtabs.service.TabOpener
 import io.prismtabs.service.TabRepaint
 import java.awt.Color
 import java.awt.Component
@@ -642,7 +642,10 @@ internal fun chooseMemberFile(
         promptToUnassignMissing(project, group, service, row)
         return
     }
-    OpenFileDescriptor(project, file).navigate(true)
+    // Not `OpenFileDescriptor.navigate` and not `FileEditorManager.openFile`: both open the editor
+    // synchronously, on this plugin's own stack, which pins its class loader for the life of the
+    // editor. See [io.prismtabs.service.TabOpener].
+    project.service<TabOpener>().open(listOf(file), requestFocus = true)
 }
 
 /**

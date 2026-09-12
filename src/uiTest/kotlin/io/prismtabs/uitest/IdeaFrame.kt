@@ -1500,6 +1500,241 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
             true,
         )
     }
+
+    /**
+     * Puts [fileNames] in a brand-new group called [groupName], straight through
+     * [io.prismtabs.service.TabGroupService], with no popup and no clicking.
+     *
+     * The colour-swatch popup is covered by its own tests; what the unload test needs is simply a
+     * group that exists, and driving that through the service keeps it independent of every pixel
+     * the popup happens to occupy — and, more to the point, off `java.awt.Robot`, which on macOS
+     * needs an accessibility grant that a Gradle daemon does not necessarily carry.
+     */
+    fun assignToNewGroup(groupName: String, fileNames: List<String>) {
+        runJs(
+            """
+            importPackage(com.intellij.openapi.wm.impl)
+            importPackage(com.intellij.ide.plugins)
+            importPackage(com.intellij.openapi.extensions)
+            importClass(com.intellij.openapi.project.ProjectUtil)
+
+            const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+            const project = frameHelper.getProject()
+            const loader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
+            const service = project.getService(java.lang.Class.forName('io.prismtabs.service.TabGroupService', true, loader))
+
+            // The data class's primary constructor, named rather than picked out of getConstructors()
+            // by index: the synthetic defaults constructor sits alongside it and the order is not
+            // specified. Signature confirmed with javap, per CLAUDE.md.
+            const groupClass = java.lang.Class.forName('io.prismtabs.model.TabGroup', true, loader)
+            const ctor = groupClass.getConstructor(
+                java.lang.String, java.lang.String,
+                java.lang.Integer.TYPE, java.lang.Integer.TYPE,
+                java.util.List, java.lang.Integer.TYPE
+            )
+            const group = ctor.newInstance(
+                '$groupName-id', '$groupName',
+                new java.lang.Integer(0x2E7D32), new java.lang.Integer(0x81C784),
+                java.util.Collections.emptyList(), new java.lang.Integer(0)
+            )
+
+            const dir = ProjectUtil.guessProjectDir(project)
+            const names = '${fileNames.joinToString(",")}'.split(',')
+            for (let i = 0; i < names.length; i++) {
+                service.assign(dir.findChild(names[i]).getUrl(), group)
+            }
+            """,
+            true,
+        )
+    }
+
+    /**
+     * The colour the tab strip is *currently* painting [path] with, read off the `TabInfo` the tab
+     * label holds, or `"none"` where it has none.
+     *
+     * Read from the `TabInfo` rather than from `EditorTabColorProvider`, and deliberately so: the
+     * colour a tab shows is **cached** on its `TabInfo` and only recomputed when something asks for
+     * an update. Asking the provider would therefore answer the wrong question — it says what the
+     * strip *would* paint if it repainted, which is exactly the thing that was broken. Read from
+     * the platform rather than from `Robot.getPixelColor` (as [pixelColorAtTabCenter] does) because
+     * this one runs in CI, where there is no screen to sample and no accessibility grant to sample
+     * it with.
+     */
+    fun tabColorOf(path: String): String = callJs<String>(
+        """
+        importClass(com.intellij.openapi.fileEditor.impl.EditorTabLabel)
+
+        function findTabLabel(comp) {
+            if (comp instanceof EditorTabLabel) {
+                var ctx = comp.getAccessibleContext()
+                var name = ctx != null ? ctx.getAccessibleName() : null
+                if (name == '$path') return comp
+            }
+            if (comp.getComponentCount) {
+                var n = comp.getComponentCount()
+                for (var i = 0; i < n; i++) {
+                    var found = findTabLabel(comp.getComponent(i))
+                    if (found != null) return found
+                }
+            }
+            return null
+        }
+
+        var tabLabel = findTabLabel(component)
+        if (tabLabel == null) 'no tab'
+        else {
+            var color = tabLabel.getInfo().getTabColor()
+            color == null ? 'none' : ('' + color.getRGB())
+        }
+        """,
+        true,
+    )
+
+    /**
+     * The names of every live `ActionToolbarImpl` under this frame whose *creation trace* mentions
+     * PrismTabs — which is to say, every toolbar that is pinning this plugin's class loader.
+     *
+     * `ActionToolbarImpl`'s constructor stores `new Throwable("toolbar creation trace")` in a
+     * private final field it never clears (javap: one `putfield`), and a `Throwable` holds the
+     * [Class] of every frame that was on the stack. So a toolbar built while PrismTabs was on the
+     * stack holds a PrismTabs class, a class holds its loader, and the plugin cannot be unloaded
+     * until that toolbar dies. [io.prismtabs.service.TabOpener] exists to keep this list empty.
+     *
+     * This is the assertion to reach for rather than "did the class loader go": it names the
+     * offending toolbar and the frame that got captured, it is the same on every JDK, and it
+     * cannot be satisfied by luck. Collectability is the *consequence*, and is checked separately.
+     */
+    fun editorToolbarsNamingPrismTabs(): List<String> = callJs<String>(
+        """
+        importClass(com.intellij.openapi.actionSystem.impl.ActionToolbarImpl)
+
+        const traceField = java.lang.Class
+            .forName('com.intellij.openapi.actionSystem.impl.ActionToolbarImpl')
+            .getDeclaredField('myCreationTrace')
+        traceField.setAccessible(true)
+
+        const found = []
+        function scan(comp) {
+            if (comp instanceof ActionToolbarImpl) {
+                const frames = traceField.get(comp).getStackTrace()
+                for (let i = 0; i < frames.length; i++) {
+                    if (frames[i].getClassName().indexOf('io.prismtabs') == 0) {
+                        found.push(comp.getPlace() + ' <- ' + frames[i].getClassName())
+                        break
+                    }
+                }
+            }
+            if (comp.getComponentCount) {
+                const n = comp.getComponentCount()
+                for (let i = 0; i < n; i++) scan(comp.getComponent(i))
+            }
+        }
+        scan(component)
+        found.join(' | ')
+        """,
+        true,
+    ).split(" | ").filter { it.isNotEmpty() }
+
+    /**
+     * The feature version of the JDK the *sandbox IDE* runs on — not this test's own.
+     *
+     * Needed because `java.awt.Component`'s constructor captures `AccessController.getContext()`
+     * into its `acc` field, and a captured context holds a `ProtectionDomain` per class loader on
+     * the stack. On a JDK that still has the security manager, any Swing component the platform
+     * builds while PrismTabs is on the stack therefore pins the loader exactly as a creation trace
+     * does — and unlike a creation trace there is nothing a plugin can do about it, because the
+     * plugin's own painting, listening and colour-providing code has to run on the EDT. JEP 486
+     * (JDK 24) disables the security manager permanently and the capture goes with it; measured on
+     * both dumps behind this test, the JDK 25 one has no `AccessControlContext` holding the plugin's
+     * domain at all, while the JDK 21 one does.
+     */
+    fun ideJdkFeature(): Int = callJs<String>("'' + java.lang.Runtime.version().feature()", true).toInt()
+
+    /**
+     * Unloads PrismTabs the way "Disable" and "Uninstall" do, and reports both halves of what that
+     * has to achieve: whether the platform accepted the unload, and whether the plugin's class
+     * loader was then actually collectable.
+     *
+     * Returns `"unloaded:collected"` when all is well; `"unloaded:retained"` is the failure the
+     * user sees as "not unload-safe because class loader cannot be unloaded", a several-hundred-
+     * megabyte heap snapshot, and an IDE that needs restarting.
+     *
+     * `waitForClassloaderUnload = false` in the options, so the platform does *not* run its own
+     * wait-and-dump: this asserts the same fact with a [java.lang.ref.WeakReference] and a few
+     * collections, and writing an 800 MB `.hprof` on every test run would be its own bug.
+     *
+     * The loader is handed to the reference as a temporary, never stored in a variable of its own —
+     * a strong reference held anywhere in this script would keep the very thing being measured
+     * alive and turn the test green for the wrong reason.
+     */
+    fun unloadPrismTabs(): String = callJs<String>(
+        """
+        importPackage(com.intellij.openapi.wm.impl)
+        importPackage(com.intellij.ide.plugins)
+        importPackage(com.intellij.openapi.extensions)
+        importClass(com.intellij.openapi.application.ApplicationManager)
+
+        // Rhino, not Nashorn: no `Java.type`, and a nested class has to be named with its binary
+        // `${'$'}` spelling. Constructor signature confirmed with javap, per CLAUDE.md — every flag off,
+        // `waitForClassloaderUnload` (the fifth) included, so the platform runs no wait-and-dump of
+        // its own and this script's own WeakReference is the whole measurement.
+        const optionsClass = java.lang.Class.forName('com.intellij.ide.plugins.DynamicPlugins${'$'}UnloadPluginOptions')
+        const B = java.lang.Boolean.TYPE
+        const optionsCtor = optionsClass.getConstructor(B, B, B, B, B, B, java.lang.Integer)
+
+        const descriptor = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs'))
+        // Stashed for [reloadPrismTabs]: an unloaded plugin is no longer in PluginManagerCore, so
+        // this is the only handle left to load it back with. The root pane, because it is the
+        // nearest JComponent — the frame itself is a JFrame and has no client properties.
+        component.getRootPane().putClientProperty('prismtabs.unloaded.descriptor', descriptor)
+        const ref = new java.lang.ref.WeakReference(descriptor.getPluginClassLoader())
+        const F = java.lang.Boolean.FALSE
+        const options = optionsCtor.newInstance([F, F, F, F, F, F, null])
+        const outcome = new java.util.concurrent.atomic.AtomicReference('')
+
+        const task = new Runnable({
+            run: function() {
+                outcome.set(DynamicPlugins.INSTANCE.unloadPlugin(descriptor, options) ? 'unloaded' : 'refused')
+            }
+        })
+        ApplicationManager.getApplication().invokeAndWait(task)
+
+        for (let i = 0; i < 40 && ref.get() != null; i++) {
+            java.lang.System.gc()
+            java.lang.Thread.sleep(100)
+        }
+        outcome.get() + (ref.get() == null ? ':collected' : ':retained')
+        """,
+        true,
+    )
+
+    /** Puts PrismTabs back after [unloadPrismTabs], so the rest of the suite still has a plugin to
+     * test. Reports whether the platform accepted the reload. */
+    fun reloadPrismTabs(): Boolean = callJs<String>(
+        """
+        importPackage(com.intellij.openapi.wm.impl)
+        importPackage(com.intellij.ide.plugins)
+        importPackage(com.intellij.openapi.extensions)
+        importClass(com.intellij.openapi.application.ApplicationManager)
+
+        const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+        const project = frameHelper.getProject()
+        const rootPane = component.getRootPane()
+        const descriptor = rootPane.getClientProperty('prismtabs.unloaded.descriptor')
+        rootPane.putClientProperty('prismtabs.unloaded.descriptor', null)
+        const outcome = new java.util.concurrent.atomic.AtomicReference('')
+        const task = new Runnable({
+            run: function() {
+                const loaded = DynamicPlugins.INSTANCE.loadPlugins(
+                    java.util.Collections.singletonList(descriptor), project)
+                outcome.set('' + loaded)
+            }
+        })
+        ApplicationManager.getApplication().invokeAndWait(task)
+        outcome.get()
+        """,
+        true,
+    ).toBoolean()
 }
 
 /**

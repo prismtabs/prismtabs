@@ -20,3 +20,15 @@
   (`Add to Group "Auth"`). Auto-join only ever sees files the platform actually has to open, so
   before this an already-open file had to be closed and reopened to join the group. Free, like
   every other by-hand assignment.
+
+### Fixed
+
+- Disabling or uninstalling PrismTabs no longer leaves the IDE asking for a restart. Files the
+  plugin opened itself — "Show Group", or a member file opened from the tool window — were opened
+  synchronously, and the platform stores the stack it was on in the creation trace of every toolbar
+  it builds for that editor, which pinned the plugin's class loader for as long as the tab stayed
+  open. The IDE reported this as "not unload-safe because class loader cannot be unloaded" and
+  wrote a several-hundred-megabyte heap snapshot for it. Those files are now opened off the
+  plugin's own stack.
+- Tab colours now disappear the moment the plugin is disabled or uninstalled, instead of lingering
+  until the next IDE start — which, on a disable, is never prompted for.
