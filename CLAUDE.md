@@ -38,6 +38,16 @@ Three details in that recipe are load-bearing on Windows, and all three fail *si
 Verified end to end on Windows 11 (`FileEditorManagerEx`, `DynamicPluginListener`, `IconLoader` all
 resolve); the counts above are this machine's `ideaIC-2024.2-win`.
 
+## Calling a platform Kotlin API
+
+Never omit a defaulted argument on a `com.intellij` function or constructor. Kotlin compiles the
+omission into a call to a *synthetic* member (`foo$default`, or a constructor taking every parameter
+plus a `DefaultConstructorMarker`) whose descriptor changes whenever the platform adds a parameter —
+so it links fine against the 2024.2 baseline and throws `NoSuchMethodError` on the user's newer IDE.
+Pass every argument explicitly, or build the value in Java, as `PlatformOpenOptions` does for
+`FileEditorOpenOptions()`. `PlatformDefaultArgumentCallsTest` fails on a new one; README
+§"Never omit a default argument on a platform Kotlin API" has the full account.
+
 ## Build
 
 `./gradlew test` (fast, no IDE) · `./gradlew runIde` (sandbox IDE). Toolchain is JDK 21; the shell's
