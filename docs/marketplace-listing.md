@@ -71,7 +71,7 @@ Free forever
   • "Files…" lists everything in a group, open tab or not, and reopens any of it
   • Assignments persist across restarts and survive file renames and moves
 
-Paid — a 30-day free trial on every new install, then a subscription
+Paid — a 14-day free trial, then a subscription
   • The PrismTabs tool window for managing every group at a glance, each group
     expanding to the files it holds
   • Hide a group to close its tabs and remember them, then show it to reopen them

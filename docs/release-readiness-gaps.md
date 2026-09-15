@@ -20,10 +20,16 @@ items (5, 6, 8) are still open and this isn't shipping today.
 made the built zip an invalid plugin outright — `verifyPlugin` refused it with *"The
 `<release-version>` parameter (1) format is invalid. Ensure it is an integer with at least two
 digits"* and ran zero of its eight verifications. Corrected to `14`: `pluginVersion`'s first two
-components with the dot dropped (1.4.14 → 14), which is the Marketplace convention and means it
-moves on a minor bump and stays put across patch releases — the boundary a licence is sold up to, so
-a patch stays free to existing subscribers. Keep it in step with `pluginVersion` at release time,
-and re-run `verifyPlugin` after touching the descriptor: nothing else in the build catches this.
+components with the dot dropped (1.4.14 → 14), which is the Marketplace convention.
+`ProductDescriptorTest` keeps it in step with `pluginVersion`, and re-run `verifyPlugin` after
+touching the descriptor all the same: the test checks the two agree, not that the Verifier accepts
+the result.
+
+**Superseded in part (2026-09-15):** this item originally had `release-version` moving on every
+minor bump. It now moves only on a deliberately cut **major release**, about once a year, because
+changing it resets every user's trial — see README "Trial resets and release cadence" and item 3's
+release procedure. `release-date` moves with it, to that major release's publish day, and stays put
+across the x.y.Z updates in between.
 
 One consequence worth knowing, handled the same day: arming the gate also made
 `runIdeForUiTests` an unlicensed paid build, which locked the paid features out from under the
@@ -124,14 +130,17 @@ cross-platform pass is done):
 # 1. On master, in one commit: set the release version + descriptor, stamp the changelog.
 #    `pluginVersion` in gradle.properties has been a plain number since 267202a (2026-09-05) —
 #    there is no -SNAPSHOT suffix to strip and no per-commit bump. Move it only here, and only
-#    if the number changes: derive it from the Conventional Commits since the last release tag
-#    (feat -> minor, fix/perf/revert -> patch, ! or BREAKING CHANGE -> major; see the
-#    `create-commit` skill).
+#    if the number changes. First decide whether this is a MAJOR RELEASE — cut deliberately,
+#    about once a year, because it resets every user's trial (README "Trial resets and release
+#    cadence"). Conventional Commit types do not decide that on their own:
+#      - Update (the default, features included): bump only the third component
+#        (1.4.14 -> 1.4.15). Leave release-date and release-version untouched.
+#      - Major release: bump the second component and zero the third (1.4.x -> 1.5.0), or, after
+#        1.9, the first (1.9.x -> 2.0.0) — the minor must stay one digit (see item 1).
+#        Set release-version to the new first two components with the dot dropped ("15", "20")
+#        and release-date to the real ship date YYYYMMDD. The very first publish counts as one
+#        for release-date, which is still a placeholder.
 #      - gradle.properties: pluginVersion -> the release number (if it moves)
-#      - plugin.xml <product-descriptor>: release-date -> real ship date YYYYMMDD;
-#        release-version -> the version's first two components with the dot dropped
-#        (1.4.x -> "14", 1.5.x -> "15"), always >= 2 digits or verifyPlugin rejects the zip
-#        (see item 1). It is the licence boundary: moves on a minor, stays put across patches.
 #      - ./gradlew patchChangelog  — stamps [Unreleased] with the version and date
 #    Then ./gradlew verifyPlugin (nothing else in the build catches a bad release-version),
 #    commit on master, push the commit.
@@ -164,8 +173,9 @@ generated and is now set as the `PUBLISH_TOKEN` repo secret (closes item 3). Acc
 - Under **Sales Info → Add to Marketplace**: confirm/register product code `PPRISMTABS`, choose
   **Freemium**, then the **Yearly Subscription without a Fallback License** scheme, set the
   personal price to $14/year and the commercial price to $29/year per user (matches the website's
-  pricing card as of `docs(pricing)` / `d57b11b`, 2026-09-06), leave the trial at its 30-day
-  default.
+  pricing card as of `docs(pricing)` / `d57b11b`, 2026-09-06), and set the trial to **14 days**
+  rather than the 30-day default (decided 2026-09-15; the options are 7, 10, 14 or 30 — see README
+  "Marketplace publishing prep"). Check that `prismtabs.com`'s pricing card says 14 days too.
 - Attach the licence (item 7): paste the `prismtabs.com/eula` URL into the licence field at upload
   time (per the best-practices doc it's added here, not via a `plugin.xml` tag); paste the full
   EULA text as the fallback if the form wants text rather than a link.

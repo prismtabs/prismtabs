@@ -50,7 +50,7 @@ object PrismTabsLicense {
 
     /**
      * The freemium gate: `true` when the paid features may run — on an active subscription, during
-     * the 30-day trial, and in any build that isn't distributed as a paid plugin in the first place.
+     * the free trial, and in any build that isn't distributed as a paid plugin in the first place.
      *
      * That last clause is what [isPaidBuild] is for, and it is not a convenience: the paid-plugin
      * contract only exists once `plugin.xml` carries a `<product-descriptor>`, and until then

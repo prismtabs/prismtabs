@@ -116,7 +116,7 @@ already covered continuously by local development.
    - **Unlicensed start.** Launch with no licence for `PPRISMTABS`. The plugin must stay *enabled*
      (not in `config/disabled_plugins.txt`) with the tool window showing its upsell panel, and
      colouring, grouping and unlimited groups must all still work from the tab right-click menu.
-   - **Trial, then a real key.** Start the 30-day trial from the register dialog a paid action
+   - **Trial, then a real key.** Start the 14-day trial from the register dialog a paid action
      raises, and confirm the paid features unlock. Note the tool window picks its licence state up
      the next time it is *shown* (or on the next group change), not the instant the dialog closes —
      that is by design, since nothing broadcasts a licence change. Repeat with a genuine
