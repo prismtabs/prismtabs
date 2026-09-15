@@ -1,6 +1,8 @@
 package io.prismtabs.service
 
+import com.intellij.util.xmlb.XmlSerializer
 import io.prismtabs.model.TabGroupPalette
+import io.prismtabs.model.TabGroupPaletteState
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -63,6 +65,21 @@ class TabGroupPaletteServiceTest {
         restored.loadState(original.state)
 
         assertEquals(edited, restored.presets())
+    }
+
+    /** Through the platform's own XML serializer, as an IDE restart does — see [TabGroupServiceTest]. */
+    @Test
+    fun `a restart brings back a renamed and recoloured preset`() {
+        val original = TabGroupPaletteService()
+        val edited = TabGroupPalette.PRESETS.toMutableList()
+        edited[5] = edited[5].copy(label = "Reviews", light = Color(0xFEDCBA), dark = Color(0x654321))
+        original.setPresets(edited)
+
+        val xml = XmlSerializer.serialize(original.state)
+        val restarted = TabGroupPaletteService()
+        restarted.loadState(XmlSerializer.deserialize(xml, TabGroupPaletteState::class.java))
+
+        assertEquals(edited, restarted.presets())
     }
 
     @Test

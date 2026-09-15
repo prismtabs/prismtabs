@@ -793,7 +793,12 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
             if (stash == null) stash = new java.util.HashMap()
             const ids = ['RegisterPlugins', 'Register']
             for (var i = 0; i < ids.length; i++) {
-                const action = actionManager.getAction(ids[i])
+                // `var`, never `const`, in a loop body — see RemoteRobotExtension's doc. With `const`
+                // this stayed bound to the first id's action: "Register" was stashed as the
+                // "RegisterPlugins" instance, and restoring then registered that one instance under
+                // "Register", which the platform accepts and "RegisterPlugins" is then refused. After
+                // that, nothing was suppressed at all and the real Licenses dialog opened mid-test.
+                var action = actionManager.getAction(ids[i])
                 if (action == null) continue
                 stash.put(ids[i], action)
                 actionManager.unregisterAction(ids[i])
@@ -846,7 +851,8 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
                     const actionManager = ActionManager.getInstance()
                     const entries = stash.entrySet().iterator()
                     while (entries.hasNext()) {
-                        const entry = entries.next()
+                        // `var`, not `const` — the loop-body scoping failure noted in suppressRegisterDialog.
+                        var entry = entries.next()
                         // Re-registering an id that is somehow already back would throw; the guard
                         // keeps a double restore (finally after an early failure) harmless.
                         if (actionManager.getAction(entry.getKey()) == null) {

@@ -1,7 +1,11 @@
 package io.prismtabs.uitest
 
 import com.intellij.remoterobot.RemoteRobot
+import com.intellij.remoterobot.fixtures.JButtonFixture
+import com.intellij.remoterobot.fixtures.JTextFieldFixture
+import com.intellij.remoterobot.utils.Keyboard
 import com.intellij.remoterobot.utils.waitFor
+import io.prismtabs.model.TabGroupPalette
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -328,7 +332,8 @@ class PaywallUiTest {
                 openFile("Third.kt")
 
                 simulateUnlicensed()
-                suppressRegisterDialog()
+                installRegisterProbe()
+                hideTabGroupsToolWindow()
                 assertFalse(paidFeaturesEnabled(), "the simulated lapse should read as unlicensed")
 
                 // Creating a group by clicking a colour dot: the popup's own flow, modal name prompt
@@ -361,10 +366,185 @@ class PaywallUiTest {
                     "grouping while locked must leave every tab open, got: ${openTabNames()}",
                 )
                 assertFalse(isGroupHidden("FreeGroup"), "a group created while locked must not come up hidden")
+
+                // The rest of "managing groups from a tab's right-click menu": rename, recolour, the
+                // file list, removal and deletion, each through the popup a lapsed user has.
+                remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+                remoteRobot.clickPopupItem("Manage Groups…")
+                remoteRobot.clickPopupSubstepItem("FreeGroup", "Rename…")
+                dialog("Rename Tab Group") {
+                    find<JTextFieldFixture>(JTextFieldFixture.byType()).text = "RenamedFree"
+                    find<JButtonFixture>(JButtonFixture.byText("OK")).click()
+                }
+                waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == "RenamedFree" }
+
+                remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+                remoteRobot.clickPopupItem("Manage Groups…")
+                remoteRobot.popupSubstepItems("RenamedFree", anchor = "Recolour…")
+                remoteRobot.popupSubstepItems("Recolour…", anchor = "Recolour…")
+                waitFor(ofSeconds(10)) { remoteRobot.popupRowSwatches().size == 8 }
+                remoteRobot.clickPopupItem("Purple")
+                waitFor(ofSeconds(10)) { groupLightRgbFor("Sample.kt") == 0xD3B3F5 }
+
+                remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+                remoteRobot.clickPopupItem("Manage Groups…")
+                remoteRobot.clickPopupSubstepItem("RenamedFree", "Files…")
+                waitFor(ofSeconds(10)) { remoteRobot.chooserPopupRows().size == 2 }
+                Keyboard(remoteRobot).escape()
+
+                remoteRobot.openTabGroupPopupOn(this, "Third.kt")
+                remoteRobot.clickPopupItem("Remove from Group")
+                waitFor(ofSeconds(10)) { groupNameFor("Third.kt") == null }
+
+                remoteRobot.openTabGroupPopupOn(this, "Second.kt")
+                remoteRobot.clickPopupItem("Manage Groups…")
+                remoteRobot.clickPopupSubstepItem("AlsoFree", "Delete Group")
+                dialog("Delete Tab Group") { find<JButtonFixture>(JButtonFixture.byText("Delete")).click() }
+                waitFor(ofSeconds(10)) { groupNameFor("Second.kt") == null }
+
+                assertEquals(
+                    emptyList<String>(),
+                    registerProbeMessages(),
+                    "nothing the free tier does may raise the subscription dialog",
+                )
             } finally {
                 simulateEntitled()
-                restoreRegisterDialog()
+                removeRegisterProbe()
                 closeAllEditors()
+            }
+        }
+    }
+
+    /**
+     * Every one of the eight presets still starts a coloured group for a lapsed subscriber. Each new
+     * group is made from the same tab, so each one after the first empties the previous group, whose
+     * prompt is answered along the way.
+     */
+    @Test
+    fun `every preset still colours a new group while the licence is lapsed`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                resetTabGroupPalette()
+                hideTabGroupsToolWindow()
+                openFile("Sample.kt")
+                simulateUnlicensed()
+                installRegisterProbe()
+                assertFalse(paidFeaturesEnabled(), "the simulated lapse should read as unlicensed")
+
+                TabGroupPalette.PRESETS.forEachIndexed { index, preset ->
+                    remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+                    remoteRobot.clickPopupItem(preset.label)
+                    dialog("New Tab Group") { find<JButtonFixture>(JButtonFixture.byText("OK")).click() }
+                    if (index > 0) dialog("Empty Tab Group") { find<JButtonFixture>(JButtonFixture.byText("Delete Group")).click() }
+
+                    waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == preset.label && groupCount() == 1 }
+                    assertEquals(preset.light.rgb and 0xFFFFFF, groupLightRgbFor("Sample.kt"), "${preset.label}'s light colour")
+                    assertEquals(preset.dark.rgb and 0xFFFFFF, groupDarkRgbFor("Sample.kt"), "${preset.label}'s dark colour")
+                    val shown = themedPreset(preset.id)
+                    waitFor(ofSeconds(10), errorMessage = "${preset.label}: expected ${shown.hex()}, painted ${paintedTabRgb("Sample.kt").hex()}") {
+                        rgbClose(shown, paintedTabRgb("Sample.kt"))
+                    }
+                }
+                assertEquals(emptyList<String>(), registerProbeMessages(), "colouring tabs must never raise the subscription dialog")
+            } finally {
+                simulateEntitled()
+                removeRegisterProbe()
+            }
+        }
+    }
+
+    /**
+     * The sandbox is a cold start of a paid build that holds no licence — measured at boot, before
+     * [RemoteRobotExtension] stands in a facade (see [IdeaFrame.simulateEntitled]) — which is the
+     * exact state the "optional" product descriptor exists for. The plugin must have come up enabled
+     * and loaded, and must not have been written into `disabled_plugins.txt`, where a platform-side
+     * disable would keep it off across every later restart too.
+     */
+    @Test
+    fun `a paid build started without a licence comes up enabled rather than disabled`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            assertTrue(isPaidBuild(), "this test is about the paid build; plugin.xml must carry its product-descriptor")
+            val state = prismTabsPluginState()
+            assertEquals(true, state["enabled"], "the platform must not have disabled the plugin, got $state")
+            assertEquals(true, state["loaded"], "the plugin must be loaded, got $state")
+            assertEquals(false, state["listedAsDisabled"], "the plugin must not be recorded as disabled, got $state")
+        }
+    }
+
+    /**
+     * A refused paid action does not fail silently: it raises the IDE's registration dialog, naming
+     * the feature that was refused. A recording action stands in for the dialog, so what is asserted
+     * is that the plugin asked for it, and with what message.
+     */
+    @Test
+    fun `a refused paid action raises the subscription dialog, naming what was refused`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                assignFileToNewGroup("Sample.kt", "Upsell")
+                addFileToGroup("Second.kt", "Upsell")
+                simulateUnlicensed()
+                installRegisterProbe()
+                assertFalse(paidFeaturesEnabled(), "the simulated lapse should read as unlicensed")
+
+                toggleActiveGroup("Upsell")
+                waitFor(ofSeconds(10), errorMessage = "marking a group active raised no dialog") { registerProbeMessages().size == 1 }
+                assertTrue(
+                    registerProbeMessages()[0].startsWith("Marking a tab group active needs an active PrismTabs subscription."),
+                    "got ${registerProbeMessages()}",
+                )
+                assertNull(activeGroupName(), "the refused action must not have happened")
+
+                invokeToggleVisibility("Upsell")
+                waitFor(ofSeconds(10), errorMessage = "hiding a group raised no dialog") { registerProbeMessages().size == 2 }
+                assertTrue(
+                    registerProbeMessages()[1].startsWith("Hiding and showing tab groups needs an active PrismTabs subscription."),
+                    "got ${registerProbeMessages()}",
+                )
+                assertFalse(isGroupHidden("Upsell"), "the refused action must not have happened")
+            } finally {
+                simulateEntitled()
+                removeRegisterProbe()
+                closeAllEditors()
+            }
+        }
+    }
+
+    /**
+     * Nothing broadcasts a licence change, so an open locked tool window does not unlock the instant a
+     * subscription starts — only at its next natural refresh. The first test in this class covers the
+     * refresh on being shown again; this one covers the other: the next change to a group.
+     */
+    @Test
+    fun `a subscription started while the locked tool window is open shows at the next group change`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                assignFileToNewGroup("Sample.kt", "Unlocks")
+                simulateUnlicensed()
+                hideTabGroupsToolWindow()
+                showTabGroupsToolWindow()
+                waitFor(ofSeconds(10)) { toolWindowEmptyText().contains("paid feature") }
+
+                simulateEntitled()
+                assertTrue(paidFeaturesEnabled(), "the subscription is back")
+                assertTrue(
+                    toolWindowEmptyText().contains("paid feature"),
+                    "with no refresh yet, the window must still show what it last read, got: ${toolWindowEmptyText()}",
+                )
+
+                // A group change — marking the group active, and clearing it again — is the refresh.
+                toggleActiveGroup("Unlocks")
+                toggleActiveGroup("Unlocks")
+                waitFor(ofSeconds(10)) { toolWindowEmptyText() == "" }
+                assertTrue(remoteRobot.toolWindowGroupRows().any { it.contains("Unlocks") }, "the group list must be back")
+            } finally {
+                simulateEntitled()
+                clearActiveGroup()
+                hideTabGroupsToolWindow()
             }
         }
     }
