@@ -2,13 +2,17 @@ package io.prismtabs.uitest
 
 import com.intellij.remoterobot.RemoteRobot
 import com.intellij.remoterobot.fixtures.JButtonFixture
+import com.intellij.remoterobot.fixtures.JTextFieldFixture
 import com.intellij.remoterobot.utils.Keyboard
 import com.intellij.remoterobot.utils.waitFor
+import io.prismtabs.model.TabGroupPalette
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import java.awt.event.KeyEvent
 import java.time.Duration.ofSeconds
 
 /**
@@ -886,10 +890,15 @@ class TabGroupsToolWindowUiTest {
                     remoteRobot.contextMenuItemStates().any { it == "Remove 2 Files from Their Groups=true" },
                     "the label must not claim one group, got ${remoteRobot.contextMenuItemStates()}",
                 )
-                assertTrue(
-                    remoteRobot.contextMenuItemStates().any { it == "Delete Group=false" },
-                    "a selection spanning groups must grey the group actions, got ${remoteRobot.contextMenuItemStates()}",
-                )
+                val states = remoteRobot.contextMenuItemStates()
+                // "Hide Group", not "Show Group", although both groups' tabs are closed: with no single
+                // group selected there is no group to read as hidden, so the eye keeps its default label.
+                listOf("Active Group", "Hide Group", "Rename…", "Recolour…", "Delete Group").forEach { action ->
+                    assertTrue(
+                        states.contains("$action=false"),
+                        "a selection spanning groups must grey every group action, $action included, got $states",
+                    )
+                }
 
                 remoteRobot.actionMenuItem("Remove 2 Files from Their Groups").click()
 
@@ -902,6 +911,298 @@ class TabGroupsToolWindowUiTest {
                 waitFor(ofSeconds(10)) {
                     remoteRobot.toolWindowGroupRows().count { it.contains("0 files") } == 2
                 }
+            } finally {
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
+     * What each kind of row is drawn with, read off the renderer: a group row carries its colour dot,
+     * name and greyed count; a member row carries its file type's own icon, its name — bold while its
+     * tab is open, regular once closed — and its project-relative directory in grey.
+     */
+    @Test
+    fun `rows carry the group's dot, each file's type icon, a greyed directory, and bold for an open tab`(
+        remoteRobot: RemoteRobot,
+    ) {
+        remoteRobot.idea {
+            try {
+                silenceAddToVcsConfirmation()
+                resetTabGroups()
+                createFixtureFile("tree-rows/notes.txt")
+                openFile("Sample.kt")
+                assignFileToNewGroup("Sample.kt", "Rendered", lightRgb = 0xAECBFA, darkRgb = 0x2E5C9C)
+                addFileToGroup("tree-rows/notes.txt", "Rendered")
+                remoteRobot.expandToolWindowGroup("Rendered")
+
+                val dot = themed(0xAECBFA, 0x2E5C9C).hex()
+                val expected = listOf(
+                    "swatch:$dot|Rendered{plain}¦  2 files{grey}",
+                    "filetype:Kotlin|Sample.kt{bold}",
+                    "filetype:PLAIN_TEXT|notes.txt{plain}¦  tree-rows{grey}",
+                )
+                waitFor(ofSeconds(10), errorMessage = "got ${toolWindowRowRendering()}") { toolWindowRowRendering() == expected }
+
+                closeFile("Sample.kt")
+                waitFor(ofSeconds(10), errorMessage = "a closed member must render regular, got ${toolWindowRowRendering()}") {
+                    toolWindowRowRendering().getOrNull(1) == "filetype:Kotlin|Sample.kt{plain}"
+                }
+            } finally {
+                deleteFixtureFile("tree-rows")
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /** Enter on a group row is the tree's own expand key, never Hide Group: the tabs stay where they are. */
+    @Test
+    fun `Enter expands and collapses a group row without hiding it`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                assignFileToNewGroup("Sample.kt", "Keyed")
+                addFileToGroup("Second.kt", "Keyed")
+                waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().any { it.contains("Keyed") && it.contains("2 files") } }
+
+                remoteRobot.toolWindowGroupTree().clickRowWithText("Keyed", false)
+                assertFalse(isToolWindowGroupExpanded("Keyed"), "precondition: a new group's row starts collapsed")
+
+                Keyboard(remoteRobot).enter()
+                waitFor(ofSeconds(10)) { isToolWindowGroupExpanded("Keyed") }
+                assertEquals(listOf("Sample.kt", "Second.kt"), openTabNames().sorted(), "Enter must not close the group's tabs")
+                assertFalse(isGroupHidden("Keyed"))
+
+                Keyboard(remoteRobot).enter()
+                waitFor(ofSeconds(10)) { !isToolWindowGroupExpanded("Keyed") }
+                assertEquals(listOf("Sample.kt", "Second.kt"), openTabNames().sorted(), "nor may a second Enter")
+            } finally {
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    @Test
+    fun `Hide Group and Show Group in the context menu close the group's tabs and reopen them in order`(
+        remoteRobot: RemoteRobot,
+    ) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                openFile("Third.kt")
+                assignFileToNewGroup("Sample.kt", "Menu")
+                addFileToGroup("Second.kt", "Menu")
+                waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().any { it.contains("Menu") && it.contains("2 files") } }
+
+                remoteRobot.toolWindowGroupTree().findText("Menu").rightClick()
+                remoteRobot.actionMenuItem("Hide Group").click()
+                waitFor(ofSeconds(10)) { openTabNames() == listOf("Third.kt") }
+                waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().any { it.contains("Menu") && it.contains("hidden") } }
+
+                remoteRobot.toolWindowGroupTree().findText("Menu").rightClick()
+                remoteRobot.actionMenuItem("Show Group").click()
+                waitFor(ofSeconds(10)) { openTabNames().containsAll(listOf("Sample.kt", "Second.kt")) }
+                assertEquals(
+                    listOf("Sample.kt", "Second.kt"),
+                    openTabNames().filter { it != "Third.kt" },
+                    "the group's tabs must come back in the order they were open",
+                )
+            } finally {
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /** The toggle from both of its surfaces, moving the one active mark from group to group. */
+    @Test
+    fun `the Active Group toggle in the context menu and the toolbar moves the active mark between groups`(
+        remoteRobot: RemoteRobot,
+    ) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                assignFileToNewGroup("Sample.kt", "ToggleA")
+                assignFileToNewGroup("Second.kt", "ToggleB")
+                waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().size == 2 }
+
+                remoteRobot.toolWindowGroupTree().findText("ToggleA").rightClick()
+                remoteRobot.actionMenuItem("Active Group").click()
+                waitFor(ofSeconds(10)) { activeGroupName() == "ToggleA" }
+                // A toggle item keeps its context menu open once clicked (the platform's own
+                // behaviour for checkable items, measured here), and an open menu swallows the next
+                // click on the tree — so it is closed first, as a user would.
+                Keyboard(remoteRobot).escape()
+                waitFor(ofSeconds(10)) { remoteRobot.contextMenuItemStatesNow().isEmpty() }
+
+                remoteRobot.toolWindowGroupTree().clickRowWithText("ToggleB", false)
+                remoteRobot.toolWindowToolbarButton("Active Group").click()
+                waitFor(ofSeconds(10)) { activeGroupName() == "ToggleB" }
+
+                waitFor(ofSeconds(10), errorMessage = "got ${remoteRobot.toolWindowGroupRows()}") {
+                    val rows = remoteRobot.toolWindowGroupRows()
+                    rows.any { it.startsWith("ToggleB") && it.contains("active") } &&
+                        rows.none { it.startsWith("ToggleA") && it.contains("active") }
+                }
+            } finally {
+                clearActiveGroup()
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
+     * Rename, Recolour and Delete offered live on both surfaces, and each one doing its job from one of
+     * them: Rename from the context menu, Recolour and Delete from the toolbar. Both surfaces wrap the
+     * very same action instances, so what one does the other does.
+     */
+    @Test
+    fun `Rename, Recolour and Delete work from the tool window's context menu and toolbar`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                resetTabGroupPalette()
+                openFile("Sample.kt")
+                assignFileToNewGroup("Sample.kt", "Surfaces")
+                assignFileToNewGroup("Second.kt", "Bystander")
+                waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().size == 2 }
+
+                remoteRobot.toolWindowGroupTree().findText("Surfaces").rightClick()
+                val states = remoteRobot.contextMenuItemStates()
+                listOf("Rename…=true", "Recolour…=true", "Delete Group=true").forEach {
+                    assertTrue(states.contains(it), "expected $it in the context menu, got $states")
+                }
+                remoteRobot.actionMenuItem("Rename…").click()
+                dialog("Rename Tab Group") {
+                    find<JTextFieldFixture>(JTextFieldFixture.byType()).text = "Renamed"
+                    find<JButtonFixture>(JButtonFixture.byText("OK")).click()
+                }
+                waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == "Renamed" }
+                waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().any { it.startsWith("Renamed") } }
+
+                remoteRobot.toolWindowGroupTree().clickRowWithText("Renamed", false)
+                remoteRobot.toolWindowToolbarButton("Recolour…").click()
+                remoteRobot.clickPopupItem("Cyan")
+                val cyan = TabGroupPalette.PRESETS.first { it.id == "cyan" }
+                waitFor(ofSeconds(10)) { groupLightRgbFor("Sample.kt") == cyan.light.rgb and 0xFFFFFF }
+                waitFor(ofSeconds(10), errorMessage = "the member's tab was not repainted") { tabRgb("Sample.kt") == themedPreset("cyan") }
+
+                remoteRobot.toolWindowGroupTree().clickRowWithText("Renamed", false)
+                remoteRobot.toolWindowToolbarButton("Delete Group").click()
+                dialog("Delete Tab Group") { find<JButtonFixture>(JButtonFixture.byText("Delete")).click() }
+                waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == null }
+                waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().none { it.startsWith("Renamed") } }
+                assertEquals("Bystander", groupNameFor("Second.kt"), "only the selected group may go")
+            } finally {
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
+     * The platform's own file actions, working off a member row because the panel publishes the row's
+     * file: F4 opens it, Copy Path copies its absolute path, Select in Project View selects it there.
+     * F4 is pressed for real; the other two run against the tree's own data context, which is what
+     * their shortcuts hand them in whatever keymap the IDE uses.
+     */
+    @Test
+    fun `a member row feeds Jump to Source, Copy Path and Select in Project View`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                assignFileToNewGroup("Sample.kt", "Actions")
+                closeAllEditors()
+                remoteRobot.expandToolWindowGroup("Actions")
+
+                remoteRobot.toolWindowGroupTree().clickRowWithText("Sample.kt", false)
+                Keyboard(remoteRobot).key(KeyEvent.VK_F4)
+                waitFor(ofSeconds(10), errorMessage = "F4 on the member row did not open it") { openTabNames() == listOf("Sample.kt") }
+
+                remoteRobot.toolWindowGroupTree().clickRowWithText("Sample.kt", false)
+                remoteRobot.setClipboardText("nothing copied yet")
+                invokeActionOnToolWindowTree("CopyPaths")
+                waitFor(ofSeconds(10), errorMessage = "Copy Path copied ${remoteRobot.clipboardText()}") {
+                    remoteRobot.clipboardText().endsWith("/fixture-project/Sample.kt")
+                }
+
+                invokeActionOnToolWindowTree("SelectInProjectView")
+                waitFor(ofSeconds(20), errorMessage = "the Project view selected ${projectViewSelection()}") {
+                    projectViewSelection() == listOf("Sample.kt")
+                }
+            } finally {
+                hideProjectView()
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
+     * The model is rebuilt wholesale on every change, so the two pieces of view state Swing throws
+     * away with it — which groups were expanded, and which row was selected — have to be put back.
+     * The change comes from elsewhere, a recolour in a tab's popup, as it would for a user.
+     */
+    @Test
+    fun `a group recoloured from a tab's popup stays expanded and selected in the tree`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                resetTabGroupPalette()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                assignFileToNewGroup("Sample.kt", "Kept")
+                addFileToGroup("Second.kt", "Kept")
+                assignFileToNewGroup("Third.kt", "Unrelated")
+                remoteRobot.expandToolWindowGroup("Kept")
+                remoteRobot.toolWindowGroupTree().clickRowWithText("Kept", false)
+                assertTrue(isToolWindowGroupExpanded("Kept"))
+
+                remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+                remoteRobot.clickPopupItem("Manage Groups…")
+                remoteRobot.popupSubstepItems("Kept", anchor = "Recolour…")
+                remoteRobot.popupSubstepItems("Recolour…", anchor = "Recolour…")
+                waitFor(ofSeconds(10)) { remoteRobot.popupRowSwatches().size == TabGroupPalette.PRESETS.size }
+                remoteRobot.clickPopupItem("Red")
+                val red = TabGroupPalette.PRESETS.first { it.id == "red" }
+                waitFor(ofSeconds(10)) { groupLightRgbFor("Sample.kt") == red.light.rgb and 0xFFFFFF }
+
+                assertTrue(isToolWindowGroupExpanded("Kept"), "the recolour must not collapse the group")
+                assertTrue(
+                    remoteRobot.selectedToolWindowRows().any { it.startsWith("Kept") },
+                    "the recolour must not drop the selection, got ${remoteRobot.selectedToolWindowRows()}",
+                )
+                assertTrue(
+                    toolWindowRowRendering().first().startsWith("swatch:${themedPreset("red").hex()}|Kept"),
+                    "and the row must show the new colour, got ${toolWindowRowRendering()}",
+                )
+            } finally {
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /** "Keep" on the empty-group prompt, seen from the tool window: a 0-file row that can still be deleted later. */
+    @Test
+    fun `a group kept after its last file is removed lists 0 files and still offers Delete Group`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                assignFileToNewGroup("Sample.kt", "Emptied")
+                remoteRobot.expandToolWindowGroup("Emptied")
+
+                remoteRobot.toolWindowGroupTree().findText("Sample.kt").rightClick()
+                remoteRobot.actionMenuItem("Remove from Group").click()
+                dialog("Empty Tab Group") { find<JButtonFixture>(JButtonFixture.byText("Keep")).click() }
+
+                waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().any { it.startsWith("Emptied") && it.contains("0 files") } }
+                remoteRobot.toolWindowGroupTree().findText("Emptied").rightClick()
+                assertTrue(
+                    remoteRobot.contextMenuItemStates().contains("Delete Group=true"),
+                    "a kept empty group must still be deletable, got ${remoteRobot.contextMenuItemStates()}",
+                )
+                Keyboard(remoteRobot).escape()
             } finally {
                 hideTabGroupsToolWindow()
             }

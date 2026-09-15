@@ -121,4 +121,21 @@ class PluginUnloadUiTest {
             }
         }
     }
+
+    /**
+     * The paid build's side of the same question: disabling it cannot happen without a restart, and
+     * the platform says so up front rather than attempting an unload — which is what makes Settings |
+     * Plugins offer "Restart IDE" instead of unloading in place.
+     */
+    @Test
+    fun `the platform requires a restart to disable the paid build`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            assumeTrue(isPaidBuild(), "only a paid build is refused a dynamic unload — see this class's doc")
+            val refusal = unloadWithoutRestartRefusal()
+            assertTrue(
+                refusal != null && refusal.contains("paid plugin"),
+                "expected the platform to refuse unloading a paid plugin without a restart, got: $refusal",
+            )
+        }
+    }
 }

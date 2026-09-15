@@ -1,6 +1,8 @@
 package io.prismtabs.service
 
+import com.intellij.util.xmlb.XmlSerializer
 import io.prismtabs.model.TabGroup
+import io.prismtabs.model.TabGroupState
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
@@ -343,6 +345,69 @@ class TabGroupServiceTest {
         restored.loadState(original.state)
 
         assertEquals(listOf("file:///A.kt", "file:///B.kt"), restored.groupFor("file:///A.kt")?.rememberedTabUrls)
+    }
+
+    @Test
+    fun `a restart brings back every group's name, colours and members`() {
+        val original = TabGroupService()
+        original.assign("file:///A.kt", red.copy(order = 0))
+        original.assign("file:///B.kt", red.copy(order = 0))
+        original.assign("file:///C.kt", blue.copy(order = 1))
+
+        val restarted = restartedFrom(original)
+
+        assertEquals(listOf(red, blue.copy(order = 1)), restarted.groups())
+        assertEquals(setOf("file:///A.kt", "file:///B.kt"), restarted.membersOf("red").toSet())
+        assertEquals(listOf("file:///C.kt"), restarted.membersOf("blue"))
+        assertEquals(red, restarted.groupFor("file:///B.kt"))
+    }
+
+    @Test
+    fun `a restart keeps a group that was left with no members`() {
+        val original = TabGroupService()
+        original.assign("file:///A.kt", red)
+        original.clear("file:///A.kt")
+
+        val restarted = restartedFrom(original)
+
+        assertEquals(listOf(red), restarted.groups())
+        assertEquals(emptyList<String>(), restarted.membersOf("red"))
+    }
+
+    @Test
+    fun `a restart brings back the tabs a group remembers, in order`() {
+        val original = TabGroupService()
+        original.assign("file:///A.kt", red)
+        original.assign("file:///B.kt", red)
+        original.rememberOpenTabs("red", listOf("file:///B.kt", "file:///A.kt"))
+
+        val restarted = restartedFrom(original)
+
+        assertEquals(listOf("file:///B.kt", "file:///A.kt"), restarted.group("red")?.rememberedTabUrls)
+    }
+
+    /** Session-scoped by design: see the doc on `TabGroupService.activeGroupId`. */
+    @Test
+    fun `a restart never brings back the active group`() {
+        val original = TabGroupService()
+        original.assign("file:///A.kt", red)
+        original.setActiveGroup("red")
+
+        val restarted = restartedFrom(original)
+
+        assertEquals(listOf(red), restarted.groups())
+        assertNull(restarted.activeGroupId())
+        assertNull(restarted.activeGroup())
+    }
+
+    /**
+     * What an IDE restart does to this service: its state is written out as XML by the platform's
+     * own serializer, and a fresh instance is handed that XML back. Stricter than passing the state
+     * object across, which would also pass for a field the serializer silently skips.
+     */
+    private fun restartedFrom(service: TabGroupService): TabGroupService {
+        val xml = XmlSerializer.serialize(service.state)
+        return TabGroupService().apply { loadState(XmlSerializer.deserialize(xml, TabGroupState::class.java)) }
     }
 
     @Test

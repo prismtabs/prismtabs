@@ -320,6 +320,17 @@ class TabGroupPopupUiTest {
             remoteRobot.clickPopupItem("Remove from Group")
 
             dialog("Empty Tab Group") {
+                val message = remoteRobot.windowTexts("Empty Tab Group").joinToString(" ")
+                assertTrue(
+                    message.contains("\"Solo\" has no tabs left. Delete the group?"),
+                    "the prompt must name the emptied group and ask about it, got: $message",
+                )
+                assertTrue(findAll<JButtonFixture>(JButtonFixture.byText("Keep")).isNotEmpty(), "the prompt must offer Keep")
+                assertEquals(
+                    "Delete Group",
+                    remoteRobot.defaultButtonOf("Empty Tab Group"),
+                    "Delete Group must be the default button, the one Enter presses",
+                )
                 find<JButtonFixture>(JButtonFixture.byText("Delete Group")).click()
             }
 
@@ -503,5 +514,668 @@ class TabGroupPopupUiTest {
                 toggleActiveGroup("StickyGroup")
             }
         }
+    }
+
+    /**
+     * The swatch row as the user reads it: the "New Group" caption, then all eight presets in order,
+     * each dot painted in its own colour for the current theme. Read off the popup's step, which is
+     * what the renderer paints each row from, so a dot wired to the wrong preset fails here.
+     */
+    @Test
+    fun `the swatch row offers all eight presets, each dot in its own colour`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            resetTabGroupPalette()
+            openFile("Sample.kt")
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+
+            assertEquals("New Group", remoteRobot.popupSeparatorInsetsByCaption().first().first)
+            assertEquals(
+                TabGroupPalette.PRESETS.map { it.label to themedPreset(it.id) },
+                remoteRobot.popupRowSwatches().take(8),
+                "expected the eight presets in order, each with its own colour dot",
+            )
+            Keyboard(remoteRobot).escape()
+        }
+    }
+
+    /**
+     * No click lands in the name prompt before typing: the field has focus on open, so the keyboard
+     * alone replaces the pre-filled name, and Enter accepts it.
+     */
+    @Test
+    fun `the name prompt opens focused, so typing a name and pressing Enter creates the group`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            openFile("Sample.kt")
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            remoteRobot.clickPopupItem("Blue")
+            dialog("New Tab Group")
+
+            waitFor(ofSeconds(10), errorMessage = "the name field never took focus: ${remoteRobot.focusOwner()}") {
+                remoteRobot.focusOwner().let { it.contains("TextField") && it.endsWith("@New Tab Group") }
+            }
+            remoteRobot.typeOverFocusedFieldAndEnter("Typed")
+
+            waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == "Typed" }
+            assertFalse(hasDialog("New Tab Group"), "Enter must close the prompt")
+            assertEquals(1, groupCount())
+        }
+    }
+
+    /** The two other ways out of the name prompt besides its Cancel button, which the test above that covers. */
+    @Test
+    fun `Escape and the title bar's close button both cancel the name prompt`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            openFile("Sample.kt")
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            remoteRobot.clickPopupItem("Red")
+            dialog("New Tab Group")
+            Keyboard(remoteRobot).escape()
+            waitFor(ofSeconds(10)) { !hasDialog("New Tab Group") }
+            assertEquals(0, groupCount(), "Escape must create no group")
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            remoteRobot.clickPopupItem("Green")
+            dialog("New Tab Group")
+            remoteRobot.closeDialogFromTitleBar("New Tab Group")
+            waitFor(ofSeconds(10)) { !hasDialog("New Tab Group") }
+            assertEquals(0, groupCount(), "closing the prompt's window must create no group")
+            assertNull(groupNameFor("Sample.kt"))
+        }
+    }
+
+    /**
+     * The selected tab, coloured from its own right-click: right-clicking does not move the
+     * selection, and the tab paints the group colour at full strength. Clicking away then leaves it
+     * painted about halfway into the strip — the platform's blend for an unselected tab.
+     *
+     * Measured on the painted strip, not on the colour held for the tab: both readings share one
+     * `TabInfo` colour, and only the paint tells them apart.
+     */
+    @Test
+    fun `a group made from the selected tab paints it at full strength, and at half once another tab is selected`(
+        remoteRobot: RemoteRobot,
+    ) {
+        remoteRobot.idea {
+            resetTabGroups()
+            resetTabGroupPalette()
+            hideTabGroupsToolWindow()
+            openFile("Second.kt")
+            openFile("Sample.kt")
+            waitFor(ofSeconds(10)) { selectedTabName() == "Sample.kt" }
+            val strip = paintedTabRgb("Second.kt")
+            val blue = themedPreset("blue")
+
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Blue", name = "Selected")
+
+            assertEquals("Sample.kt", selectedTabName(), "right-clicking the tab must not change the selection")
+            waitFor(ofSeconds(10), errorMessage = "expected ${blue.hex()} at full strength, got ${paintedTabRgb("Sample.kt").hex()}") {
+                rgbClose(blue, paintedTabRgb("Sample.kt"))
+            }
+
+            selectTab("Second.kt")
+            waitFor(ofSeconds(10)) { selectedTabName() == "Second.kt" }
+            val half = halfwayBlend(blue, strip)
+            waitFor(ofSeconds(10), errorMessage = "expected ${half.hex()} once unselected, got ${paintedTabRgb("Sample.kt").hex()}") {
+                rgbClose(half, paintedTabRgb("Sample.kt"), tolerance = 3)
+            }
+        }
+    }
+
+    @Test
+    fun `a group made from a background tab leaves the selection alone and paints that tab at half strength`(
+        remoteRobot: RemoteRobot,
+    ) {
+        remoteRobot.idea {
+            resetTabGroups()
+            resetTabGroupPalette()
+            hideTabGroupsToolWindow()
+            openFile("Sample.kt")
+            openFile("Second.kt")
+            openFile("Third.kt")
+            waitFor(ofSeconds(10)) { selectedTabName() == "Third.kt" }
+            val strip = paintedTabRgb("Second.kt")
+
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Blue", name = "Background")
+
+            assertEquals("Third.kt", selectedTabName(), "assigning a background tab must not select it")
+            val half = halfwayBlend(themedPreset("blue"), strip)
+            waitFor(ofSeconds(10), errorMessage = "expected ${half.hex()}, got ${paintedTabRgb("Sample.kt").hex()}") {
+                rgbClose(half, paintedTabRgb("Sample.kt"), tolerance = 3)
+            }
+            assertTrue(rgbClose(strip, paintedTabRgb("Second.kt")), "the untouched tab must keep the strip's colour")
+        }
+    }
+
+    /**
+     * "New Group" means new: the same dot accepted as-is on two files gives two groups that share a
+     * name — nothing is renumbered and nothing is merged.
+     */
+    @Test
+    fun `accepting the same preset on two files makes two groups, not one`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            openFile("Sample.kt")
+            openFile("Second.kt")
+            listOf("Sample.kt", "Second.kt").forEach { path ->
+                remoteRobot.openTabGroupPopupOn(this, path)
+                remoteRobot.clickPopupItem("Blue")
+                dialog("New Tab Group") { find<JButtonFixture>(JButtonFixture.byText("OK")).click() }
+                waitFor(ofSeconds(10)) { groupNameFor(path) == "Blue" }
+            }
+
+            assertEquals(2, groupCount(), "the second file must start a group of its own")
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            // Hovered with its own row as the anchor: "Blue" is also a swatch in the root list, so it
+            // cannot tell the substep apart. The wait below reads the deepest list, which is the substep.
+            remoteRobot.popupSubstepItems("Manage Groups…", anchor = "Manage Groups…")
+            waitFor(ofSeconds(10), errorMessage = "both groups must be listed under the name each was given, got ${remoteRobot.popupItemTexts()}") {
+                remoteRobot.popupItemTexts().count { it == "Blue" } == 2
+            }
+            repeat(2) { Keyboard(remoteRobot).escape() }
+        }
+    }
+
+    @Test
+    fun `Add to Group lists every group by name, each with its own colour dot`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            resetTabGroupPalette()
+            hideTabGroupsToolWindow()
+            openFile("Sample.kt")
+            openFile("Second.kt")
+            openFile("Third.kt")
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Red", name = "Reds")
+            remoteRobot.createGroupViaPopup(this, "Second.kt", colour = "Cyan", name = "Cyans")
+
+            remoteRobot.openTabGroupPopupOn(this, "Third.kt")
+            remoteRobot.popupSubstepItems("Add to Group…", anchor = "Cyans")
+
+            assertEquals(
+                listOf("Reds" to themedPreset("red"), "Cyans" to themedPreset("cyan")),
+                remoteRobot.popupRowSwatches(),
+            )
+            repeat(2) { Keyboard(remoteRobot).escape() }
+        }
+    }
+
+    @Test
+    fun `picking a group from Add to Group tints the tab at once`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            resetTabGroupPalette()
+            hideTabGroupsToolWindow()
+            openFile("Sample.kt")
+            openFile("Second.kt")
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Pink", name = "Pinks")
+
+            remoteRobot.openTabGroupPopupOn(this, "Second.kt")
+            remoteRobot.clickPopupSubstepItem("Add to Group…", "Pinks")
+
+            val pink = themedPreset("pink")
+            waitFor(ofSeconds(10)) { groupNameFor("Second.kt") == "Pinks" }
+            waitFor(ofSeconds(10), errorMessage = "the strip never took the group's colour for the tab") { tabRgb("Second.kt") == pink }
+            waitFor(ofSeconds(10), errorMessage = "the selected tab never painted ${pink.hex()}") {
+                rgbClose(pink, paintedTabRgb("Second.kt"))
+            }
+        }
+    }
+
+    @Test
+    fun `with no group active the one-click row is not offered`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            assignFileToNewGroup("Second.kt", "Idle")
+            openFile("Sample.kt")
+            assertNull(activeGroupName(), "precondition: no group is active")
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            val rows = remoteRobot.popupItemTexts()
+
+            assertTrue(rows.contains("Add to Group…"), "expected the ordinary list step, got $rows")
+            assertFalse(rows.any { it.startsWith("Add to Group \"") }, "no active group, so no shortcut row, got $rows")
+            Keyboard(remoteRobot).escape()
+        }
+    }
+
+    /**
+     * Removal from both sides: before, the popup names the group and offers the removal; after, the
+     * tab holds no colour of its own, and the popup is back to offering a new group as if the file had
+     * never been in one.
+     */
+    @Test
+    fun `after Remove from Group the tab loses its colour and the popup offers a new group again`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            resetTabGroupPalette()
+            hideTabGroupsToolWindow()
+            openFile("Second.kt")
+            openFile("Sample.kt")
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Yellow", name = "Yellows")
+            addFileToGroup("Second.kt", "Yellows")
+            waitFor(ofSeconds(10)) { tabRgb("Sample.kt") == themedPreset("yellow") }
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            assertTrue(remoteRobot.popupSeparatorInsetsByCaption().any { it.first == "In group: Yellows" })
+            assertTrue(remoteRobot.popupItemTexts().contains("Remove from Group"))
+            remoteRobot.clickPopupItem("Remove from Group")
+
+            waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == null }
+            waitFor(ofSeconds(10), errorMessage = "the tab kept a colour after removal") { tabRgb("Sample.kt") == null }
+            assertFalse(hasDialog("Empty Tab Group"), "a group with a member left must not be offered for deletion")
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            val captions = remoteRobot.popupSeparatorInsetsByCaption().map { it.first }
+            val rows = remoteRobot.popupItemTexts()
+            assertTrue(captions.none { it.startsWith("In group:") }, "no group left to name, got $captions")
+            assertFalse(rows.contains("Remove from Group"), "nothing left to remove, got $rows")
+            assertEquals(TabGroupPalette.PRESETS.map { it.label }, remoteRobot.popupRowSwatches().take(8).map { it.first })
+            Keyboard(remoteRobot).escape()
+        }
+    }
+
+    /**
+     * Rename, keyboard only: the field comes up holding the current name and focused, Enter applies
+     * the new one, every member follows — the caption over "Remove from Group" included — and no
+     * colour moves.
+     */
+    @Test
+    fun `Rename starts from the current name, and Enter renames every member without recolouring`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            resetTabGroupPalette()
+            hideTabGroupsToolWindow()
+            openFile("Sample.kt")
+            openFile("Second.kt")
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Green", name = "Before")
+            remoteRobot.openTabGroupPopupOn(this, "Second.kt")
+            remoteRobot.clickPopupSubstepItem("Add to Group…", "Before")
+            waitFor(ofSeconds(10)) { tabRgb("Second.kt") == themedPreset("green") }
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            remoteRobot.clickPopupItem("Manage Groups…")
+            remoteRobot.clickPopupSubstepItem("Before", "Rename…")
+            dialog("Rename Tab Group") {
+                assertEquals("Before", find<JTextFieldFixture>(JTextFieldFixture.byType()).text)
+            }
+            waitFor(ofSeconds(10), errorMessage = "the rename field never took focus: ${remoteRobot.focusOwner()}") {
+                remoteRobot.focusOwner().let { it.contains("TextField") && it.endsWith("@Rename Tab Group") }
+            }
+            remoteRobot.typeOverFocusedFieldAndEnter("After")
+
+            waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == "After" && groupNameFor("Second.kt") == "After" }
+            val green = themedPreset("green")
+            assertEquals(green, tabRgb("Sample.kt"), "renaming must not recolour a member")
+            assertEquals(green, tabRgb("Second.kt"), "renaming must not recolour a member")
+
+            remoteRobot.openTabGroupPopupOn(this, "Second.kt")
+            assertTrue(
+                remoteRobot.popupSeparatorInsetsByCaption().any { it.first == "In group: After" },
+                "the caption must carry the new name",
+            )
+            Keyboard(remoteRobot).escape()
+        }
+    }
+
+    @Test
+    fun `cancelling Rename keeps the old name, whatever was typed`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            openFile("Sample.kt")
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Grey", name = "Settled")
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            remoteRobot.clickPopupItem("Manage Groups…")
+            remoteRobot.clickPopupSubstepItem("Settled", "Rename…")
+            dialog("Rename Tab Group") {
+                find<JTextFieldFixture>(JTextFieldFixture.byType()).text = "Discarded"
+                find<JButtonFixture>(JButtonFixture.byText("Cancel")).click()
+            }
+
+            waitFor(ofSeconds(10)) { !hasDialog("Rename Tab Group") }
+            assertEquals("Settled", groupNameFor("Sample.kt"))
+        }
+    }
+
+    /**
+     * Recolour's list is the eight presets with their dots, and a pick applies there and then — to
+     * the open member's tab, and to a member with no tab at all, which shows the new colour the moment
+     * it is opened.
+     */
+    @Test
+    fun `Recolour offers the eight presets and repaints every member, open or not`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            resetTabGroupPalette()
+            hideTabGroupsToolWindow()
+            openFile("Sample.kt")
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Grey", name = "Paint")
+            addFileToGroup("Third.kt", "Paint")
+            assertFalse(openTabNames().contains("Third.kt"), "precondition: one member has no tab")
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            remoteRobot.clickPopupItem("Manage Groups…")
+            remoteRobot.popupSubstepItems("Paint", anchor = "Recolour…")
+            // Every preset label is also a swatch in the root list, so none can anchor the recolour
+            // step; the wait reads the deepest list, which is that step once it has opened.
+            remoteRobot.popupSubstepItems("Recolour…", anchor = "Recolour…")
+            val presets = TabGroupPalette.PRESETS.map { it.label to themedPreset(it.id) }
+            waitFor(ofSeconds(10), errorMessage = "expected the recolour step's eight presets, got ${remoteRobot.popupRowSwatches()}") {
+                remoteRobot.popupRowSwatches() == presets
+            }
+            remoteRobot.clickPopupItem("Purple")
+
+            val purple = TabGroupPalette.PRESETS.first { it.id == "purple" }
+            waitFor(ofSeconds(10)) { groupLightRgbFor("Sample.kt") == purple.light.rgb and 0xFFFFFF }
+            assertFalse(hasDialog("Recolour"), "recolouring must not ask for confirmation")
+            assertEquals(purple.light.rgb and 0xFFFFFF, groupLightRgbFor("Third.kt"))
+            assertEquals(purple.dark.rgb and 0xFFFFFF, groupDarkRgbFor("Third.kt"))
+            waitFor(ofSeconds(10), errorMessage = "the open member's tab was not repainted") { tabRgb("Sample.kt") == themedPreset("purple") }
+
+            openFile("Third.kt")
+            waitFor(ofSeconds(10), errorMessage = "the member opened afterwards did not show the new colour") {
+                runCatching { tabRgb("Third.kt") == themedPreset("purple") }.getOrDefault(false)
+            }
+        }
+    }
+
+    @Test
+    fun `marking a group active turns its item into Clear Active Group`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                assignFileToNewGroup("Sample.kt", "Flag")
+                openFile("Sample.kt")
+
+                remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+                remoteRobot.clickPopupItem("Manage Groups…")
+                remoteRobot.clickPopupSubstepItem("Flag", "Mark as Active Group")
+                waitFor(ofSeconds(10)) { activeGroupName() == "Flag" }
+
+                remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+                remoteRobot.clickPopupItem("Manage Groups…")
+                val items = remoteRobot.popupSubstepItems("Flag (active)", anchor = "Delete Group")
+                assertTrue(items.contains("Clear Active Group"), "expected the item to offer clearing, got $items")
+                assertFalse(items.contains("Mark as Active Group"), "the marking item must be gone, got $items")
+                repeat(3) { Keyboard(remoteRobot).escape() }
+            } finally {
+                clearActiveGroup()
+            }
+        }
+    }
+
+    @Test
+    fun `marking a second group active clears the first`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                assignFileToNewGroup("Sample.kt", "Alpha")
+                assignFileToNewGroup("Second.kt", "Beta")
+                openFile("Sample.kt")
+
+                listOf("Alpha", "Beta").forEach { group ->
+                    remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+                    remoteRobot.clickPopupItem("Manage Groups…")
+                    remoteRobot.clickPopupSubstepItem(group, "Mark as Active Group")
+                    waitFor(ofSeconds(10)) { activeGroupName() == group }
+                }
+
+                remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+                val listed = remoteRobot.popupSubstepItems("Manage Groups…", anchor = "Beta (active)")
+                assertTrue(listed.contains("Alpha"), "Alpha must no longer be marked active, got $listed")
+                assertFalse(listed.contains("Alpha (active)"), "only one group may be active, got $listed")
+                repeat(2) { Keyboard(remoteRobot).escape() }
+
+                openFile("Third.kt")
+                waitFor(ofSeconds(10)) { groupNameFor("Third.kt") == "Beta" }
+            } finally {
+                clearActiveGroup()
+            }
+        }
+    }
+
+    /**
+     * Auto-join end to end, both directions, through the popup items a user uses: a file opened while
+     * the group is active joins it and its tab takes the colour; once cleared, the next file opened
+     * joins nothing.
+     */
+    @Test
+    fun `a file opened while a group is active joins and takes its colour, and none does once it is cleared`(
+        remoteRobot: RemoteRobot,
+    ) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                assignFileToNewGroup("Sample.kt", "Auto", lightRgb = 0xAECBFA, darkRgb = 0x2E5C9C)
+                openFile("Sample.kt")
+
+                remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+                remoteRobot.clickPopupItem("Manage Groups…")
+                remoteRobot.clickPopupSubstepItem("Auto", "Mark as Active Group")
+                waitFor(ofSeconds(10)) { activeGroupName() == "Auto" }
+
+                openFile("Second.kt")
+                waitFor(ofSeconds(10)) { groupNameFor("Second.kt") == "Auto" }
+                waitFor(ofSeconds(10), errorMessage = "the auto-joined tab never took the group's colour") {
+                    runCatching { tabRgb("Second.kt") == themed(0xAECBFA, 0x2E5C9C) }.getOrDefault(false)
+                }
+
+                remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+                remoteRobot.clickPopupItem("Manage Groups…")
+                remoteRobot.clickPopupSubstepItem("Auto (active)", "Clear Active Group")
+                waitFor(ofSeconds(10)) { activeGroupName() == null }
+
+                openFile("Third.kt")
+                waitFor(ofSeconds(5)) { openTabNames().contains("Third.kt") }
+                assertNull(groupNameFor("Third.kt"), "a file opened after clearing must not join any group")
+            } finally {
+                clearActiveGroup()
+            }
+        }
+    }
+
+    /**
+     * The file list's shape: titled after its group, rows ordered by directory and then name, each
+     * row the file's name followed by its project-relative directory in grey.
+     */
+    @Test
+    fun `the file list is titled after its group and sorts its greyed directories`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                silenceAddToVcsConfirmation()
+                resetTabGroups()
+                hideTabGroupsToolWindow()
+                createFixtureFile("files-list/beta/Alpha.txt")
+                createFixtureFile("files-list/alpha/Zeta.txt")
+                createFixtureFile("files-list/alpha/Beta.txt")
+                openFile("Sample.kt")
+                remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Blue", name = "Sorted")
+                listOf("files-list/beta/Alpha.txt", "files-list/alpha/Zeta.txt", "files-list/alpha/Beta.txt")
+                    .forEach { addFileToGroup(it, "Sorted") }
+
+                remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+                remoteRobot.clickPopupItem("Manage Groups…")
+                remoteRobot.clickPopupSubstepItem("Sorted", "Files…")
+                remoteRobot.chooserPopupRows()
+
+                assertTrue(remoteRobot.windowTexts().contains("Files in Sorted"), "the list must be titled after its group")
+                assertEquals(
+                    listOf(
+                        "Sample.kt{plain}",
+                        "Beta.txt{plain}¦  files-list/alpha{grey}",
+                        "Zeta.txt{plain}¦  files-list/alpha{grey}",
+                        "Alpha.txt{plain}¦  files-list/beta{grey}",
+                    ),
+                    remoteRobot.chooserRowFragments(),
+                )
+                Keyboard(remoteRobot).escape()
+            } finally {
+                deleteFixtureFile("files-list")
+            }
+        }
+    }
+
+    @Test
+    fun `choosing a member that is already open in the file list selects its tab rather than opening another`(
+        remoteRobot: RemoteRobot,
+    ) {
+        remoteRobot.idea {
+            resetTabGroups()
+            hideTabGroupsToolWindow()
+            openFile("Sample.kt")
+            openFile("Second.kt")
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Red", name = "Focus")
+            addFileToGroup("Second.kt", "Focus")
+            waitFor(ofSeconds(10)) { selectedTabName() == "Second.kt" }
+
+            remoteRobot.openTabGroupPopupOn(this, "Second.kt")
+            remoteRobot.clickPopupItem("Manage Groups…")
+            remoteRobot.clickPopupSubstepItem("Focus", "Files…")
+            remoteRobot.clickChooserPopupItem("Sample.kt")
+
+            waitFor(ofSeconds(10)) { selectedTabName() == "Sample.kt" }
+            assertEquals(listOf("Sample.kt", "Second.kt"), openTabNames().sorted(), "no second tab may open for the same file")
+        }
+    }
+
+    /**
+     * Delete Group from the popup asks first, with concrete buttons — Delete and Cancel, not a bare
+     * Yes/No — and Cancel changes nothing.
+     */
+    @Test
+    fun `Delete Group from the popup asks with Delete and Cancel, and Cancel keeps the group`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            resetTabGroupPalette()
+            hideTabGroupsToolWindow()
+            openFile("Sample.kt")
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Purple", name = "Keeper")
+
+            remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+            remoteRobot.clickPopupItem("Manage Groups…")
+            remoteRobot.clickPopupSubstepItem("Keeper", "Delete Group")
+            dialog("Delete Tab Group") {
+                assertTrue(findAll<JButtonFixture>(JButtonFixture.byText("Delete")).isNotEmpty(), "expected a Delete button")
+                assertTrue(findAll<JButtonFixture>(JButtonFixture.byText("Yes")).isEmpty(), "no generic Yes button")
+                find<JButtonFixture>(JButtonFixture.byText("Cancel")).click()
+            }
+
+            waitFor(ofSeconds(10)) { !hasDialog("Delete Tab Group") }
+            assertEquals("Keeper", groupNameFor("Sample.kt"))
+            assertEquals(1, groupCount())
+            assertEquals(themedPreset("purple"), tabRgb("Sample.kt"), "a cancelled delete must leave the tint alone")
+        }
+    }
+
+    @Test
+    fun `confirming Delete Group untints every member and drops the group from the popup and the tool window`(
+        remoteRobot: RemoteRobot,
+    ) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                resetTabGroupPalette()
+                hideTabGroupsToolWindow()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Cyan", name = "Doomed")
+                remoteRobot.openTabGroupPopupOn(this, "Second.kt")
+                remoteRobot.clickPopupSubstepItem("Add to Group…", "Doomed")
+                assignFileToNewGroup("Third.kt", "Other")
+                waitFor(ofSeconds(10)) { tabRgb("Second.kt") == themedPreset("cyan") }
+
+                remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+                remoteRobot.clickPopupItem("Manage Groups…")
+                remoteRobot.clickPopupSubstepItem("Doomed", "Delete Group")
+                dialog("Delete Tab Group") { find<JButtonFixture>(JButtonFixture.byText("Delete")).click() }
+
+                waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == null && groupNameFor("Second.kt") == null }
+                waitFor(ofSeconds(10), errorMessage = "a deleted group's members kept their tint") {
+                    tabRgb("Sample.kt") == null && tabRgb("Second.kt") == null
+                }
+
+                remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+                val listed = remoteRobot.popupSubstepItems("Manage Groups…", anchor = "Other")
+                assertTrue(listed.none { it.startsWith("Doomed") }, "the popup must no longer list it, got $listed")
+                repeat(2) { Keyboard(remoteRobot).escape() }
+
+                val rows = remoteRobot.toolWindowGroupRows()
+                assertTrue(rows.none { it.contains("Doomed") } && rows.any { it.contains("Other") }, "got $rows")
+            } finally {
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
+     * The one delete that loses more than an assignment: a hidden group takes its record of what to
+     * reopen with it, and the real dialog says so — asserted on the rendered message, where
+     * `DeleteConfirmationMessageTest` can only pin the string.
+     */
+    @Test
+    fun `deleting a hidden group warns that the tabs it would reopen will be forgotten`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                hideTabGroupsToolWindow()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                openFile("Third.kt")
+                assignFileToNewGroup("Sample.kt", "Shelved")
+                addFileToGroup("Second.kt", "Shelved")
+                setGroupHidden("Shelved", hidden = true)
+                waitFor(ofSeconds(10)) { openTabNames() == listOf("Third.kt") }
+
+                remoteRobot.openTabGroupPopupOn(this, "Third.kt")
+                remoteRobot.clickPopupItem("Manage Groups…")
+                remoteRobot.clickPopupSubstepItem("Shelved", "Delete Group")
+                dialog("Delete Tab Group") {
+                    val message = remoteRobot.windowTexts("Delete Tab Group").joinToString(" ")
+                    assertTrue(message.contains("Delete \"Shelved\"? Its files will be unassigned."), "got: $message")
+                    assertTrue(message.contains("This group is hidden. The 2 tabs it would reopen will be forgotten."), "got: $message")
+                    find<JButtonFixture>(JButtonFixture.byText("Cancel")).click()
+                }
+                waitFor(ofSeconds(10)) { !hasDialog("Delete Tab Group") }
+            } finally {
+                setGroupHidden("Shelved", hidden = false)
+            }
+        }
+    }
+
+    /** The empty-group prompt's second trigger, reached through a preset dot rather than "Add to Group…". */
+    @Test
+    fun `starting a new group from a group's last member offers to delete the group it left`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            openFile("Sample.kt")
+            remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Blue", name = "Origin")
+
+            remoteRobot.createGroupViaPopupExpectingPrompt(this, "Sample.kt", colour = "Green", name = "Destination")
+            dialog("Empty Tab Group") {
+                val message = remoteRobot.windowTexts("Empty Tab Group").joinToString(" ")
+                assertTrue(message.contains("\"Origin\" has no tabs left"), "the prompt must name the group left behind, got: $message")
+                find<JButtonFixture>(JButtonFixture.byText("Delete Group")).click()
+            }
+
+            waitFor(ofSeconds(10)) { groupCount() == 1 }
+            assertEquals("Destination", groupNameFor("Sample.kt"))
+        }
+    }
+}
+
+/**
+ * [createGroupViaPopup] for a file that is already the last member of another group: the name prompt
+ * is accepted, but the caller handles the empty-group prompt that follows, so nothing here waits on
+ * the assignment — it only lands once that modal is answered.
+ */
+private fun RemoteRobot.createGroupViaPopupExpectingPrompt(ideaFrame: IdeaFrame, path: String, colour: String, name: String) {
+    openTabGroupPopupOn(ideaFrame, path)
+    clickPopupItem(colour)
+    ideaFrame.dialog("New Tab Group") {
+        find<JTextFieldFixture>(JTextFieldFixture.byType()).text = name
+        find<JButtonFixture>(JButtonFixture.byText("OK")).click()
     }
 }

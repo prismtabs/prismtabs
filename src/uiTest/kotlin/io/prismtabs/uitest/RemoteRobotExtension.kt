@@ -15,6 +15,9 @@ import java.io.File
  * and, on failure — but not on a skip, see [afterTestExecution] — saves a screenshot to
  * `build/reports`, the only debugging aid available once the IDE under test has already moved on.
  *
+ * A test that passes its own assertions still fails if PrismTabs logged an error (`SEVERE`) to
+ * `idea.log` while it ran — see [failOnPrismTabsErrors].
+ *
  * [beforeTestExecution] also entitles the plugin's paid features before every test — see
  * [IdeaFrame.simulateEntitled]. Since `plugin.xml` gained its `<product-descriptor>` the sandbox
  * boots as a paid build holding no licence, so without this the whole suite would run against the
@@ -45,6 +48,8 @@ class RemoteRobotExtension : BeforeTestExecutionCallback, AfterTestExecutionCall
         remoteRobot
 
     override fun beforeTestExecution(context: ExtensionContext) {
+        context.getStore(NAMESPACE).put(LOG_OFFSET, remoteRobot.ideaLogLength())
+
         // Dismiss anything a previous *failed* test left open. A half-finished TabGroupPopup keeps
         // a modal-ish cascade of ListPopup windows on screen, and those swallow the next test's
         // tab right-click — which then fails as a WaitForConditionTimeoutException on
@@ -117,7 +122,11 @@ class RemoteRobotExtension : BeforeTestExecutionCallback, AfterTestExecutionCall
      * and therefore on top, which is what a failing popup test needs to show.
      */
     override fun afterTestExecution(context: ExtensionContext) {
-        val outcome = context.executionException.orElse(null) ?: return
+        val outcome = context.executionException.orElse(null)
+        if (outcome == null) {
+            failOnPrismTabsErrors(context)
+            return
+        }
         // A skipped test is not a failed one. JUnit signals an `assumeTrue` opt-out by throwing
         // TestAbortedException, which arrives in executionException exactly like a real failure —
         // so without this guard every self-gating class photographs a perfectly idle IDE into
@@ -170,5 +179,27 @@ class RemoteRobotExtension : BeforeTestExecutionCallback, AfterTestExecutionCall
         File("build/reports").apply { mkdirs() }
             .resolve("${context.requiredTestMethod.name}.png")
             .writeBytes(bytes)
+    }
+
+    /**
+     * Fails a test that passed its own assertions but left a PrismTabs error (`SEVERE`) in `idea.log` —
+     * the "no stray errors" check a manual pass makes by watching the log, made for every automated
+     * flow instead. Only this test's slice of the log is read, from where [beforeTestExecution] noted
+     * its length, and only entries that name the plugin count: the sandbox has errors of its own that
+     * are documented in README "Expected sandbox noise".
+     *
+     * Skipped for a test that already failed, whose own failure is the more useful report.
+     */
+    private fun failOnPrismTabsErrors(context: ExtensionContext) {
+        val offset = context.getStore(NAMESPACE).get(LOG_OFFSET, Long::class.javaObjectType) ?: return
+        val errors = prismTabsErrors(remoteRobot.ideaLogFrom(offset))
+        if (errors.isNotEmpty()) {
+            throw AssertionError("PrismTabs logged ${errors.size} error(s) during this test:\n\n" + errors.joinToString("\n\n"))
+        }
+    }
+
+    private companion object {
+        val NAMESPACE: ExtensionContext.Namespace = ExtensionContext.Namespace.create(RemoteRobotExtension::class.java)
+        const val LOG_OFFSET = "ideaLogOffset"
     }
 }
