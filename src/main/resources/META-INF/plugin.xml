@@ -9,14 +9,20 @@
          product-descriptor makes the platform disable the whole plugin instead once the register
          dialog is dismissed, verified live under runIde.
 
-         release-date is listing metadata, not validated against the actual publish date — bump it
-         to the day this is actually tagged and published (see gap doc item 1). release-version is
-         NOT free-form: the Plugin Verifier rejects fewer than two digits outright ("The
-         <release-version> parameter (1) format is invalid"), and the Marketplace reads it as the
-         version boundary a licence is sold up to. It is pluginVersion's first two components with
-         the dot dropped — 1.4.14 -> 14 — so it moves with a minor bump and stays put across patch
-         releases, which is what keeps a patch free to existing subscribers. Keep it in step with
-         gradle.properties' pluginVersion. -->
+         release-date and release-version identify a *major release* in the Marketplace's sense and
+         move together, only when one is cut: "subsequent minor updates (e.g. 2024.1.1, 2024.1.2,
+         2024.1.x) should have the same release-date and release-version" (Marketplace docs, "Add
+         required parameters"). Changing them resets every user's trial, so PrismTabs cuts a major
+         release deliberately — roughly once a year — and ships features in between as x.y.Z
+         updates; resetting on every feature release would hand a non-paying user the paid tier
+         for a trial's length every few months. release-date is the day that major release is
+         published; the value here is a placeholder until the first one (see gap doc item 1).
+
+         release-version is NOT free-form: the Plugin Verifier rejects fewer than two digits
+         outright ("The <release-version> parameter (1) format is invalid"), and the Marketplace
+         reads its last digit as a separate number (20241 -> 2024 and 1). It is pluginVersion's
+         first two components with the dot dropped — 1.4.14 -> 14 — so the minor component must
+         stay a single digit: after 1.9 comes 2.0. ProductDescriptorTest enforces both. -->
     <product-descriptor code="PPRISMTABS" release-date="20260905" release-version="14" optional="true"/>
 
     <description><![CDATA[
@@ -43,7 +49,7 @@
             <li>"Files…" lists everything in a group, open tab or not, and reopens any of it</li>
             <li>Assignments persist across restarts and survive file renames and moves</li>
         </ul>
-        <b>Paid — a 30-day free trial on every new install, then a subscription</b>
+        <b>Paid — a 14-day free trial, then a subscription</b>
         <ul>
             <li>The PrismTabs tool window for managing every group at a glance, each group
                 expanding to the files it holds</li>

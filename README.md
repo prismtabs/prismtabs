@@ -722,7 +722,7 @@ how the check was driven, not evidence of a problem in the plugin being checked.
 
 **Decision:** PrismTabs will be sold under JetBrains Marketplace's **Freemium** model, priced as a
 **Yearly Subscription without a Fallback License** at **$14/year personal, $29/year per user
-commercial**, with the standard **30-day trial** of the paid features. This supersedes an earlier Perpetual License decision (see git
+commercial**, with a **14-day trial** of the paid features. This supersedes an earlier Perpetual License decision (see git
 history) — reasoning below.
 
 **Why not Perpetual:** the original reasoning was "the plugin has no backend/hosting cost and the
@@ -751,14 +751,26 @@ punish a mid-task user who needs one more, which is exactly the "too limited" ou
   ("Files…", see [Group membership](#group-membership)) — the last two are correctness features
   (your assignments survive a rename; what is in a group is knowable at all), not premium ones, so
   they stay free.
-- **Paid** (active subscription, or during the 30-day trial): the PrismTabs tool window,
+- **Paid** (active subscription, or during the 14-day trial): the PrismTabs tool window,
   hide/show, active/sticky-group auto-join on newly opened files (Phase 4's tool window +
   Phase 3's inheritance rule), and custom palette editing (Phase 5's settings page). These are the
   workflow-multiplier features a daily user builds a habit around, not ones a casual tab-colourer
   misses.
-- **Trial:** new installs get the full paid feature set for 30 days (JetBrains' "reverse trial"
+- **Trial:** users get the full paid feature set for 14 days (JetBrains' "reverse trial"
   pattern), then silently downgrade to the free tier above if not subscribed — never a hard
-  lockout.
+  lockout. Decided 2026-09-15, down from the 30-day default: 15 days was the intent, but the
+  Marketplace only offers 7, 10, 14 or 30.
+- **Trial resets and release cadence** (decided 2026-09-15): the Marketplace resets every user's
+  trial whenever `<product-descriptor>`'s `release-version` changes, lapsed subscribers and
+  never-paid users included. With features landing every few months, resetting on each one would
+  give a user who never pays the paid tier for a trial's length every release. So PrismTabs follows
+  the Marketplace's own model instead: the first two components of `pluginVersion` (and with them
+  `release-version` and `release-date`) move only on a deliberately cut **major release**, about
+  once a year, and features in between ship as third-component updates (1.4.14 → 1.4.15). This
+  departs from semantic versioning's "patch = fixes only" on purpose: the Marketplace's model has
+  every update within a major release share one `release-version`, and a version number that
+  followed semantic versioning would have to break that on every feature. The procedure is in
+  `docs/release-readiness-gaps.md` item 3.
 
 Done so far, none of it published anywhere:
 
@@ -841,8 +853,9 @@ Done so far, none of it published anywhere:
 `<product-descriptor code="PPRISMTABS" release-date="20260905" release-version="14" optional="true"/>`
 on 2026-09-05, which armed every gate above. `release-date` is a placeholder until the real publish
 day, and `release-version` must stay in step with `pluginVersion` — it is the first two components
-with the dot dropped, and fewer than two digits makes the built zip an invalid plugin that
-`verifyPlugin` refuses to check at all. Both are covered by `docs/release-readiness-gaps.md` item 1. It also means `runIde` and `runIdeForUiTests` now
+with the dot dropped, it moves only on a major release (see "Trial resets and release cadence"
+above), and fewer than two digits makes the built zip an invalid plugin that `verifyPlugin` refuses
+to check at all. Both are covered by `docs/release-readiness-gaps.md` item 1. It also means `runIde` and `runIdeForUiTests` now
 behave as an unlicensed paid build, so anything exercising a paid feature by hand needs the trial or
 a licence first, and the uiTest suite entitles itself before each test.
 
@@ -862,7 +875,7 @@ a licence first, and the uiTest suite entitles itself before each test.
 3. Upload the plugin (first release, not an update), then in **Sales Info → Add to Marketplace**:
    confirm/register product code `PPRISMTABS`, choose **Freemium**, then the **Yearly Subscription
    without a Fallback License** scheme, set the personal price to $14/year and the commercial
-   price to $29/year per user, leave the trial at its 30-day default.
+   price to $29/year per user, and set the trial to 14 days (not the 30-day default).
 4. Write the actual listing content — tagline, full description, ≥1200×760 screenshots, tags. Not
    started; `plugin.xml`'s `<description>` is a reasonable first draft of the prose but the
    screenshots and tags still need doing.
