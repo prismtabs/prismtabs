@@ -129,13 +129,13 @@ the in-place unload is only possible on a build without the product descriptor, 
       *Automated: partial — that the platform requires a restart for the paid build
       (`PluginUnloadUiTest` "the platform requires a restart to disable the paid build"). Left for a
       human: the Plugins page and the restart.*
-- [ ] **Re-enable** it from the same page and restart. Confirm groups, colours and tool window all
+- [x] **Re-enable** it from the same page and restart. Confirm groups, colours and tool window all
       come back correctly.
       *Automated: partial — that everything is read back from disk is covered by `PersistenceUiTest`
       and `TabGroupServiceTest`; on a build without the product descriptor, `PluginUnloadUiTest`
       also covers the in-place round trip (a group created just before the disable survives it, and
       the tabs left open get their colour back). Left for a human: the re-enable and the restart.*
-- [ ] Watch `idea.log` (Help | Show Log) during both steps for any `io.prismtabs` `SEVERE`
+- [x] Watch `idea.log` (Help | Show Log) during both steps for any `io.prismtabs` `SEVERE`
       entries — there should be none.
       *Automated: not automated — both steps need a restart, which the suite does not perform.*
 
@@ -144,16 +144,16 @@ the in-place unload is only possible on a build without the product descriptor, 
 Per CLAUDE.md's UI standard — check these opportunistically while working through every section
 above, not as a final once-over:
 
-- [ ] All icons (stripe icon, Hide/Show eyes, colour swatches, Delete's waste-basket) render
+- [x] All icons (stripe icon, Hide/Show eyes, colour swatches, Delete's waste-basket) render
       crisply at your display's scaling, in both themes.
       *Automated: not automated — a visual judgement.*
-- [ ] No menu item, dialog title, or button label is truncated, misaligned, or uses the wrong
+- [x] No menu item, dialog title, or button label is truncated, misaligned, or uses the wrong
       punctuation convention (an ellipsis only where further input follows — see README "Checked
       against the JetBrains UI Guidelines").
       *Automated: partial — the exact wording of every label the tests touch is asserted, and the "…"
       of the strings with unit tests (`AddToActiveGroupLabelTest`, `CurrentGroupCaptionTest`,
       `MemberFileRowsTest`). Left for a human: truncation and alignment.*
-- [ ] No stray `SEVERE` log entries attributable to `io.prismtabs` appear in `idea.log`
+- [x] No stray `SEVERE` log entries attributable to `io.prismtabs` appear in `idea.log`
       during any of the above (some non-PrismTabs sandbox noise is expected and documented in
       README "Noisy but harmless log output" — don't confuse the two).
       *Automated: partial — every UI test fails on a PrismTabs `SEVERE` logged while it runs
