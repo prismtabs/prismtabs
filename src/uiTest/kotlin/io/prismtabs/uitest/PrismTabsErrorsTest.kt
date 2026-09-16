@@ -27,7 +27,7 @@ class PrismTabsErrorsTest {
     fun `an error logged by the plugin, or blamed on it, is PrismTabs'`() {
         val log = """
             2026-09-15 00:15:32,389 [117718] SEVERE - #io.prismtabs.ui.ToggleActiveAction - measured: the full category
-            2026-09-14 23:50:00,000 [1] SEVERE - #i.p.s.TabOpener - Could not open a tab group's files
+            2026-09-14 23:50:00,000 [1] SEVERE - #i.p.s.TabStrip - Could not open a tab group's files
             2026-09-14 23:50:00,001 [2] SEVERE - #c.i.o.a.TransactionGuardImpl - Plugin to blame: PrismTabs version: 1.4.14
         """.trimIndent()
 
@@ -50,8 +50,8 @@ class PrismTabsErrorsTest {
 
     @Test
     fun `warnings naming the plugin are not errors`() {
-        val log = "2026-09-14 23:50:00,000 [1]   WARN - #i.p.s.TabOpener - Could not open a tab group's files\n" +
-            "\tat io.prismtabs.service.TabOpener.open(TabOpener.kt:40)"
+        val log = "2026-09-14 23:50:00,000 [1]   WARN - #i.p.s.TabStrip - Could not open a tab group's files\n" +
+            "\tat io.prismtabs.service.TabStrip.open(TabStrip.kt:40)"
 
         assertEquals(emptyList<String>(), prismTabsErrors(log))
     }

@@ -24,7 +24,7 @@ import java.util.jar.JarFile
  *
  * That is not hypothetical: 1.4.14 shipped `FileEditorOpenOptions()` built from Kotlin, whose
  * synthetic constructor gained a parameter on 2025.2, another on 2025.3 and another on 2026.1. Every
- * IDE from 2025.2 on threw on the first tab [TabOpener] tried to open, which — being an `Error` —
+ * IDE from 2025.2 on threw on the first tab [TabStrip] (then `TabOpener`) tried to open, which — being an `Error` —
  * killed the coroutine draining its queue, so Show Group and "open this member from the tree" did
  * nothing at all for the rest of the session. [PlatformOpenOptions] is the fix and explains the
  * shape of it; this is what stops the next one, in a second, rather than after eight IDE downloads

@@ -30,8 +30,8 @@ import io.prismtabs.service.TabGroupNotifier
 import io.prismtabs.service.TabGroupPaletteService
 import io.prismtabs.service.TabGroupService
 import io.prismtabs.service.TabGroupVisibility
-import io.prismtabs.service.TabOpener
 import io.prismtabs.service.TabRepaint
+import io.prismtabs.service.TabStrip
 import java.awt.Color
 import java.awt.Component
 import java.util.UUID
@@ -644,8 +644,8 @@ internal fun chooseMemberFile(
     }
     // Not `OpenFileDescriptor.navigate` and not `FileEditorManager.openFile`: both open the editor
     // synchronously, on this plugin's own stack, which pins its class loader for the life of the
-    // editor. See [io.prismtabs.service.TabOpener].
-    project.service<TabOpener>().open(listOf(file), requestFocus = true)
+    // editor. See [io.prismtabs.service.TabStrip].
+    project.service<TabStrip>().open(listOf(file), requestFocus = true)
 }
 
 /**

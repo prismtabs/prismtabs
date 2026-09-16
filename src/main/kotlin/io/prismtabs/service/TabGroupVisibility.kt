@@ -25,9 +25,9 @@ import io.prismtabs.model.TabGroup
  * Lives outside [TabGroupService], not as methods on it, for the same reason [TabRepaint] does:
  * `FileEditorManager` only exists inside a live IDE, and the service stays plain-JUnit testable.
  * Every call made *here* is declared on the public `FileEditorManager` interface itself
- * (`getOpenFiles()`, `closeFile(VirtualFile)` — verified via `javap` on 2024.2), not an impl class,
- * so no cast is needed. Reopening goes through [TabOpener] rather than `openFile` directly, for the
- * class-loader reason set out there; this is one of the two call sites that reason was found at.
+ * (`getOpenFiles()` — verified via `javap` on 2024.2), not an impl class, so no cast is needed.
+ * Closing and reopening go through [TabStrip] rather than `closeFile`/`openFile` directly, for the
+ * class-loader reason set out there; both directions were found leaking it from here.
  */
 internal object TabGroupVisibility {
 
@@ -52,6 +52,9 @@ internal object TabGroupVisibility {
     /**
      * Closes every open tab belonging to [group], after which [isHidden] reports it hidden.
      *
+     * The tabs close asynchronously, through [TabStrip], so the tool window is told once they have
+     * gone rather than straight away — what it draws is read off the tab strip, as for [show].
+     *
      * Recording the exact set being closed is what makes Hide followed by Show an identity even for
      * a group only half of whose files were open. Nothing in the close loop can undo it:
      * [io.prismtabs.listener.TabGroupFileListener] maintains [TabGroup.rememberedTabUrls] on editor
@@ -62,10 +65,13 @@ internal object TabGroupVisibility {
         val openUrls = openMemberUrls(project, service, group.id)
         if (openUrls.isEmpty()) return
         service.rememberOpenTabs(group.id, openUrls)
-        val fileEditorManager = FileEditorManager.getInstance(project)
         val virtualFileManager = VirtualFileManager.getInstance()
-        openUrls.forEach { url -> virtualFileManager.findFileByUrl(url)?.let { fileEditorManager.closeFile(it) } }
-        TabGroupNotifier.notifyChanged(project)
+        val files = openUrls.mapNotNull { virtualFileManager.findFileByUrl(it) }
+        if (files.isEmpty()) {
+            TabGroupNotifier.notifyChanged(project)
+            return
+        }
+        project.service<TabStrip>().close(files) { TabGroupNotifier.notifyChanged(project) }
     }
 
     /**
@@ -94,8 +100,8 @@ internal object TabGroupVisibility {
             TabGroupNotifier.notifyChanged(project)
             return
         }
-        // Reopening is asynchronous — see [TabOpener]. The notification has to wait for it, because
+        // Reopening is asynchronous — see [TabStrip]. The notification has to wait for it, because
         // what the tool window draws (`isHidden`) is read off the tab strip.
-        project.service<TabOpener>().open(files, requestFocus = false) { TabGroupNotifier.notifyChanged(project) }
+        project.service<TabStrip>().open(files, requestFocus = false) { TabGroupNotifier.notifyChanged(project) }
     }
 }

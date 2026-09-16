@@ -19,13 +19,17 @@ import java.time.Duration.ofSeconds
  * 862 MB heap snapshot, and an IDE that wanted restarting. Reading that snapshot back is what named
  * the cause: twelve live `ActionToolbarImpl`s whose `myCreationTrace` `Throwable` held a PrismTabs
  * class, because the plugin had opened those editors on its own stack. See
- * [io.prismtabs.service.TabOpener]. The colours simply stayed on the strip until the next restart,
+ * [io.prismtabs.service.TabStrip]. The colours simply stayed on the strip until the next restart,
  * which a disable never asks for.
  *
  * The scenario is chosen to be the one that broke, not a convenient one: files opened **by the
  * plugin**, through Show Group, and left open at the moment of unload. Opening them any other way
  * does not reproduce it — it is the plugin's own frames beneath the platform's editor construction
- * that do the damage.
+ * that do the damage. It broke a second time on 2026-09-16, from the other direction: Hide Group
+ * closing a selected Markdown tab, with the group left hidden up to the Disable. That half only
+ * reproduces on 2026.2 and later, so run this against `runIdeForUiTestsLatest` as well as the
+ * baseline sandbox — see the scenario's own comment, and README "The newest platform" for setting that
+ * task up.
  *
  * The plugin is put back in a `finally`. This test unloads the very plugin the rest of the suite
  * exercises, and a sandbox IDE is shared across the whole run.
@@ -58,19 +62,42 @@ class PluginUnloadUiTest {
             var unloaded = false
             try {
                 resetTabGroups()
-                assignToNewGroup("Unloadable", listOf("Sample.kt", "Second.kt", "Third.kt"))
+                createFixtureFile(HIDDEN_MARKDOWN)
+                assignToNewGroup("Unloadable", listOf("Sample.kt", "Second.kt"))
+                assignToNewGroup("Hideable", listOf(HIDDEN_MARKDOWN))
 
                 // Show Group is the path the 2026-09-12 snapshot was taken on: the plugin opens the
                 // editors itself, and every toolbar the platform builds for them is a chance to
                 // capture a PrismTabs frame.
                 setGroupHidden("Unloadable", hidden = false)
-                waitFor(ofSeconds(20)) { openTabNames().size == 3 }
-                // A full Hide/Show round trip, not just one open: closing tabs moves the selection,
-                // which builds toolbars of its own, and the tabs have to be open at the end.
+                waitFor(ofSeconds(20)) { openTabNames().size == 2 }
+                // A full Hide/Show round trip, not just one open, and the tabs have to be open at
+                // the end.
                 setGroupHidden("Unloadable", hidden = true)
                 waitFor(ofSeconds(20)) { openTabNames().isEmpty() }
                 setGroupHidden("Unloadable", hidden = false)
+                waitFor(ofSeconds(20)) { openTabNames().size == 2 }
+
+                // The 2026-09-16 snapshot's path: Hide Group closing the *selected* tab while others
+                // stay open, so the strip moves the selection to a neighbour on the plugin's stack.
+                // From 2026.2 the tab strip's entry-point toolbar is rebuilt whenever the selection
+                // moves between a tab whose editor has tab actions of its own (a Markdown file's
+                // preview editor has) and one whose editor has none — read off the snapshot: the
+                // retained toolbar's strip held one Markdown tab, and a Kotlin tab selected. Nothing
+                // replaces that toolbar until the selection moves again, so the group has to stay
+                // hidden up to the unload. The round trip above cannot catch it: Kotlin tabs alone
+                // never rebuild the toolbar, and its Show moves the selection on a clean stack.
+                setGroupHidden("Hideable", hidden = false)
                 waitFor(ofSeconds(20)) { openTabNames().size == 3 }
+                openFile(HIDDEN_MARKDOWN)
+                waitFor(ofSeconds(20)) { selectedTabName() == HIDDEN_MARKDOWN }
+                waitFor(
+                    ofSeconds(20),
+                    errorMessage = "$HIDDEN_MARKDOWN never got a tab with tab actions, so this " +
+                        "scenario would pass without exercising anything",
+                ) { tabHasTabActions(HIDDEN_MARKDOWN) }
+                setGroupHidden("Hideable", hidden = true)
+                waitFor(ofSeconds(20)) { openTabNames().size == 2 }
 
                 waitFor(ofSeconds(20), errorMessage = "the group's tabs were never coloured") {
                     tabColorOf("Sample.kt") !in listOf("none", "no tab")
@@ -110,7 +137,7 @@ class PluginUnloadUiTest {
                     tabColorOf("Sample.kt") == "none"
                 }
                 assertEquals(
-                    listOf("Sample.kt", "Second.kt", "Third.kt"),
+                    listOf("Sample.kt", "Second.kt"),
                     openTabNames().sorted(),
                     "unloading must leave the user's tabs open — only their colours go",
                 )
@@ -126,11 +153,23 @@ class PluginUnloadUiTest {
                     tabColorOf("Sample.kt") !in listOf("none", "no tab")
                 }
             } finally {
-                if (unloaded) {
-                    assertNotEquals(false, reloadPrismTabs(), "PrismTabs could not be loaded back")
+                try {
+                    if (unloaded) {
+                        assertNotEquals(false, reloadPrismTabs(), "PrismTabs could not be loaded back")
+                    }
+                } finally {
+                    // Groups before the file: deleting the last member of a group raises PrismTabs'
+                    // modal "delete the empty group?" prompt, which would block the sandbox's EDT
+                    // for every test that runs after this one.
+                    resetTabGroups()
+                    deleteFixtureFile(HIDDEN_MARKDOWN)
                 }
             }
         }
+    }
+
+    private companion object {
+        const val HIDDEN_MARKDOWN = "Hideable.md"
     }
 
     /**

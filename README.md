@@ -694,8 +694,25 @@ creation trace")` into a private final field it never clears; a `Throwable` hold
 every frame on the stack; a class holds its loader. So every toolbar the platform builds while the
 plugin is on the stack pins the plugin for the life of that toolbar — and
 `FileEditorManager.openFile` ends in `waitBlockingAndPumpEdt`, which pumps the editor-building
-coroutine *nested inside the caller's own stack*. See `TabOpener` for the fix and the full
-reasoning; `PluginUnloadUiTest` is the regression test, and it fails against the code as it was.
+coroutine *nested inside the caller's own stack*. See `TabStrip` (then `TabOpener`) for the fix and
+the full reasoning; `PluginUnloadUiTest` is the regression test, and it fails against the code as it was.
+
+**Closing leaks the same way, found 2026-09-16.** Disabling PrismTabs on 2026.2 with a group left
+hidden produced the same dialog and an 834 MB snapshot holding a single toolbar, the tab strip's
+entry point (`TabsMoreToolbar`), whose trace ran through `TabGroupVisibility.hide` and
+`FileEditorManagerImpl.closeFile`. Closing the selected tab moves the selection, and from 2026.2
+`JBTabsImpl.updateEntryPointToolbar` builds a new toolbar whenever the tab pane actions of the tabs
+involved differ: a Markdown preview editor has some, a plain editor none. That toolbar lives until
+the selection next moves, so a group hidden and left hidden pins the loader through the Disable;
+2024.2 reuses the toolbar and never showed it. No platform close suspends the way `openFile` does,
+so `PlatformTabClose` hands `closeFile` to the EDT as a Java method reference run by a JDK
+`CompletableFuture` task. A method reference compiles to a hidden-class proxy, and HotSpot leaves
+hidden frames out of a `Throwable`'s backtrace, so every frame recorded is the JDK's or the
+platform's. That was measured before relying on it: a class loader reached only through such a
+trace was collected on JDK 21 and JBR 25, and kept alive when a lambda stood in for the method
+reference. `TabStrip` queues closes and opens in one ordered channel. `PluginUnloadUiTest` hides a
+selected Markdown tab and leaves it hidden, and fails without the fix, but only against
+`runIdeForUiTestsLatest`, the 2026.2 sandbox.
 
 Two things that bound how far that generalises, both measured rather than assumed:
 
@@ -707,7 +724,15 @@ Two things that bound how far that generalises, both measured rather than assume
   domain at all, the JDK 21 sandbox one does. `PluginUnloadUiTest` therefore asserts the toolbar
   creation traces unconditionally — that is the plugin's own bug and is the same on every JDK — and
   the class-loader collection only from JDK 24 up.
-- The unload is still driven through `unloadPlugin` under `invokeAndWait`, as below.
+- The unload is driven the way Settings | Plugins drives a Disable: `PluginEnabler.HEADLESS.disable`,
+  then `unloadPlugins`, handed to the EDT with `invokeAndWait` and `ModalityState.nonModal()` from a
+  script running *off* the EDT. Two things in the harness hid the result on 2026.2 until
+  2026-09-16. The Gradle plugin starts every sandbox with `-Didea.required.plugins.id=io.prismtabs`,
+  which 2026.2's module-graph resolver honours by refusing the unload outright ("was expected not to
+  be loaded but was included in the module graph"), so `build.gradle.kts` overrides it. And the
+  collection check used to run on the EDT, which blocks the platform's own deferred unload cleanup:
+  it reported "retained" for a loader that was collected within half a second once the EDT was
+  free.
 
 One nuance worth recording honestly: the log for this run also has 9 `SEVERE` entries from
 `#c.i.u.SlowOperations`, each reading "Plugin to blame: Robot server version: 0.11.23" — this is
@@ -1203,6 +1228,36 @@ skipped rather than failing or being silently left out. `MacSettingsShortcutUiTe
 `-Dprismtabs.manualVerification=true` that neither local dev nor `ui-tests.yml` ever passes (see its
 own doc comment, and `docs/cross-platform-manual-verification.md` for how to run it deliberately).
 
+### The newest platform: `runIdeForUiTestsLatest`
+
+`runIdeForUiTests` runs the 2024.2 compile baseline. `runIdeForUiTestsLatest` is the same sandbox on
+an *installed* IDE of 2026.2 or later, started the same way and driven by the same `./gradlew
+uiTest`. Only one of the two can run at a time, because both listen on :8082. It exists because the
+platform changes underneath the plugin: `PluginUnloadUiTest`'s Hide Group scenario only reproduces
+on 2026.2 and later (see "Closing leaks the same way" above). Point it at the install in your
+machine-local `~/.gradle/gradle.properties`, never in this repository's:
+
+```properties
+uiTestLatestIdePath=/home/you/.local/share/JetBrains/Toolbox/apps/intellij-idea-ultimate
+```
+
+Without the property the task fails with a message naming it; configuring the build, CI's included,
+never needs it. Whatever version that install is on is the version tested, so a Toolbox update moves
+it forward.
+
+It uses an installed IDE, not one the Gradle plugin downloads, for a measured reason. A downloaded
+IDE is extracted into Gradle 9's transform cache, which Gradle holds immutable. A 2026.2 IDE
+(measured on 2026.2.2; the bundled JCEF plugin arrived earlier, so older ones may too) writes into its own install directory the moment JCEF starts (Chromium creates
+`plugins/jcef-plugin/jcef/extensions`), and a Markdown preview is enough to start it. So the second
+launch failed with "the contents of the immutable workspace have been modified" until the cache was
+deleted by hand. No JCEF property moves that directory, and IPGP 2.19.0 lists no fix.
+
+So far only `PluginUnloadUiTest` is known to pass there. Run it on its own (`--tests
+io.prismtabs.uitest.PluginUnloadUiTest`), with `<product-descriptor>` commented out as that class
+requires. The rest of the suite has not been brought up on 2026.2: under Xvfb it wedges at
+`EmptyGroupOnDiskDeleteUiTest`, whose robot click on the empty-group dialog does not land, and every
+test after that times out against the blocked IDE.
+
 ### Expected sandbox noise — an error balloon and a warning, neither a PrismTabs bug
 
 A fully green run still leaves the sandbox IDE showing the red **"IDE error occurred"** notification,
@@ -1462,7 +1517,7 @@ constructor carrying every parameter plus a bitmask and a `DefaultConstructorMar
 descriptors list **every** parameter the callee declares, so they change shape the moment the
 platform adds one — and the call is linked at runtime, against whatever IDE the user is on.
 
-`TabOpener` shipped exactly that in 1.4.14: `FileEditorOpenOptions()`, whose synthetic constructor
+`TabOpener` (now `TabStrip`) shipped exactly that in 1.4.14: `FileEditorOpenOptions()`, whose synthetic constructor
 gained a parameter on 2025.2, another on 2025.3 and another on 2026.1. On 2026.2 the first tab it
 tried to open threw `NoSuchMethodError`, which — being an `Error` — escaped the per-request `catch`
 and killed the coroutine draining its queue, so Show Group and "open this member" did nothing at all

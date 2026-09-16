@@ -217,30 +217,81 @@ intellijPlatformTesting {
             "-Didea.trust.all.projects=true",
             "-Dide.show.tips.on.startup.default.value=false",
             "-Didea.is.internal=true",
+            // Replaces the `-Didea.required.plugins.id=io.prismtabs` the Gradle plugin puts on every
+            // sandbox (a later -D wins, and these arguments come after its own). From 2026.2 the
+            // platform resolves a dynamic unload against a module graph that honours that property,
+            // so it refuses to unload PrismTabs at all — "was expected not to be loaded but was
+            // included in the module graph" — which leaves PluginUnloadUiTest unable to do what a
+            // user's Disable does. The robot server is what this sandbox genuinely cannot run
+            // without; naming it keeps the property's own guarantee, just not for the plugin under
+            // test.
+            "-Didea.required.plugins.id=com.jetbrains.test.robot-server-plugin",
+        )
+
+        val uiTestIdeArgs = robotServerArgs + listOf(
+            // Native macOS chrome that remote-robot cannot introspect or drive. The
+            // screen-menu-bar pair is the one that actually bites: with the global
+            // NSMenu in play the menu bar is not Swing, so nothing in the suite can
+            // see it. See the note below on the variant that leaves it on precisely
+            // to cover that gap.
+            "-DjbScreenMenuBar.enabled=false",
+            "-Dapple.laf.useScreenMenuBar=false",
+            "-Dide.mac.file.chooser.native=false",
+            // Vestigial on the 2024.2 baseline and kept only for older/newer hosts:
+            // nothing in the platform reads this property any more, and
+            // Messages.canShowMacSheetPanel()/isMacSheetEmulation() are both compiled
+            // to a bare `iconst_0; ireturn` (confirmed by javap on app-client.jar), so
+            // no Messages dialog can render as a native sheet whatever this says.
+            "-Dide.mac.message.dialogs.as.sheets=false",
         )
 
         // See README "UI testing": run this in the background, THEN `./gradlew uiTest` against it.
         register("runIdeForUiTests") {
             task {
                 args(fixtureProject)
-                jvmArgumentProviders += CommandLineArgumentProvider {
-                    robotServerArgs + listOf(
-                        // Native macOS chrome that remote-robot cannot introspect or drive. The
-                        // screen-menu-bar pair is the one that actually bites: with the global
-                        // NSMenu in play the menu bar is not Swing, so nothing in the suite can
-                        // see it. See runIdeForUiTestsNativeMac below for the variant that leaves
-                        // it on precisely to cover that gap.
-                        "-DjbScreenMenuBar.enabled=false",
-                        "-Dapple.laf.useScreenMenuBar=false",
-                        "-Dide.mac.file.chooser.native=false",
-                        // Vestigial on the 2024.2 baseline and kept only for older/newer hosts:
-                        // nothing in the platform reads this property any more, and
-                        // Messages.canShowMacSheetPanel()/isMacSheetEmulation() are both compiled
-                        // to a bare `iconst_0; ireturn` (confirmed by javap on app-client.jar), so
-                        // no Messages dialog can render as a native sheet whatever this says.
-                        "-Dide.mac.message.dialogs.as.sheets=false",
+                jvmArgumentProviders += CommandLineArgumentProvider { uiTestIdeArgs }
+            }
+            plugins {
+                robotServerPlugin(remoteRobotVersion)
+            }
+        }
+
+        // The same sandbox on the newest platform rather than the compile baseline, run the same way
+        // (only one of the two at a time: both listen on the robot-server port). Needed because the
+        // platform's behaviour moves under the plugin: from 2026.2, moving the selection between a tab
+        // with tab actions of its own (a Markdown preview) and one without rebuilds the tab strip's
+        // entry-point toolbar, which 2024.2 reuses — so the class-loader leak PluginUnloadUiTest
+        // guards against on Hide Group only reproduces here.
+        //
+        // Run from a locally installed IDE rather than one the Gradle plugin downloads. A downloaded
+        // IDE is extracted into Gradle's transform cache, which Gradle 9 holds immutable, and a
+        // 2026.2 IDE (measured) writes into its own install directory the moment JCEF starts (Chromium
+        // creates `plugins/jcef-plugin/jcef/extensions`); a Markdown preview is enough, and this
+        // sandbox exists to open one. The next launch then fails "the contents of the immutable
+        // workspace have been modified" until the cache is deleted by hand. An installed IDE is an
+        // ordinary directory that tolerates that write, and the platform version is whatever that
+        // install is on.
+        //
+        // The path is machine-specific, so it is read from `uiTestLatestIdePath` in the user-level
+        // ~/.gradle/gradle.properties, never this repository's (see README "The newest platform").
+        // The check is deferred to when the task's own IDE is resolved, so configuring the build —
+        // CI's included — never needs it.
+        register("runIdeForUiTestsLatest") {
+            localPath = layout.dir(
+                providers.gradleProperty("uiTestLatestIdePath")
+                    .orElse(
+                        provider {
+                            throw GradleException(
+                                "runIdeForUiTestsLatest needs uiTestLatestIdePath in ~/.gradle/gradle.properties: " +
+                                    "the directory of an installed IntelliJ IDEA 2026.2 or later, e.g. a Toolbox app directory.",
+                            )
+                        },
                     )
-                }
+                    .map { file(it) },
+            )
+            task {
+                args(fixtureProject)
+                jvmArgumentProviders += CommandLineArgumentProvider { uiTestIdeArgs }
             }
             plugins {
                 robotServerPlugin(remoteRobotVersion)
