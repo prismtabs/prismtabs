@@ -26,9 +26,10 @@ internal object TabRepaint {
     }
 
     /**
-     * The same request for every tab currently on the strip — what unload needs, and the one caller
-     * that cannot name its files: [io.prismtabs.listener.PrismTabsUnloadListener] is repainting
-     * *because* this plugin is about to stop answering for any of them.
+     * The same request for every tab currently on the strip — what a dynamic load or unload needs,
+     * the one caller that cannot name its files: [io.prismtabs.listener.PrismTabsDynamicPluginListener]
+     * is repainting *because* this plugin has just started, or is about to stop, answering for all
+     * of them.
      *
      * `queueUpdateFile` is a queue, not a paint: it hands the file to `FileEditorManagerImpl`'s
      * own `MergingUpdateChannel` (confirmed in the platform bytecode) and the recolour happens a

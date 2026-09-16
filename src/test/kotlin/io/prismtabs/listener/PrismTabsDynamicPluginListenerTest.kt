@@ -28,13 +28,13 @@ import javax.swing.TransferHandler
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
- * Everything about [PrismTabsUnloadListener] that fails *silently*: a listener that is never
- * registered, a registered listener that never recognises its own plugin, and a release step that
- * runs but drops nothing. In every case the class loader survives and the only symptom is an
+ * Everything about [PrismTabsDynamicPluginListener] that fails *silently*: a listener that is
+ * never registered, a registered listener that never recognises its own plugin, and a release step
+ * that runs but drops nothing. In every case the class loader survives and the only symptom is an
  * "unable to unload" dialog on somebody else's machine weeks later — exactly the failure this
  * listener exists to prevent. The last of the three is not hypothetical: the first version of
- * [PrismTabsUnloadListener.releaseClipboard] tested the clipboard's contents for a type they can
- * never have and returned early every single time.
+ * [PrismTabsDynamicPluginListener.releaseClipboard] tested the clipboard's contents for a type they
+ * can never have and returned early every single time.
  *
  * The tab-colour half of an unload is here too, for the same reason: forgetting it costs nobody a
  * stack trace, it just leaves the strip painted by a plugin that is gone.
@@ -43,7 +43,7 @@ import javax.xml.parsers.DocumentBuilderFactory
  * io.prismtabs.license.ProductDescriptorTest], so it asserts on the file a developer edits rather
  * than on `patchPluginXml`'s output.
  */
-class PrismTabsUnloadListenerTest {
+class PrismTabsDynamicPluginListenerTest {
 
     private val root: Element = run {
         val xml = checkNotNull(javaClass.getResourceAsStream("/META-INF/plugin.xml")) {
@@ -55,7 +55,7 @@ class PrismTabsUnloadListenerTest {
     @Test
     fun `the listener's plugin id is the one plugin xml declares`() {
         val declared = root.getElementsByTagName("id").item(0).textContent
-        assertEquals(declared, PrismTabsUnloadListener.PLUGIN_ID.idString)
+        assertEquals(declared, PrismTabsDynamicPluginListener.PLUGIN_ID.idString)
     }
 
     @Test
@@ -69,7 +69,7 @@ class PrismTabsUnloadListenerTest {
             .map { it.getAttribute("class") to it.getAttribute("topic") }
 
         assertEquals(
-            listOf(PrismTabsUnloadListener::class.java.name to "com.intellij.ide.plugins.DynamicPluginListener"),
+            listOf(PrismTabsDynamicPluginListener::class.java.name to "com.intellij.ide.plugins.DynamicPluginListener"),
             registered,
         )
     }
@@ -86,9 +86,9 @@ class PrismTabsUnloadListenerTest {
      * afterwards" cannot be separate tests without making them order-dependent on each other in a
      * shared JVM — exactly the flake that passes locally and fails in CI on a different shuffle.
      *
-     * Driven through [PrismTabsUnloadListener.stopColouringTabs] rather than the gate directly: the
-     * gate closing itself is not the regression worth guarding, the unload forgetting to close it
-     * is.
+     * Driven through [PrismTabsDynamicPluginListener.stopColouringTabs] rather than the gate
+     * directly: the gate closing itself is not the regression worth guarding, the unload forgetting
+     * to close it is.
      */
     @Test
     fun `unload stops the provider handing out group colours`() {
@@ -98,7 +98,7 @@ class PrismTabsUnloadListenerTest {
             "a loaded plugin must colour a tab whose file is in a group",
         )
 
-        PrismTabsUnloadListener().stopColouringTabs()
+        PrismTabsDynamicPluginListener().stopColouringTabs()
 
         assertNull(
             TabGroupColorProvider.colorOf(group),
@@ -133,7 +133,7 @@ class PrismTabsUnloadListenerTest {
         val reference = WeakReference(field)
         field = null
 
-        PrismTabsUnloadListener().releaseClipboard(clipboard)
+        PrismTabsDynamicPluginListener().releaseClipboard(clipboard)
 
         assertTrue(collectable(reference), "the copied text field is still reachable from the clipboard")
         assertNull(
@@ -155,7 +155,7 @@ class PrismTabsUnloadListenerTest {
         val lostOwnership = CountDownLatch(1)
         clipboard.setContents(contents) { _, _ -> lostOwnership.countDown() }
 
-        PrismTabsUnloadListener().releaseClipboard(clipboard)
+        PrismTabsDynamicPluginListener().releaseClipboard(clipboard)
 
         assertSame(contents, clipboard.getContents(null), "the image was rewritten as something else")
         assertTrue(
@@ -183,7 +183,7 @@ class PrismTabsUnloadListenerTest {
         withContentsRestored(clipboard) {
             clipboard.setContents(StringSelection(text), caretLikeOwner)
 
-            PrismTabsUnloadListener().releaseClipboard(clipboard)
+            PrismTabsDynamicPluginListener().releaseClipboard(clipboard)
 
             assertTrue(
                 lostOwnership.await(10, TimeUnit.SECONDS),
@@ -194,7 +194,7 @@ class PrismTabsUnloadListenerTest {
     }
 
     /**
-     * The JDK behaviour [PrismTabsUnloadListener.releaseClipboard] tells ownership by:
+     * The JDK behaviour [PrismTabsDynamicPluginListener.releaseClipboard] tells ownership by:
      * `SunClipboard` hands back its stored `contents` field while this JVM owns the clipboard, and
      * builds a fresh `ClipboardTransferable` per call when another application does. Pinned here
      * because the ownership test this replaced was also a reading of `SunClipboard`, was wrong, and
@@ -206,8 +206,8 @@ class PrismTabsUnloadListenerTest {
      * because `SunClipboard` is abstract: what a Windows JVM actually owns is a `WClipboard` and a
      * macOS one a `CClipboard`, each with its own native transfer path, and neither is exercised by
      * the tests above — those construct a plain [Clipboard], which inherits none of that. Were the
-     * identity to fail on one of them, [PrismTabsUnloadListener.releaseClipboard] would return early
-     * on that platform and release nothing, silently, exactly as the reading it replaced did.
+     * identity to fail on one of them, [PrismTabsDynamicPluginListener.releaseClipboard] would return
+     * early on that platform and release nothing, silently, exactly as the reading it replaced did.
      *
      * Confirmed live against `sun.awt.windows.WClipboard` on Windows 11 before this test existed.
      */
@@ -224,8 +224,8 @@ class PrismTabsUnloadListenerTest {
 
     /**
      * The same ownership reading as the test above, on the clipboard whose owner
-     * [PrismTabsUnloadListener.releaseClipboard]'s second release step exists to displace. Kept
-     * alongside rather than folded into it because the primary selection is a separate JDK
+     * [PrismTabsDynamicPluginListener.releaseClipboard]'s second release step exists to displace.
+     * Kept alongside rather than folded into it because the primary selection is a separate JDK
      * implementation — `WLClipboard`/`XClipboard` reached through `Toolkit.getSystemSelection`
      * rather than `getSystemClipboard` — and a platform is free to get one right and the other
      * wrong.
@@ -332,7 +332,10 @@ class PrismTabsUnloadListenerTest {
             saved[flavor] ?: throw UnsupportedFlavorException(flavor)
     }
 
-    /** A clipboard content with a flavour [PrismTabsUnloadListener.releaseClipboard] must not touch. */
+    /**
+     * A clipboard content with a flavour [PrismTabsDynamicPluginListener.releaseClipboard] must not
+     * touch.
+     */
     private class ImageContents(private val image: Image) : Transferable {
 
         override fun getTransferDataFlavors(): Array<DataFlavor> = arrayOf(DataFlavor.imageFlavor)

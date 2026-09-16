@@ -55,11 +55,11 @@ internal class TabGroupColorProvider : EditorTabColorProvider, DumbAware {
          * Stops handing out colours, so that a repaint after this point leaves every tab the colour
          * the platform's own providers give it.
          *
-         * Called from [io.prismtabs.listener.PrismTabsUnloadListener] on uninstall, update and
-         * disable. The platform *does* unregister this extension point as part of the unload, but
-         * it repaints nothing afterwards, so without both halves — this gate and the repaint the
-         * listener asks for next — every tab keeps the colour of a plugin that is no longer there
-         * until the user restarts the IDE, which on a disable they are never prompted to do.
+         * Called from [io.prismtabs.listener.PrismTabsDynamicPluginListener] on uninstall, update
+         * and disable. The platform *does* unregister this extension point as part of the unload,
+         * but it repaints nothing afterwards, so without both halves — this gate and the repaint
+         * the listener asks for next — every tab keeps the colour of a plugin that is no longer
+         * there until the user restarts the IDE, which on a disable they are never prompted to do.
          *
          * A gate rather than relying on the unregistration alone because the ordering is not ours
          * to depend on: the repaint is queued, and whether it drains before or after the platform

@@ -5,6 +5,7 @@ import com.intellij.ide.plugins.IdeaPluginDescriptor
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.extensions.PluginId
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.util.IconLoader
 import io.prismtabs.provider.TabGroupColorProvider
@@ -16,10 +17,11 @@ import java.awt.datatransfer.StringSelection
 import java.awt.datatransfer.Transferable
 
 /**
- * Everything PrismTabs has to do on its way out: leave no coloured tab behind, and leave nothing
- * holding its class loader.
+ * Everything PrismTabs has to do when it is loaded or unloaded without a restart. On the way in,
+ * colour the tabs that were already open; on the way out, keep the user's groups, leave no coloured
+ * tab behind, and leave nothing holding its class loader.
  *
- * The second half is what "leaves the IDE needing a restart" actually means. Without it,
+ * The last of those is what "leaves the IDE needing a restart" actually means. Without it,
  * uninstalling (or updating, or disabling) PrismTabs leaves the plugin's class loader alive, which
  * the platform reports as "not unload-safe because class loader cannot be unloaded", dumps a
  * several-hundred-megabyte heap snapshot for, and recovers from only by asking the user to restart.
@@ -40,13 +42,44 @@ import java.awt.datatransfer.Transferable
  * Each step is guarded independently: a failure to drop one reference must not stop the others from
  * being dropped, and none of them is worth failing an uninstall over.
  */
-internal class PrismTabsUnloadListener : DynamicPluginListener {
+internal class PrismTabsDynamicPluginListener : DynamicPluginListener {
+
+    /**
+     * Colours the tabs that were already open when PrismTabs was enabled or updated in place — the
+     * mirror image of [stopColouringTabs].
+     *
+     * The platform registers the `editorTabColorProvider` extension point as part of the load but
+     * repaints nothing afterwards, and a tab's background is cached on its `TabInfo`. So without
+     * this, re-enabling the plugin brings its tool window back while every open tab stays plain
+     * until something happens to repaint it one by one.
+     *
+     * `DynamicPlugins.loadPluginWithoutProgress` publishes this after `loadModules` has registered
+     * this plugin's listeners and extensions, in the same write action (confirmed in the 2024.2
+     * bytecode), so this listener hears its own load and the provider is already there to answer
+     * the repaint it queues. Not published on an ordinary IDE start, whose tabs are painted with
+     * the provider in place from the outset.
+     */
+    override fun pluginLoaded(pluginDescriptor: IdeaPluginDescriptor) {
+        if (pluginDescriptor.pluginId != PLUGIN_ID) return
+
+        // Caught narrowly, as on unload: an enable must not fail over tabs we could not repaint.
+        try {
+            repaintOpenTabs()
+        } catch (e: Exception) {
+            thisLogger().warn("Could not colour the open tabs on load", e)
+        }
+    }
 
     override fun beforePluginUnload(pluginDescriptor: IdeaPluginDescriptor, isUpdate: Boolean) {
         if (pluginDescriptor.pluginId != PLUGIN_ID) return
 
         // Caught narrowly, and separately per step: an uninstall must not fail over a reference we
         // could not drop, but nor should this swallow an Error or a control-flow exception.
+        try {
+            saveState()
+        } catch (e: Exception) {
+            thisLogger().warn("Could not save the tab groups and palette on unload", e)
+        }
         try {
             stopColouringTabs()
         } catch (e: Exception) {
@@ -70,6 +103,27 @@ internal class PrismTabsUnloadListener : DynamicPluginListener {
     }
 
     /**
+     * Writes the tab groups and the palette to disk while this plugin's services still exist to be
+     * asked for them — the one thing on this list a user would lose rather than merely see.
+     *
+     * The platform does not save a plugin's state before unloading it. `ComponentManagerImpl
+     * .unloadServices` hands each service to `IComponentStore.unloadComponent`, which only removes
+     * it from the store (both confirmed in the 2024.2 and 2026.2 bytecode). So whatever changed
+     * since the last autosave — a group created or a tab assigned a moment before the user
+     * disables PrismTabs — is dropped, and re-enabling it reads the older state back from disk.
+     *
+     * [Project.save] and [com.intellij.openapi.application.Application.saveSettings] are the public
+     * entry points to that save, and write only what changed. They are safe here: this runs before
+     * the unload's write action, and on the EDT both run the save under modal progress rather than
+     * blocking it.
+     */
+    private fun saveState() {
+        val application = ApplicationManager.getApplication() ?: return
+        ProjectManager.getInstanceIfCreated()?.openProjects?.forEach(Project::save)
+        application.saveSettings()
+    }
+
+    /**
      * Takes this plugin out of the tab-colour business and asks every open project to repaint what
      * it had coloured — the second of the two things a user sees when PrismTabs goes.
      *
@@ -86,13 +140,18 @@ internal class PrismTabsUnloadListener : DynamicPluginListener {
      * `VirtualFile`, so it cannot become the reference that keeps this class loader alive.
      *
      * The application is read through a null check rather than assumed, so that
-     * [PrismTabsUnloadListenerTest] can call this with no IDE around it: with no application there
-     * are no projects and no tabs, and closing the gate is the whole of the work.
+     * [PrismTabsDynamicPluginListenerTest] can call this with no IDE around it: with no application
+     * there are no projects and no tabs, and closing the gate is the whole of the work.
      *
      * Internal rather than private for that same reason.
      */
     internal fun stopColouringTabs() {
         TabGroupColorProvider.stop()
+        repaintOpenTabs()
+    }
+
+    /** Asks every open project to re-ask the providers for each of its tabs' colours. */
+    private fun repaintOpenTabs() {
         ApplicationManager.getApplication() ?: return
         ProjectManager.getInstanceIfCreated()?.openProjects?.forEach(TabRepaint::requestAll)
     }
@@ -176,7 +235,7 @@ internal class PrismTabsUnloadListener : DynamicPluginListener {
      *
      * ```
      * ROOT: Global JNI -> sun.awt.wl.WLClipboard$1
-     *   data: io.prismtabs.listener.PrismTabsUnloadListener$ClipboardSnapshot
+     *   data: io.prismtabs.listener.PrismTabsDynamicPluginListener$ClipboardSnapshot
      *   <class>: java.lang.Class
      * * name: com.intellij.ide.plugins.cl.PluginClassLoader
      * ```
@@ -205,8 +264,8 @@ internal class PrismTabsUnloadListener : DynamicPluginListener {
      * rewrite; anything else is another application's and is left alone. Confirmed against
      * `SunClipboard`/`WLClipboard` bytecode and live under both `WLToolkit` and `XToolkit`.
      *
-     * Internal rather than private so [PrismTabsUnloadListenerTest] can exercise it directly:
-     * [beforePluginUnload] takes an [IdeaPluginDescriptor], which has no constructible
+     * Internal rather than private so [PrismTabsDynamicPluginListenerTest] can exercise it
+     * directly: [beforePluginUnload] takes an [IdeaPluginDescriptor], which has no constructible
      * implementation outside the platform's own loading code.
      */
     internal fun releaseClipboard(clipboard: Clipboard) {
@@ -255,7 +314,7 @@ internal class PrismTabsUnloadListener : DynamicPluginListener {
         /**
          * Must match `<id>` in plugin.xml. A drift here is silent — the listener still fires for
          * every other plugin's unload and simply never matches its own — so
-         * [io.prismtabs.listener.PrismTabsUnloadListenerTest] holds the two in step.
+         * [io.prismtabs.listener.PrismTabsDynamicPluginListenerTest] holds the two in step.
          */
         val PLUGIN_ID: PluginId = PluginId.getId("io.prismtabs")
     }
