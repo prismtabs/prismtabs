@@ -10,6 +10,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import java.time.Duration.ofSeconds
@@ -48,6 +50,24 @@ import java.time.Duration.ofSeconds
 class PaywallUiTest {
     init {
         StepsLogger.init()
+    }
+
+    /**
+     * Every test here is about a *paid build's* locked side, and only a paid build has one: with
+     * `<product-descriptor>` commented out — as [PluginUnloadUiTest] asks, to exercise an in-place
+     * unload — [IdeaFrame.simulateUnlicensed] has nothing to lock, so each test fails on its first
+     * locked assertion. Worse, the failures do not stay here: measured on 2026-09-16, a full run on
+     * that build also failed ten tool-window and popup tests that pass in the same run without this
+     * class. Skipped instead, the mirror image of [PluginUnloadUiTest]'s own gate.
+     *
+     * A `@BeforeEach` rather than a line in each test because answering it means asking the running
+     * IDE, and all eleven need the same answer.
+     */
+    @BeforeEach
+    fun requirePaidBuild(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            assumeTrue(isPaidBuild(), "the paywall exists only on a build with a <product-descriptor>")
+        }
     }
 
     @Test

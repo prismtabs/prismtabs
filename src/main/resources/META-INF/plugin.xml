@@ -101,11 +101,13 @@
                                   instance="io.prismtabs.ui.TabGroupPaletteConfigurable"/>
     </extensions>
 
-    <!-- Flushes the platform's derived-icon caches so this plugin's class loader can actually be
-         collected on uninstall/update/disable. See PrismTabsUnloadListener for the retention path
-         and why the platform's own unload cleanup does not cover it. -->
+    <!-- Repaints the tab strip when the plugin is loaded or unloaded without a restart, saves the
+         tab groups before an unload drops them, and drops the references that would otherwise keep
+         this plugin's class loader alive on uninstall/update/disable. See
+         PrismTabsDynamicPluginListener for the retention paths and why the platform's own unload
+         cleanup does not cover them. -->
     <applicationListeners>
-        <listener class="io.prismtabs.listener.PrismTabsUnloadListener"
+        <listener class="io.prismtabs.listener.PrismTabsDynamicPluginListener"
                   topic="com.intellij.ide.plugins.DynamicPluginListener"/>
     </applicationListeners>
 

@@ -114,6 +114,17 @@ class PluginUnloadUiTest {
                     openTabNames().sorted(),
                     "unloading must leave the user's tabs open — only their colours go",
                 )
+
+                // Re-enabling is the same round trip in reverse, and has to put back what the unload
+                // took: the platform re-registers the tab-colour provider but repaints nothing, so
+                // the tabs left open across it stay uncoloured unless the plugin asks. The flag drops
+                // first because reloadPrismTabs consumes its stashed descriptor either way: a second
+                // attempt from the `finally` would have nothing to load and mask this failure.
+                unloaded = false
+                assertEquals(true, reloadPrismTabs(), "PrismTabs could not be loaded back")
+                waitFor(ofSeconds(20), errorMessage = "the tabs did not get their colour back after a reload") {
+                    tabColorOf("Sample.kt") !in listOf("none", "no tab")
+                }
             } finally {
                 if (unloaded) {
                     assertNotEquals(false, reloadPrismTabs(), "PrismTabs could not be loaded back")
