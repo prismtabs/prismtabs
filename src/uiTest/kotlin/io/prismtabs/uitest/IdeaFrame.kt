@@ -237,6 +237,53 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
         )
     }
 
+    /** The name of the file whose tab is selected in the focused editor window, or `null` when no
+     * tab is open. Same `''`-for-null sentinel as [groupNameFor]. */
+    fun selectedTabName(): String? = callJs<String>(
+        """
+        importPackage(com.intellij.openapi.wm.impl)
+        importPackage(com.intellij.openapi.fileEditor)
+
+        const frameHelper = ProjectFrameHelper.getFrameHelper(component)
+        const project = frameHelper.getProject()
+        const selected = FileEditorManager.getInstance(project).getSelectedFiles()
+        selected.length > 0 ? selected[0].getName() : ''
+        """,
+        true,
+    ).ifEmpty { null }
+
+    /**
+     * Whether [path]'s tab carries tab actions of its own — what a Markdown file's
+     * `TextEditorWithPreview` contributes, and what the tab strip's entry-point toolbar is rebuilt
+     * over when the selection moves on or off that tab.
+     *
+     * Read off the tab's `TabInfo` rather than asked of the editor: `EditorTabbedContainer` copies
+     * the editor's actions onto the `TabInfo` once, when the tab is inserted, and only the copy
+     * counts. The editor can answer yes while the tab says no — measured on a freshly started
+     * 2026.2 sandbox, whose first Markdown tab went in before JCEF was up.
+     */
+    fun tabHasTabActions(path: String): Boolean = callJs<String>(
+        """
+        importClass(com.intellij.openapi.fileEditor.impl.EditorTabs)
+
+        let found = false
+        function scan(comp) {
+            if (comp instanceof EditorTabs) {
+                const infos = comp.getTabs()
+                for (let i = 0; i < infos.size(); i++) {
+                    if (infos.get(i).getText() == '$path' && infos.get(i).getTabPaneActions() != null) found = true
+                }
+            }
+            if (comp.getComponentCount) {
+                for (let i = 0; i < comp.getComponentCount(); i++) scan(comp.getComponent(i))
+            }
+        }
+        scan(component)
+        '' + found
+        """,
+        true,
+    ).toBoolean()
+
     /** Comma-joined names of every currently open editor tab, in `FileEditorManager` order —
      * what Phase 4a's collapse/expand actually has to move. Same `''`-for-empty sentinel as
      * [groupNameFor], since `callJs` can't return a bare `null`. */
@@ -1624,7 +1671,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
      * private final field it never clears (javap: one `putfield`), and a `Throwable` holds the
      * [Class] of every frame that was on the stack. So a toolbar built while PrismTabs was on the
      * stack holds a PrismTabs class, a class holds its loader, and the plugin cannot be unloaded
-     * until that toolbar dies. [io.prismtabs.service.TabOpener] exists to keep this list empty.
+     * until that toolbar dies. [io.prismtabs.service.TabStrip] exists to keep this list empty.
      *
      * This is the assertion to reach for rather than "did the class loader go": it names the
      * offending toolbar and the frame that got captured, it is the same on every JDK, and it
@@ -1692,6 +1739,18 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
      * The loader is handed to the reference as a temporary, never stored in a variable of its own —
      * a strong reference held anywhere in this script would keep the very thing being measured
      * alive and turn the test green for the wrong reason.
+     *
+     * The unload is the one Settings | Plugins performs for a Disable: `DynamicPluginEnabler.disable`
+     * marks the plugin disabled (`PluginEnabler.HEADLESS.disable`) and then calls `unloadPlugins` —
+     * the same two calls in the 2024.2 and 2026.2 bytecode. 2026.2 resolves the unload against a
+     * module graph built from that disabled set, so leaving the mark out would be testing a
+     * different path from the user's.
+     *
+     * The script runs **off** the EDT and hands only the unload to it. The collection loop must not
+     * hold the EDT: the platform finishes releasing an unloaded plugin in work it queues there, and
+     * a loop blocking it reported "retained" on 2026.2 for a loader that went within half a second
+     * once the EDT was free. `ModalityState.nonModal()` makes the hand-off write-safe, where a
+     * script dispatched onto the EDT by the robot server is not — see [forceSaveSettings].
      */
     fun unloadPrismTabs(): String = callJs<String>(
         """
@@ -1699,6 +1758,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
         importPackage(com.intellij.ide.plugins)
         importPackage(com.intellij.openapi.extensions)
         importClass(com.intellij.openapi.application.ApplicationManager)
+        importClass(com.intellij.openapi.application.ModalityState)
 
         // Rhino, not Nashorn: no `Java.type`, and a nested class has to be named with its binary
         // `${'$'}` spelling. Constructor signature confirmed with javap, per CLAUDE.md — every flag off,
@@ -1708,11 +1768,8 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
         const B = java.lang.Boolean.TYPE
         const optionsCtor = optionsClass.getConstructor(B, B, B, B, B, B, java.lang.Integer)
 
+        const project = ProjectFrameHelper.getFrameHelper(component).getProject()
         const descriptor = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs'))
-        // Stashed for [reloadPrismTabs]: an unloaded plugin is no longer in PluginManagerCore, so
-        // this is the only handle left to load it back with. The root pane, because it is the
-        // nearest JComponent — the frame itself is a JFrame and has no client properties.
-        component.getRootPane().putClientProperty('prismtabs.unloaded.descriptor', descriptor)
         const ref = new java.lang.ref.WeakReference(descriptor.getPluginClassLoader())
         const F = java.lang.Boolean.FALSE
         const options = optionsCtor.newInstance([F, F, F, F, F, F, null])
@@ -1720,10 +1777,18 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
 
         const task = new Runnable({
             run: function() {
-                outcome.set(DynamicPlugins.INSTANCE.unloadPlugin(descriptor, options) ? 'unloaded' : 'refused')
+                // Stashed for [reloadPrismTabs]: an unloaded plugin is no longer in
+                // PluginManagerCore, so this is the only handle left to load it back with. The root
+                // pane, because it is the nearest JComponent — the frame itself is a JFrame and has
+                // no client properties.
+                component.getRootPane().putClientProperty('prismtabs.unloaded.descriptor', descriptor)
+                PluginEnabler.HEADLESS.disable(java.util.Collections.singletonList(descriptor))
+                const unloaded = DynamicPlugins.INSTANCE.unloadPlugins(
+                    java.util.Collections.singletonList(descriptor), project, null, options)
+                outcome.set(unloaded ? 'unloaded' : 'refused')
             }
         })
-        ApplicationManager.getApplication().invokeAndWait(task)
+        ApplicationManager.getApplication().invokeAndWait(task, ModalityState.nonModal())
 
         for (let i = 0; i < 40 && ref.get() != null; i++) {
             java.lang.System.gc()
@@ -1731,35 +1796,38 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
         }
         outcome.get() + (ref.get() == null ? ':collected' : ':retained')
         """,
-        true,
+        false,
     )
 
     /** Puts PrismTabs back after [unloadPrismTabs], so the rest of the suite still has a plugin to
-     * test. Reports whether the platform accepted the reload. */
+     * test. Reports whether the platform accepted the reload. Marks it enabled again first — the
+     * mirror of the disable there, and what `DynamicPluginEnabler.enable` does before loading — and
+     * runs off the EDT for the same reason. */
     fun reloadPrismTabs(): Boolean = callJs<String>(
         """
         importPackage(com.intellij.openapi.wm.impl)
         importPackage(com.intellij.ide.plugins)
         importPackage(com.intellij.openapi.extensions)
         importClass(com.intellij.openapi.application.ApplicationManager)
+        importClass(com.intellij.openapi.application.ModalityState)
 
-        const frameHelper = ProjectFrameHelper.getFrameHelper(component)
-        const project = frameHelper.getProject()
-        const rootPane = component.getRootPane()
-        const descriptor = rootPane.getClientProperty('prismtabs.unloaded.descriptor')
-        rootPane.putClientProperty('prismtabs.unloaded.descriptor', null)
+        const project = ProjectFrameHelper.getFrameHelper(component).getProject()
         const outcome = new java.util.concurrent.atomic.AtomicReference('')
         const task = new Runnable({
             run: function() {
+                const rootPane = component.getRootPane()
+                const descriptor = rootPane.getClientProperty('prismtabs.unloaded.descriptor')
+                rootPane.putClientProperty('prismtabs.unloaded.descriptor', null)
+                PluginEnabler.HEADLESS.enable(java.util.Collections.singletonList(descriptor))
                 const loaded = DynamicPlugins.INSTANCE.loadPlugins(
                     java.util.Collections.singletonList(descriptor), project)
                 outcome.set('' + loaded)
             }
         })
-        ApplicationManager.getApplication().invokeAndWait(task)
+        ApplicationManager.getApplication().invokeAndWait(task, ModalityState.nonModal())
         outcome.get()
         """,
-        true,
+        false,
     ).toBoolean()
 }
 

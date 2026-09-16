@@ -30,5 +30,9 @@
   open. The IDE reported this as "not unload-safe because class loader cannot be unloaded" and
   wrote a several-hundred-megabyte heap snapshot for it. Those files are now opened off the
   plugin's own stack.
+- The same restart prompt no longer follows a "Hide Group" on IntelliJ IDEA 2026.2 and later.
+  Closing the group's selected tab could make the IDE rebuild the tab strip's toolbar on the
+  plugin's stack, which again pinned the class loader for as long as the group stayed hidden.
+  Tabs are now closed off the plugin's own stack as well.
 - Tab colours now disappear the moment the plugin is disabled or uninstalled, instead of lingering
   until the next IDE start — which, on a disable, is never prompted for.

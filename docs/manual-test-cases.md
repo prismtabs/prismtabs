@@ -123,7 +123,7 @@ The platform never unloads a paid plugin in place, so on this build both steps a
 the in-place unload is only possible on a build without the product descriptor, where
 `PluginUnloadUiTest` covers it (it skips itself on the paid build).
 
-- [ ] With at least one assigned group and an open tab showing it, go to **Settings | Plugins**,
+- [x] With at least one assigned group and an open tab showing it, go to **Settings | Plugins**,
       find PrismTabs, and **Disable** it. Confirm no error dialog appears and the IDE offers
       **Restart IDE**; after the restart the plugin is off and tabs carry no PrismTabs colour.
       *Automated: partial — that the platform requires a restart for the paid build
@@ -132,7 +132,9 @@ the in-place unload is only possible on a build without the product descriptor, 
 - [ ] **Re-enable** it from the same page and restart. Confirm groups, colours and tool window all
       come back correctly.
       *Automated: partial — that everything is read back from disk is covered by `PersistenceUiTest`
-      and `TabGroupServiceTest`. Left for a human: the re-enable and the restart.*
+      and `TabGroupServiceTest`; on a build without the product descriptor, `PluginUnloadUiTest`
+      also covers the in-place round trip (a group created just before the disable survives it, and
+      the tabs left open get their colour back). Left for a human: the re-enable and the restart.*
 - [ ] Watch `idea.log` (Help | Show Log) during both steps for any `io.prismtabs` `SEVERE`
       entries — there should be none.
       *Automated: not automated — both steps need a restart, which the suite does not perform.*

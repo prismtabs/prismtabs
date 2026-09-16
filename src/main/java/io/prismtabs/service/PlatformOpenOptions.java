@@ -17,10 +17,11 @@ import com.intellij.openapi.fileEditor.impl.FileEditorOpenOptions;
  *
  * <p>That is not hypothetical either: it is what 1.4.14 shipped, and it took Show Group with it.
  * The {@code NoSuchMethodError} is an {@link Error}, so it passed straight through
- * {@link TabOpener}'s per-request {@code catch} and killed the queue's coroutine outright — after
+ * {@link TabStrip}'s per-request {@code catch} and killed the queue's coroutine outright — after
  * which no tab group could reopen its tabs, and no member file could be opened from the tool
  * window, for the rest of the session. Recorded on IU-262.10315.125 as
- * "Unhandled exception in [… CoroutineName(io.prismtabs.service.TabOpener) …]".
+ * "Unhandled exception in [… CoroutineName(io.prismtabs.service.TabOpener) …]" — the class's name
+ * before it closed tabs as well as opening them.
  *
  * <p>Java has no default arguments, so {@code new FileEditorOpenOptions()} here compiles to the
  * class's <strong>zero-argument</strong> constructor — which Kotlin generates precisely because

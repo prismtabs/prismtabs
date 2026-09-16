@@ -35,7 +35,7 @@ import java.awt.datatransfer.Transferable
  * class-loader liveness check). [DynamicPluginListener.pluginUnloaded] is too late to be reached.
  *
  * Not every retention can be dropped from here, and the one that cannot is the reason
- * [io.prismtabs.service.TabOpener] exists: a toolbar the platform built while a PrismTabs frame was
+ * [io.prismtabs.service.TabStrip] exists: a toolbar the platform built while a PrismTabs frame was
  * on the stack holds that frame's class in a creation-trace `Throwable` for as long as the toolbar
  * lives, and there is no handle on it to release. That one has to be *avoided*, not cleaned up.
  *
