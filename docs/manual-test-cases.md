@@ -83,19 +83,33 @@ Open it via its right-hand stripe button (or **View | Tool Windows | PrismTabs**
 
 ## 3. Licensing / paywall
 
-This build is paid (see "Before you start"), so every case here runs against the real gate.
+This build is paid (see "Before you start"), so every case here runs against the real gate. If you
+commented the `<product-descriptor>` out to click through the earlier sections, **revert it and
+restart the sandbox before starting here** — without the tag `PrismTabsLicense.isPaidBuild()` is
+`false`, so `paidFeaturesEnabled()` returns `true` whatever the facade says and the console snippets
+below appear to do nothing. The tag is read once at plugin load, so it takes a restart, not a
+reload: a plugin with a product code cannot load or unload dynamically (see §4).
 
 - [ ] From that dialog, **start the 14-day trial** — confirm paid features (tool window listing,
       hide/show, active-group auto-join, palette editing in Settings) all unlock.
       *Automated: partial — every paid feature unlocking once the gate reads licensed is covered in
       `PaywallUiTest`. Left for a human: starting a real trial, which needs a JetBrains Account.*
-- [x] **Lapse across a restart:** while licensed/trialling, mark a group active, hide another
-      group, and rename a palette preset in Settings. Fake the lapse (recipe below), then confirm
-      paid features lock again (tool window, active-group auto-join, palette editing) with **no
-      restart prompt** — tab colouring itself is free forever and keeps working throughout: losing
-      the licence is not the same as disabling the plugin (see §4), the gate is just re-read the
-      next time the affected code runs. Then **restart the IDE** yourself, only to confirm the
-      lapsed state and your other changes persisted across it.
+- [x] **Lapse across a restart.** What is under test is the *transition*, not the locked state: a
+      freshly built paid build with no licence boots locked already, so unlock it first or you will
+      only ever see a gate that was shut the whole time. Four steps, in this order, using the
+      console recipe below:
+
+      1. **Unlock**, simulating a subscription.
+      2. **Set up while unlocked:** mark a group active, hide another group, and rename a palette
+         preset in Settings.
+      3. **Lapse**, then confirm paid features lock again (tool window, active-group auto-join,
+         palette editing) with **no restart prompt** — tab colouring itself is free forever and
+         keeps working throughout: losing the licence is not the same as disabling the plugin (see
+         §4), the gate is just re-read the next time the affected code runs. This live re-lock is
+         the point of the case; step 4 cannot show it, since a restart drops the fake facade and
+         comes up unlicensed regardless.
+      4. **Restart the IDE** yourself, only to confirm the lapsed state and your other changes
+         persisted across it.
 
       No product code is registered on the Marketplace yet (`docs/release-readiness-gaps.md` item
       5), so there is no real trial or licence to remove locally — fake the licence facade instead,
@@ -105,9 +119,16 @@ This build is paid (see "Before you start"), so every case here runs against the
       `LicensingFacade.setInstance` NPEs on `getMessageBus()`. Pick **Groovy** when it asks for a
       language, then paste a snippet as a single line and run it with Ctrl+Enter, which executes the
       current line or selection. Both use fully qualified names, so no `import` line is needed:
-      - Unlock, simulating a subscription: `com.intellij.ui.LicensingFacade.setInstance(null)`.
-      - Lapse, simulating expiry, no restart needed: `def f = new com.intellij.ui.LicensingFacade();
+      - **Step 1, unlock**, simulating a subscription: `com.intellij.ui.LicensingFacade.setInstance(null)`.
+      - **Step 3, lapse**, simulating expiry, no restart needed: `def f = new com.intellij.ui.LicensingFacade();
         f.confirmationStamps = new java.util.HashMap(); com.intellij.ui.LicensingFacade.setInstance(f)`.
+
+      Neither snippet pushes a change out — nothing broadcasts a licence change, so each surface
+      keeps showing whatever it last rendered until something makes it redraw. After running either
+      snippet, nudge each surface you're checking rather than expecting it to update on its own: hide
+      and re-show the tool window (its gate is read in `toolWindowShown`/on the next group change, not
+      on a timer), and close and reopen Settings' Palette page. If a hide/show of the tool window still
+      shows the upsell panel afterwards, that's a real bug, not this lazy-refresh behaviour.
 
       This only simulates entitlement the same way `IdeaFrame.simulateEntitled`/`simulateUnlicensed`
       do for the uiTest suite (the "facade hasn't answered yet" row of `PrismTabsLicense.decide`) —
@@ -126,11 +147,15 @@ the in-place unload is only possible on a build without the product descriptor, 
 - [x] With at least one assigned group and an open tab showing it, go to **Settings | Plugins**,
       find PrismTabs, and **Disable** it. Confirm no error dialog appears and the IDE offers
       **Restart IDE**; after the restart the plugin is off and tabs carry no PrismTabs colour.
+      If the IDE disables it without offering a restart, your build has no `<product-descriptor>`,
+      so check `plugin.xml`.
       *Automated: partial — that the platform requires a restart for the paid build
       (`PluginUnloadUiTest` "the platform requires a restart to disable the paid build"). Left for a
       human: the Plugins page and the restart.*
 - [x] **Re-enable** it from the same page and restart. Confirm groups, colours and tool window all
-      come back correctly.
+      come back correctly. Checking the tool window needs the paywall unlocked, so use the same
+      descriptor-commented-out build as above rather than starting a real trial (see "Before you
+      start").
       *Automated: partial — that everything is read back from disk is covered by `PersistenceUiTest`
       and `TabGroupServiceTest`; on a build without the product descriptor, `PluginUnloadUiTest`
       also covers the in-place round trip (a group created just before the disable survives it, and
