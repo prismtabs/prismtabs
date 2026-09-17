@@ -43,7 +43,7 @@ class MacSettingsShortcutUiTest {
 
             keyboard.hotKey(KeyEvent.VK_META, KeyEvent.VK_COMMA)
 
-            val settings = dialog("Settings", timeout = ofSeconds(20))
+            val settings = settingsDialog(timeout = ofSeconds(20))
             keyboard.enterText("PrismTabs")
             waitFor(ofSeconds(20)) { settings.findAllText("PrismTabs").isNotEmpty() }
 

@@ -105,14 +105,14 @@ class TabGroupPaletteConfigurableUiTest {
                 remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Grey", name = "BeforeEdit")
 
                 openPrismTabsSettings()
-                val settings = dialog("Settings", ofSeconds(30))
+                val settings = settingsDialog(ofSeconds(30))
                 settings.editFirstPresetUntilPending(remoteRobot, "Work", lightRgb = 0x123456, darkRgb = 0x654321)
                 settings.find<JButtonFixture>(JButtonFixture.byText("Apply")).click()
                 waitFor(ofSeconds(10), errorMessage = "Apply did not save the edit: ${palettePreset(0)}") {
                     palettePreset(0) == "Work|${0x123456}|${0x654321}"
                 }
                 settings.find<JButtonFixture>(JButtonFixture.byText("OK")).click()
-                waitFor(ofSeconds(10)) { !hasDialog("Settings") }
+                waitFor(ofSeconds(10)) { !hasSettingsDialog() }
 
                 val edited = themed(0x123456, 0x654321)
                 remoteRobot.openTabGroupPopupOn(this, "Second.kt")
@@ -131,7 +131,7 @@ class TabGroupPaletteConfigurableUiTest {
                 assertEquals(grey.light.rgb and 0xFFFFFF, groupLightRgbFor("Sample.kt"), "a group made before the edit keeps its colour")
                 assertEquals(themedPreset("grey"), tabRgb("Sample.kt"), "and so does its tab")
             } finally {
-                if (hasDialog("Settings")) Keyboard(remoteRobot).escape()
+                if (hasSettingsDialog()) Keyboard(remoteRobot).escape()
                 resetTabGroupPalette()
             }
         }
@@ -143,17 +143,17 @@ class TabGroupPaletteConfigurableUiTest {
             try {
                 resetTabGroupPalette()
                 openPrismTabsSettings()
-                val settings = dialog("Settings", ofSeconds(30))
+                val settings = settingsDialog(ofSeconds(30))
                 settings.editFirstPresetUntilPending(remoteRobot, "Discarded", lightRgb = 0x0A0B0C, darkRgb = 0x0C0B0A)
 
                 settings.find<JButtonFixture>(JButtonFixture.byText("Cancel")).click()
-                waitFor(ofSeconds(10)) { !hasDialog("Settings") }
+                waitFor(ofSeconds(10)) { !hasSettingsDialog() }
 
                 val grey = TabGroupPalette.PRESETS.first()
                 assertEquals("Grey|${grey.light.rgb and 0xFFFFFF}|${grey.dark.rgb and 0xFFFFFF}", palettePreset(0))
                 assertEquals("Grey", paletteConfigurableLayout()["names"]?.substringBefore(','), "a page opened afterwards must show the old name")
             } finally {
-                if (hasDialog("Settings")) Keyboard(remoteRobot).escape()
+                if (hasSettingsDialog()) Keyboard(remoteRobot).escape()
                 resetTabGroupPalette()
             }
         }
@@ -180,7 +180,7 @@ private fun DialogFixture.editFirstPresetUntilPending(remoteRobot: RemoteRobot, 
         val nameField = findAll<JTextFieldFixture>(fields).first()
         if (nameField.text != name) {
             nameField.click()
-            Keyboard(remoteRobot).hotKey(KeyEvent.VK_CONTROL, KeyEvent.VK_A)
+            Keyboard(remoteRobot).hotKey(remoteRobot.menuShortcutKey(), KeyEvent.VK_A)
             Keyboard(remoteRobot).enterText(name)
         }
         remoteRobot.setPresetColoursInOpenSettings(0, lightRgb, darkRgb)

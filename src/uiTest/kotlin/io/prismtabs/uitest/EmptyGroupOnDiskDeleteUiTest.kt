@@ -52,7 +52,7 @@ class EmptyGroupOnDiskDeleteUiTest {
             waitFor(ofSeconds(10)) { openTabNames().contains("Doomed.kt") }
             assignFileToNewGroup("Doomed.kt", "Doomed")
 
-            deleteFromProjectView(remoteRobot, "Doomed")
+            deleteFromProjectView(remoteRobot, "Doomed.kt")
 
             dialog("Empty Tab Group", ofSeconds(20)) {
                 find<JButtonFixture>(JButtonFixture.byText("Delete Group")).click()
@@ -121,7 +121,7 @@ class EmptyGroupOnDiskDeleteUiTest {
 }
 
 /**
- * Selects the row labelled [label] in the Project tool window and presses Delete, then accepts
+ * Selects [fileName]'s row in the Project tool window and presses Delete, then accepts
  * whatever confirmation the platform raises — the real user gesture, rather than the VFS call
  * underneath it.
  *
@@ -130,7 +130,7 @@ class EmptyGroupOnDiskDeleteUiTest {
  * step available. The tree click itself does need real input, since a tree selection is what the
  * delete action reads its target from.
  */
-private fun IdeaFrame.deleteFromProjectView(remoteRobot: RemoteRobot, label: String) {
+private fun IdeaFrame.deleteFromProjectView(remoteRobot: RemoteRobot, fileName: String) {
     runJs(
         """
         importPackage(com.intellij.openapi.wm.impl)
@@ -150,15 +150,18 @@ private fun IdeaFrame.deleteFromProjectView(remoteRobot: RemoteRobot, label: Str
         true,
     )
 
-    // Matched on the row's rendered text, which is **not** the file name: the Kotlin plugin
-    // presents a .kt file holding a single top-level declaration as that declaration's name, so
-    // `Doomed.kt` renders as `Doomed`. Waiting for the file name here times out against a tree that
-    // is showing the file perfectly well — hence [label] being the caller's to supply.
-    val tree = find<JTreeFixture>(byXpath("//div[@class='ProjectViewTree']"), ofSeconds(20))
-    waitFor(ofSeconds(20), errorMessage = "no '$label' row in the project tree") {
-        runCatching { tree.collectRows().any { it.trim() == label } }.getOrDefault(false)
+    // Matched on the row's rendered text, which is not always the file name: up to at least 2024.2
+    // the Kotlin plugin presents a .kt file holding a single top-level declaration as that
+    // declaration's name, so `Doomed.kt` renders as `Doomed`, while 2026.2 renders `Doomed.kt`.
+    // Waiting for only one of the two times out against a tree showing the file perfectly well.
+    val labels = setOf(fileName, fileName.substringBeforeLast('.'))
+    val tree = find<JTreeFixture>(PROJECT_VIEW_TREE, ofSeconds(20))
+    var label: String? = null
+    waitFor(ofSeconds(20), errorMessage = "no row for '$fileName' in the project tree") {
+        label = runCatching { tree.collectRows().map { it.trim() }.firstOrNull { it in labels } }.getOrNull()
+        label != null
     }
-    tree.clickRowWithText(label, true)
+    tree.clickRowWithText(label!!, true)
     Keyboard(remoteRobot).key(KeyEvent.VK_DELETE)
 
     // The platform's confirmation, matched by its button rather than its title so this does not
