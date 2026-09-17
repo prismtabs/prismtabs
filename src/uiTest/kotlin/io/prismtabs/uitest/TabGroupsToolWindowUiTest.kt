@@ -791,7 +791,7 @@ class TabGroupsToolWindowUiTest {
     /**
      * Multi-select removal, driven with the gesture it exists for: toggle-click two of a group's
      * three files, then remove both in one go. The modifier held is the platform's own — Ctrl on
-     * Linux and Windows, ⌘ on macOS — see [toggleSelectionKey]. Three things are asserted that
+     * Linux and Windows, ⌘ on macOS — see [menuShortcutKey]. Three things are asserted that
      * single-selection could not reach — the item states the count, the right-click *inside* an existing selection
      * keeps that selection whole (without which the menu would discard the very rows it acts on),
      * and the group's own actions stay live because every selected row belongs to one group.
@@ -815,7 +815,7 @@ class TabGroupsToolWindowUiTest {
                 remoteRobot.expandToolWindowGroup("Bulk")
                 val tree = remoteRobot.toolWindowGroupTree()
                 tree.clickRowWithText("Sample.kt", false)
-                Keyboard(remoteRobot).pressing(remoteRobot.toggleSelectionKey()) {
+                Keyboard(remoteRobot).pressing(remoteRobot.menuShortcutKey()) {
                     tree.clickRowWithText("Second.kt", false)
                 }
                 waitFor(ofSeconds(10)) { remoteRobot.toolWindowSelectionCount() == 2 }
@@ -880,7 +880,7 @@ class TabGroupsToolWindowUiTest {
                 remoteRobot.expandToolWindowGroup("SpanB")
                 val tree = remoteRobot.toolWindowGroupTree()
                 tree.clickRowWithText("Sample.kt", false)
-                Keyboard(remoteRobot).pressing(remoteRobot.toggleSelectionKey()) {
+                Keyboard(remoteRobot).pressing(remoteRobot.menuShortcutKey()) {
                     tree.clickRowWithText("Second.kt", false)
                 }
                 waitFor(ofSeconds(10)) { remoteRobot.toolWindowSelectionCount() == 2 }

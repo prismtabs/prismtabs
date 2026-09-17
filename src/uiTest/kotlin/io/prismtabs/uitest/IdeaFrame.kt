@@ -1039,7 +1039,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
             true,
         )
 
-        val tree = find<JTreeFixture>(byXpath("//div[@class='ProjectViewTree']"), Duration.ofSeconds(20))
+        val tree = find<JTreeFixture>(PROJECT_VIEW_TREE, Duration.ofSeconds(20))
         waitFor(Duration.ofSeconds(20), errorMessage = "no '$label' row in the project tree") {
             runCatching { tree.collectRows().any { it.trim() == label } }.getOrDefault(false)
         }
@@ -1881,11 +1881,14 @@ fun RemoteRobot.toolWindowSelectionCount(): Int =
     toolWindowGroupTree().callJs<String>("'' + component.getSelectionCount()", true).toInt()
 
 /**
- * The key held down to toggle one more row into a tree selection — `VK_CONTROL` on Linux and
- * Windows, `VK_META` (⌘) on macOS.
+ * The platform's menu-shortcut modifier — `VK_CONTROL` on Linux and Windows, `VK_META` (⌘) on
+ * macOS. It is both the key held down to toggle one more row into a tree selection and the modifier
+ * of Select All in a text field ([typeOverFocusedFieldAndEnter]).
  *
  * Not a hardcoded `VK_CONTROL`, which is what the multi-select tests shipped with and what made
  * both of them fail on macOS with a `WaitForConditionTimeoutException` on the selection count. The
+ * text-field helpers shipped with it too: on macOS Ctrl+A moves the caret to the start of the line
+ * rather than selecting, so the new text was typed in front of the old (`After.txtBefore.txt`). The
  * gesture is not the plugin's to choose: `TabGroupsToolWindow` only asks for
  * `DISCONTIGUOUS_TREE_SELECTION`, and Swing decides the modifier per platform in
  * `BasicTreeUI.isToggleSelectionEvent`, which delegates to `SwingUtilities2.isMenuShortcutKeyDown`
@@ -1899,7 +1902,7 @@ fun RemoteRobot.toolWindowSelectionCount(): Int =
  * different question.) Asking for the mask rather than matching an OS name also keeps this correct
  * on any platform whose look-and-feel picks a third modifier.
  */
-fun RemoteRobot.toggleSelectionKey(): Int {
+fun RemoteRobot.menuShortcutKey(): Int {
     val isMeta = callJs<String>(
         """
         importPackage(java.awt)

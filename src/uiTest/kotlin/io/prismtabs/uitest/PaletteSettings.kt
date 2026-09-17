@@ -129,7 +129,9 @@ fun RemoteRobot.setPresetColoursInOpenSettings(index: Int, lightRgb: Int, darkRg
         var windows = java.awt.Window.getWindows()
         for (var i = 0; i < windows.length; i++) {
             var w = windows[i]
-            if (w.isShowing() && w instanceof javax.swing.JDialog && w.getTitle() == 'Settings') dialog = w
+            // "Settings" on 2024.2, "Settings – <project name>" on 2026.2; see [settingsDialog].
+            var title = w instanceof javax.swing.JDialog ? '' + w.getTitle() : ''
+            if (w.isShowing() && (title == 'Settings' || title.indexOf('Settings – ') == 0)) dialog = w
         }
         if (dialog == null) throw new java.lang.IllegalStateException('no Settings dialog is open')
         var pickers = []

@@ -258,7 +258,7 @@ class WindowsManualVerificationUiTest {
                 // --- 7. Settings | Tools | PrismTabs ---------------------------------------
                 try {
                     openPrismTabsSettings()
-                    val settingsDialog = dialog("Settings")
+                    val settingsDialog = settingsDialog()
                     // The dialog window appears before its content does — Settings pages load
                     // asynchronously behind a "loading…" placeholder. Wait for an actual preset
                     // label rather than screenshotting the placeholder.

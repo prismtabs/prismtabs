@@ -117,9 +117,16 @@ fun IdeaFrame.tabRgb(tabName: String): Int? = when (val raw = tabColorOf(tabName
  * since the icon, title and close button cover a small fraction of it.
  *
  * This is the reading that tells a selected tab (the group colour, at full strength) from an
- * unselected one (the platform blends it about halfway into the strip), which the colour held on the
- * `TabInfo` cannot: that is the same object either way. Measured against this sandbox's New UI Dark
+ * unselected one (the platform blends it part of the way into the strip), which the colour held on
+ * the `TabInfo` cannot: that is the same object either way. Measured against 2024.2's New UI Dark
  * theme with Blue's `2e5c9c`: `2e5c9c` selected, `253d5e` unselected, over a `1e1f22` strip.
+ *
+ * The strip's own background is left out of the count. 2024.2 fills a tab's whole bounds, but
+ * 2026.2's Islands themes paint it as a rounded pill inset within them, and around a selected pill
+ * the strip outnumbers the pill itself (measured: 2184 strip pixels to 1776 of Blue). The strip
+ * colour is read as the dominant colour across the strip's full width at the tab's height, which the
+ * few tabs these tests open never cover. It is still the answer for a tab painted no differently
+ * from the strip, i.e. when nothing else covers at least [MIN_TAB_FILL] of the tab.
  */
 fun IdeaFrame.paintedTabRgb(tabName: String): Int = callJs<String>(
     """
@@ -135,6 +142,21 @@ fun IdeaFrame.paintedTabRgb(tabName: String): Int = callJs<String>(
         }
         return null
     }
+    function dominant(image, x0, x1, y0, y1, skip) {
+        var counts = new java.util.HashMap()
+        var best = skip
+        var bestCount = 0
+        for (var x = x0; x < x1; x++) {
+            for (var y = y0; y < y1; y++) {
+                var rgb = image.getRGB(x, y) & 0xFFFFFF
+                if (rgb == skip) continue
+                var count = (counts.containsKey(rgb) ? counts.get(rgb) : 0) + 1
+                counts.put(rgb, count)
+                if (count > bestCount) { best = rgb; bestCount = count }
+            }
+        }
+        return [best, bestCount]
+    }
     var label = findTab(component)
     if (label == null) throw new java.lang.IllegalStateException('no tab named $tabName is open')
     var tabs = label.getParent()
@@ -142,29 +164,44 @@ fun IdeaFrame.paintedTabRgb(tabName: String): Int = callJs<String>(
     var g = image.createGraphics()
     try { tabs.paint(g) } finally { g.dispose() }
     var bounds = label.getBounds()
-    var counts = new java.util.HashMap()
-    var best = 0
-    var bestCount = 0
-    for (var x = bounds.x; x < bounds.x + bounds.width; x++) {
-        for (var y = bounds.y; y < bounds.y + bounds.height; y++) {
-            var rgb = image.getRGB(x, y) & 0xFFFFFF
-            var count = (counts.containsKey(rgb) ? counts.get(rgb) : 0) + 1
-            counts.put(rgb, count)
-            if (count > bestCount) { best = rgb; bestCount = count }
-        }
-    }
-    '' + best
+    var strip = dominant(image, 0, tabs.getWidth(), bounds.y, bounds.y + bounds.height, -1)[0]
+    var tab = dominant(image, bounds.x, bounds.x + bounds.width, bounds.y, bounds.y + bounds.height, strip)
+    '' + (tab[1] >= bounds.width * bounds.height * $MIN_TAB_FILL ? tab[0] : strip)
     """,
     true,
 ).toInt()
+
+/**
+ * The share of a tab's bounds a colour other than the strip's must cover to count as the tab's fill
+ * in [paintedTabRgb]: below it are the title, icon and close button of a tab painted like the strip.
+ * The smallest real fill measured is a 2026.2 Islands selected pill, at 36%.
+ */
+private const val MIN_TAB_FILL = 0.2
 
 /** Whether two colours match within [tolerance] on every channel. */
 fun rgbClose(expected: Int, actual: Int, tolerance: Int = 2): Boolean =
     (0..16 step 8).all { shift -> kotlin.math.abs((expected shr shift and 0xFF) - (actual shr shift and 0xFF)) <= tolerance }
 
-/** Each channel of [colour] blended halfway into [background] — how the strip paints an unselected tinted tab. */
-fun halfwayBlend(colour: Int, background: Int): Int =
-    (0..16 step 8).sumOf { shift -> (((colour shr shift and 0xFF) + (background shr shift and 0xFF)) / 2) shl shift }
+/**
+ * Whether [painted] is [colour] blended part of the way into [background] — how the strip paints an
+ * unselected tinted tab: the same share of [colour] on every channel, within [tolerance] levels, and
+ * clearly short of both ends.
+ *
+ * Not an exact halfway blend, because the share is the platform's and it moved: 2024.2's New UI Dark
+ * paints about 50%, 2026.2's Islands Dark 40% (measured: `8ab4f8` over `191a1c` painted as `465874`).
+ */
+fun isDimmedBlend(colour: Int, background: Int, painted: Int, tolerance: Int = 3): Boolean {
+    val channels = (0..16 step 8).map { shift ->
+        Triple(colour shr shift and 0xFF, background shr shift and 0xFF, painted shr shift and 0xFF)
+    }
+    // The share is read off the channel with the most room between the two colours, where one
+    // level of rounding moves it least.
+    val (c, b, p) = channels.maxBy { (c, b, _) -> kotlin.math.abs(c - b) }
+    if (c == b) return false
+    val share = (p - b).toDouble() / (c - b)
+    return share in 0.25..0.75 &&
+        channels.all { (c, b, p) -> kotlin.math.abs(b + share * (c - b) - p) <= tolerance }
+}
 
 fun Int.hex(): String = "%06x".format(this)
 
@@ -297,7 +334,7 @@ fun RemoteRobot.closeDialogFromTitleBar(title: String) {
 /** Selects everything in the focused text field and types [text] over it, then presses Enter. */
 fun RemoteRobot.typeOverFocusedFieldAndEnter(text: String) {
     val keyboard = Keyboard(this)
-    keyboard.hotKey(KeyEvent.VK_CONTROL, KeyEvent.VK_A)
+    keyboard.hotKey(menuShortcutKey(), KeyEvent.VK_A)
     keyboard.enterText(text)
     keyboard.enter()
 }
@@ -453,7 +490,11 @@ fun RemoteRobot.setClipboardText(text: String) {
     )
 }
 
-/** The virtual files the Project view has selected, as paths relative to the project. */
+/**
+ * The virtual files the Project view has selected, as paths relative to the project — `.` for the
+ * project directory itself, which 2026.2 selects for a moment on its way to a Select in Project View
+ * target.
+ */
 fun IdeaFrame.projectViewSelection(): List<String> = callJs<String>(
     """
     $SERVICE_PRELUDE
@@ -465,13 +506,26 @@ fun IdeaFrame.projectViewSelection(): List<String> = callJs<String>(
         for (var i = 0; i < elements.length; i++) {
             var e = elements[i]
             var file = (e instanceof com.intellij.psi.PsiFileSystemItem) ? e.getVirtualFile() : (e instanceof VirtualFile ? e : null)
-            if (file != null) out.push(file.getPath().substring(project.getBasePath().length() + 1))
+            if (file == null) continue
+            var path = file.getPath()
+            var base = project.getBasePath()
+            out.push(path == base ? '.' : path.substring(base.length() + 1))
         }
     }
     out.join('\n')
     """,
     true,
 ).lines().filter { it.isNotEmpty() }
+
+/**
+ * The Project view's tree. Matched on its class hierarchy rather than its exact class: 2024.2 shows a
+ * `ProjectViewTree`, while 2026.2 shows `ProjectViewPane$MyProjectViewTree`, a subclass of it, so an
+ * `@class='ProjectViewTree'` locator finds nothing there.
+ */
+val PROJECT_VIEW_TREE = byXpath(
+    "Project view tree",
+    "//div[@class='ProjectViewTree' or contains(@classhierarchy, 'com.intellij.ide.projectView.impl.ProjectViewTree ')]",
+)
 
 /** Opens the Project tool window by script and returns its tree, once it shows a row labelled [label]. */
 fun IdeaFrame.projectViewTreeShowing(label: String, expandFirst: String? = null): JTreeFixture {
@@ -483,7 +537,7 @@ fun IdeaFrame.projectViewTreeShowing(label: String, expandFirst: String? = null)
         """,
         true,
     )
-    val tree = find<JTreeFixture>(byXpath("//div[@class='ProjectViewTree']"), Duration.ofSeconds(20))
+    val tree = find<JTreeFixture>(PROJECT_VIEW_TREE, Duration.ofSeconds(20))
     if (expandFirst != null) {
         waitFor(Duration.ofSeconds(20), errorMessage = "no '$expandFirst' row in the project tree") {
             runCatching { tree.collectRows().any { it.trim() == expandFirst } }.getOrDefault(false)

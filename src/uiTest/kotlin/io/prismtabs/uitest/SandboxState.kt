@@ -47,12 +47,23 @@ fun IdeaFrame.prismTabsPluginState(): Map<String, Boolean> = callJs<String>(
     true,
 ).split('|').associate { it.substringBefore('=') to it.substringAfter('=').toBoolean() }
 
-/** What the platform answers when asked whether PrismTabs can be unloaded without a restart — `null` if it can. */
+/**
+ * What the platform answers when asked whether PrismTabs can be unloaded without a restart — `null` if it can.
+ *
+ * The reason moved between platform versions (read with `javap` from both): 2024.2's
+ * `checkCanUnloadWithoutRestart(IdeaPluginDescriptorImpl)` returns it as a `String`, while 2026.2
+ * turns that name into a `boolean` over `PluginMainDescriptor` and returns the reason from
+ * `validateCanUnloadWithoutRestart` instead. Calling the old name on 2026.2 gives back `false`, not
+ * a reason, so the newer method is preferred wherever it exists.
+ */
 fun IdeaFrame.unloadWithoutRestartRefusal(): String? = callJs<String>(
     """
     $PLUGIN_PRELUDE
     var descriptor = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs'))
-    var reason = DynamicPlugins.INSTANCE.checkCanUnloadWithoutRestart(descriptor)
+    var plugins = DynamicPlugins.INSTANCE
+    var reason = typeof plugins.validateCanUnloadWithoutRestart === 'function'
+        ? plugins.validateCanUnloadWithoutRestart(descriptor)
+        : plugins.checkCanUnloadWithoutRestart(descriptor)
     reason == null ? '' : '' + reason
     """,
     true,

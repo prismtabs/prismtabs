@@ -1252,11 +1252,16 @@ IDE is extracted into Gradle 9's transform cache, which Gradle holds immutable. 
 launch failed with "the contents of the immutable workspace have been modified" until the cache was
 deleted by hand. No JCEF property moves that directory, and IPGP 2.19.0 lists no fix.
 
-So far only `PluginUnloadUiTest` is known to pass there. Run it on its own (`--tests
-io.prismtabs.uitest.PluginUnloadUiTest`), with `<product-descriptor>` commented out as that class
-requires. The rest of the suite has not been brought up on 2026.2: under Xvfb it wedges at
-`EmptyGroupOnDiskDeleteUiTest`, whose robot click on the empty-group dialog does not land, and every
-test after that times out against the blocked IDE.
+The whole suite passes there on macOS (95 tests, 3 skipped, on IDEA 2026.2.2, 2026-09-17), once the
+helpers stopped assuming 2024.2's component shapes. 2026.2 shows the Project view tree as
+`ProjectViewPane$MyProjectViewTree` and Settings as a non-modal window titled "Settings – <project>",
+paints a tab as a rounded pill inset in its bounds (Islands themes) and blends an unselected tinted
+one about 40% rather than 50% into the strip, and renders a single-declaration `.kt` file under its
+file name — each is handled, and documented, where the helper meets it. `PluginUnloadUiTest`'s
+unload scenario still needs `<product-descriptor>` commented out, as that class requires; on a paid
+build it skips itself. Under Xvfb on Linux the suite has been seen to wedge at
+`EmptyGroupOnDiskDeleteUiTest`, whose robot click on the empty-group dialog did not land, with every
+test after it timing out against the blocked IDE; that has not been re-checked since.
 
 ### Expected sandbox noise — an error balloon and a warning, neither a PrismTabs bug
 

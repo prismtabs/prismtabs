@@ -618,9 +618,8 @@ class TabGroupPopupUiTest {
 
             selectTab("Second.kt")
             waitFor(ofSeconds(10)) { selectedTabName() == "Second.kt" }
-            val half = halfwayBlend(blue, strip)
-            waitFor(ofSeconds(10), errorMessage = "expected ${half.hex()} once unselected, got ${paintedTabRgb("Sample.kt").hex()}") {
-                rgbClose(half, paintedTabRgb("Sample.kt"), tolerance = 3)
+            waitFor(ofSeconds(10), errorMessage = "expected ${blue.hex()} dimmed into ${strip.hex()} once unselected, got ${paintedTabRgb("Sample.kt").hex()}") {
+                isDimmedBlend(blue, strip, paintedTabRgb("Sample.kt"))
             }
         }
     }
@@ -642,9 +641,9 @@ class TabGroupPopupUiTest {
             remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Blue", name = "Background")
 
             assertEquals("Third.kt", selectedTabName(), "assigning a background tab must not select it")
-            val half = halfwayBlend(themedPreset("blue"), strip)
-            waitFor(ofSeconds(10), errorMessage = "expected ${half.hex()}, got ${paintedTabRgb("Sample.kt").hex()}") {
-                rgbClose(half, paintedTabRgb("Sample.kt"), tolerance = 3)
+            val blue = themedPreset("blue")
+            waitFor(ofSeconds(10), errorMessage = "expected ${blue.hex()} dimmed into ${strip.hex()}, got ${paintedTabRgb("Sample.kt").hex()}") {
+                isDimmedBlend(blue, strip, paintedTabRgb("Sample.kt"))
             }
             assertTrue(rgbClose(strip, paintedTabRgb("Second.kt")), "the untouched tab must keep the strip's colour")
         }
