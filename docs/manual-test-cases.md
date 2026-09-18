@@ -99,43 +99,43 @@ reload: a plugin with a product code cannot load or unload dynamically (see §4)
       only ever see a gate that was shut the whole time. Four steps, in this order, using the
       console recipe below:
 
-      1. **Unlock**, simulating a subscription.
-      2. **Set up while unlocked:** mark a group active, hide another group, and rename a palette
-         preset in Settings.
-      3. **Lapse**, then confirm paid features lock again (tool window, active-group auto-join,
-         palette editing) with **no restart prompt** — tab colouring itself is free forever and
-         keeps working throughout: losing the licence is not the same as disabling the plugin (see
-         §4), the gate is just re-read the next time the affected code runs. This live re-lock is
-         the point of the case; step 4 cannot show it, since a restart drops the fake facade and
-         comes up unlicensed regardless.
-      4. **Restart the IDE** yourself, only to confirm the lapsed state and your other changes
-         persisted across it.
+  1. **Unlock**, simulating a subscription.
+  2. **Set up while unlocked:** mark a group active, hide another group, and rename a palette
+     preset in Settings.
+  3. **Lapse**, then confirm paid features lock again (tool window, active-group auto-join,
+     palette editing) with **no restart prompt** — tab colouring itself is free forever and
+     keeps working throughout: losing the licence is not the same as disabling the plugin (see
+     §4), the gate is just re-read the next time the affected code runs. This live re-lock is
+     the point of the case; step 4 cannot show it, since a restart drops the fake facade and
+     comes up unlicensed regardless.
+  4. **Restart the IDE** yourself, only to confirm the lapsed state and your other changes
+     persisted across it.
 
-      No product code is registered on the Marketplace yet (`docs/release-readiness-gaps.md` item
-      5), so there is no real trial or licence to remove locally — fake the licence facade instead,
-      live, in the same `runIde` sandbox: **Find Action → "IDE Scripting Console"** (action id
-      `IdeScriptingConsole`), not the Groovy plugin's own "Groovy Console" — that one runs your
-      script in a separate JVM with no platform `Application`, so
-      `LicensingFacade.setInstance` NPEs on `getMessageBus()`. Pick **Groovy** when it asks for a
-      language, then paste a snippet as a single line and run it with Ctrl+Enter, which executes the
-      current line or selection. Both use fully qualified names, so no `import` line is needed:
-      - **Step 1, unlock**, simulating a subscription: `com.intellij.ui.LicensingFacade.setInstance(null)`.
-      - **Step 3, lapse**, simulating expiry, no restart needed: `def f = new com.intellij.ui.LicensingFacade();
-        f.confirmationStamps = new java.util.HashMap(); com.intellij.ui.LicensingFacade.setInstance(f)`.
+  No product code is registered on the Marketplace yet (`docs/release-readiness-gaps.md` item
+  5), so there is no real trial or licence to remove locally — fake the licence facade instead,
+  live, in the same `runIde` sandbox: **Find Action → "IDE Scripting Console"** (action id
+  `IdeScriptingConsole`), not the Groovy plugin's own "Groovy Console" — that one runs your
+  script in a separate JVM with no platform `Application`, so
+  `LicensingFacade.setInstance` NPEs on `getMessageBus()`. Pick **Groovy** when it asks for a
+  language, then paste a snippet as a single line and run it with Ctrl+Enter, which executes the
+  current line or selection. Both use fully qualified names, so no `import` line is needed:
+  - **Step 1, unlock**, simulating a subscription: `com.intellij.ui.LicensingFacade.setInstance(null)`.
+  - **Step 3, lapse**, simulating expiry, no restart needed: `def f = new com.intellij.ui.LicensingFacade();
+    f.confirmationStamps = new java.util.HashMap(); com.intellij.ui.LicensingFacade.setInstance(f)`.
 
-      Neither snippet pushes a change out — nothing broadcasts a licence change, so each surface
-      keeps showing whatever it last rendered until something makes it redraw. After running either
-      snippet, nudge each surface you're checking rather than expecting it to update on its own: hide
-      and re-show the tool window (its gate is read in `toolWindowShown`/on the next group change, not
-      on a timer), and close and reopen Settings' Palette page. If a hide/show of the tool window still
-      shows the upsell panel afterwards, that's a real bug, not this lazy-refresh behaviour.
+  Neither snippet pushes a change out — nothing broadcasts a licence change, so each surface
+  keeps showing whatever it last rendered until something makes it redraw. After running either
+  snippet, nudge each surface you're checking rather than expecting it to update on its own: hide
+  and re-show the tool window (its gate is read in `toolWindowShown`/on the next group change, not
+  on a timer), and close and reopen Settings' Palette page. If a hide/show of the tool window still
+  shows the upsell panel afterwards, that's a real bug, not this lazy-refresh behaviour.
 
-      This only simulates entitlement the same way `IdeaFrame.simulateEntitled`/`simulateUnlicensed`
-      do for the uiTest suite (the "facade hasn't answered yet" row of `PrismTabsLicense.decide`) —
-      it cannot prove a real, JetBrains-signed stamp verifies. That's what the trial/real-key bullet
-      above is for, once the plugin is actually listed.
-      *Automated: partial — the lapse and the restart are each automated (`PersistenceUiTest`,
-      `PaywallUiTest`). Left for a human: restarting the IDE to confirm what survives.*
+  This only simulates entitlement the same way `IdeaFrame.simulateEntitled`/`simulateUnlicensed`
+  do for the uiTest suite (the "facade hasn't answered yet" row of `PrismTabsLicense.decide`) —
+  it cannot prove a real, JetBrains-signed stamp verifies. That's what the trial/real-key bullet
+  above is for, once the plugin is actually listed.
+  *Automated: partial — the lapse and the restart are each automated (`PersistenceUiTest`,
+  `PaywallUiTest`). Left for a human: restarting the IDE to confirm what survives.*
 
 ## 4. Disabling and re-enabling the plugin (optional, advanced)
 
@@ -152,7 +152,7 @@ the in-place unload is only possible on a build without the product descriptor, 
       *Automated: partial — that the platform requires a restart for the paid build
       (`PluginUnloadUiTest` "the platform requires a restart to disable the paid build"). Left for a
       human: the Plugins page and the restart.*
-- [x] **Re-enable** it from the same page and restart. Confirm groups, colours and tool window all
+- [ ] **Re-enable** it from the same page and restart. Confirm groups, colours and tool window all
       come back correctly. Checking the tool window needs the paywall unlocked, so use the same
       descriptor-commented-out build as above rather than starting a real trial (see "Before you
       start").
@@ -160,7 +160,7 @@ the in-place unload is only possible on a build without the product descriptor, 
       and `TabGroupServiceTest`; on a build without the product descriptor, `PluginUnloadUiTest`
       also covers the in-place round trip (a group created just before the disable survives it, and
       the tabs left open get their colour back). Left for a human: the re-enable and the restart.*
-- [x] Watch `idea.log` (Help | Show Log) during both steps for any `io.prismtabs` `SEVERE`
+- [ ] Watch `idea.log` (Help | Show Log) during both steps for any `io.prismtabs` `SEVERE`
       entries — there should be none.
       *Automated: not automated — both steps need a restart, which the suite does not perform.*
 
@@ -169,16 +169,16 @@ the in-place unload is only possible on a build without the product descriptor, 
 Per CLAUDE.md's UI standard — check these opportunistically while working through every section
 above, not as a final once-over:
 
-- [x] All icons (stripe icon, Hide/Show eyes, colour swatches, Delete's waste-basket) render
+- [ ] All icons (stripe icon, Hide/Show eyes, colour swatches, Delete's waste-basket) render
       crisply at your display's scaling, in both themes.
       *Automated: not automated — a visual judgement.*
-- [x] No menu item, dialog title, or button label is truncated, misaligned, or uses the wrong
+- [ ] No menu item, dialog title, or button label is truncated, misaligned, or uses the wrong
       punctuation convention (an ellipsis only where further input follows — see README "Checked
       against the JetBrains UI Guidelines").
       *Automated: partial — the exact wording of every label the tests touch is asserted, and the "…"
       of the strings with unit tests (`AddToActiveGroupLabelTest`, `CurrentGroupCaptionTest`,
       `MemberFileRowsTest`). Left for a human: truncation and alignment.*
-- [x] No stray `SEVERE` log entries attributable to `io.prismtabs` appear in `idea.log`
+- [ ] No stray `SEVERE` log entries attributable to `io.prismtabs` appear in `idea.log`
       during any of the above (some non-PrismTabs sandbox noise is expected and documented in
       README "Noisy but harmless log output" — don't confuse the two).
       *Automated: partial — every UI test fails on a PrismTabs `SEVERE` logged while it runs
