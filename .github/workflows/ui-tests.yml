@@ -37,7 +37,12 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          # Basic caching is MIT-licensed and free for private repositories. The default,
+          # enhanced caching, is proprietary and needs Gradle's Terms of Use accepted (see
+          # DISTRIBUTION.md in gradle/actions).
+          cache-provider: basic
 
       # Same pattern as local dev (README "UI testing"): a long-lived IDE process backgrounded in
       # its own step, polled for readiness in the next one, then driven from the one after that.

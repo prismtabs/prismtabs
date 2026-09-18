@@ -26,7 +26,12 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          # Basic caching is MIT-licensed and free for private repositories. The default,
+          # enhanced caching, is proprietary and needs Gradle's Terms of Use accepted (see
+          # DISTRIBUTION.md in gradle/actions).
+          cache-provider: basic
       # Re-run build + verifyPlugin here rather than trusting build.yml's last run: tag pushes
       # don't necessarily correspond to a commit that workflow has already checked (tags aren't
       # branches), so this is the safety net that guarantees a green build is what gets signed.
