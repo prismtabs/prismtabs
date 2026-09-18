@@ -54,7 +54,7 @@ jobs:
         run: |
           if [ -z "$DEPLOY_KEY" ]; then
             echo "::error::WEBSITE_DEPLOY_KEY is not set, so the published page cannot be read." \
-                 "Add a read-only deploy key to yendrrek/prismtabs-website and store its private" \
+                 "Add a read-only deploy key to prismtabs/prismtabs-website and store its private" \
                  "half in this repository as a secret named WEBSITE_DEPLOY_KEY." \
                  "See 'Keeping the EULA in sync' in that repository's README."
             exit 1
@@ -64,7 +64,7 @@ jobs:
       - name: Check out the published page and the checker
         uses: actions/checkout@v4
         with:
-          repository: yendrrek/prismtabs-website
+          repository: prismtabs/prismtabs-website
           ssh-key: ${{ secrets.WEBSITE_DEPLOY_KEY }}
           path: website
           sparse-checkout: |

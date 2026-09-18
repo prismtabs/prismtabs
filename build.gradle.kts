@@ -82,7 +82,7 @@ kotlin {
 
 changelog {
     version = providers.gradleProperty("pluginVersion")
-    repositoryUrl = "https://github.com/yendrrek/prismtabs"
+    repositoryUrl = "https://github.com/prismtabs/prismtabs"
 }
 
 intellijPlatform {
