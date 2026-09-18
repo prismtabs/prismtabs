@@ -26,7 +26,12 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          # Basic caching is MIT-licensed and free for private repositories. The default,
+          # enhanced caching, is proprietary and needs Gradle's Terms of Use accepted (see
+          # DISTRIBUTION.md in gradle/actions).
+          cache-provider: basic
       # `windows-latest`'s default `run:` shell is PowerShell, which cannot execute `./gradlew`
       # (a POSIX shell script) — `shell: bash` forces Git Bash, preinstalled on that runner, so
       # the same invocation works unmodified on all three OSes.
@@ -47,7 +52,12 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          # Basic caching is MIT-licensed and free for private repositories. The default,
+          # enhanced caching, is proprietary and needs Gradle's Terms of Use accepted (see
+          # DISTRIBUTION.md in gradle/actions).
+          cache-provider: basic
       - id: list
         # Fail rather than hand the matrix an empty list: that would skip verification entirely
         # and still leave the build green.
@@ -91,5 +101,10 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          # Basic caching is MIT-licensed and free for private repositories. The default,
+          # enhanced caching, is proprietary and needs Gradle's Terms of Use accepted (see
+          # DISTRIBUTION.md in gradle/actions).
+          cache-provider: basic
       - run: ./gradlew verifyPlugin -PverifyIde=${{ matrix.ide }}
