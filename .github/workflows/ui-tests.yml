@@ -52,7 +52,7 @@ jobs:
 
       - name: Wait for robot-server on :8082
         run: |
-          for i in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             if curl -sf http://127.0.0.1:8082 > /dev/null; then
               echo "robot-server is up"
               exit 0
