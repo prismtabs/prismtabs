@@ -37,6 +37,13 @@ jobs:
       # the same invocation works unmodified on all three OSes.
       - run: ./gradlew build
         shell: bash
+      # The basic cache provider archives ~/.gradle/caches after the last step. On Windows that
+      # failed with "Device or resource busy" on Gradle's .lock files while the daemon was still
+      # running, so no cache was ever saved. Stopping it first lets the archive complete.
+      - name: Stop the Gradle daemon
+        if: always()
+        run: ./gradlew --stop
+        shell: bash
 
   verify-plugin:
     uses: ./.github/workflows/verify-plugin.yml

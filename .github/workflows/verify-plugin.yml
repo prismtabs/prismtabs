@@ -80,4 +80,9 @@ jobs:
           # enhanced caching, is proprietary and needs Gradle's Terms of Use accepted (see
           # DISTRIBUTION.md in gradle/actions).
           cache-provider: basic
+          # Restore the shared dependency cache but never save one. The basic provider keys only
+          # on the build files, so every job on this OS shares one entry, and a verify job would
+          # save its multi-gigabyte IDE into it. That would crowd the repository's 10 GB cache
+          # quota and hand the other jobs an IDE they do not use.
+          cache-read-only: true
       - run: ./gradlew verifyPlugin -PverifyIde=${{ matrix.ide }}
