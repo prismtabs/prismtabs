@@ -21,12 +21,12 @@ jobs:
     # the tag push itself — only push a `v*` tag once the Windows/Mac cross-platform pass is done,
     # and keep tag pushes out of any scripted/automated flow.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
       # Re-run build + verifyPlugin here rather than trusting build.yml's last run: tag pushes
       # don't necessarily correspond to a commit that workflow has already checked (tags aren't
       # branches), so this is the safety net that guarantees a green build is what gets signed.
