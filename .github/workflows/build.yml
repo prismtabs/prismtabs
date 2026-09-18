@@ -38,13 +38,22 @@ jobs:
     # distributions — its result cannot vary by host OS, so it runs once here rather than three
     # times in the matrix above (each run downloads the full IU verification matrix; tripling that
     # for an OS-independent check would only burn CI minutes).
+    #
+    # One job per IDE release branch. All eight IDEs in one job need roughly 45-50 GB of downloads
+    # and extracted installs, and a hosted runner has about 14 GB free, so a single job dies with
+    # "No space left on device" and leaves no log. Split, each job holds one IDE and a failure
+    # names the IDE that broke. -PverifyIdeBranch narrows build.gradle.kts's selection to one
+    # branch. Add a branch here when JetBrains ships a new major release: verifyPlugin run
+    # locally with no property prints the full list in its "about to resolve" line.
+    strategy:
+      fail-fast: false
+      matrix:
+        ide-branch: [ '242', '243', '251', '252', '253', '261', '262', '263' ]
+    name: verify-plugin (${{ matrix.ide-branch }})
     runs-on: ubuntu-latest
     steps:
-      # A hosted Ubuntu runner has only about 14 GB free, and the verification matrix (one Ultimate
-      # IDE per release since pluginSinceBuild, roughly 4 GB extracted each) needs far more. Without
-      # this the job dies with "No space left on device" and leaves no log. Delete the preinstalled
-      # toolchains this job never uses; the JDK is untouched because setup-java installs its own.
-      # `df` before and after records how much room the matrix actually has to work with.
+      # Kept as headroom: a single recent IDE is still several GB extracted, next to its archive.
+      # The JDK is untouched because setup-java installs its own.
       - name: Free disk space
         run: |
           df -h /
@@ -57,4 +66,4 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew verifyPlugin
+      - run: ./gradlew verifyPlugin -PverifyIdeBranch=${{ matrix.ide-branch }}

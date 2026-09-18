@@ -126,8 +126,18 @@ intellijPlatform {
             // independent of IDE edition. Switching the *compile* baseline to Ultimate would be
             // a different, unwanted trade-off (risks silently compiling against an Ultimate-only
             // API with no error to catch it) — this only widens what gets verified.
+            //
+            // -PverifyIdeBranch=<branch> (e.g. 242) narrows the run to that one release branch. CI
+            // sets it so each IDE gets its own job: verifying every release in one job needs
+            // roughly 45-50 GB of downloaded and extracted IDEs, and a hosted runner has far less.
+            // Left unset, as it is locally, the whole range is verified in one go.
+            val verifyIdeBranch = providers.gradleProperty("verifyIdeBranch")
             select {
                 types = listOf(IntelliJPlatformType.IntellijIdea)
+                if (verifyIdeBranch.isPresent) {
+                    sinceBuild = verifyIdeBranch
+                    untilBuild = verifyIdeBranch.map { "$it.*" }
+                }
             }
         }
 
