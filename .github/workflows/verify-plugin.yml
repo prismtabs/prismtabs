@@ -32,6 +32,10 @@ jobs:
           # enhanced caching, is proprietary and needs Gradle's Terms of Use accepted (see
           # DISTRIBUTION.md in gradle/actions).
           cache-provider: basic
+          # Restore only, never save. This job finishes first, and a cache entry cannot be replaced
+          # once it exists, so its small entry (just the Gradle plugins) would shadow the fuller one
+          # build.yml's ubuntu job needs: they share a key, since it depends only on the build files.
+          cache-read-only: true
       - id: list
         # Fail rather than hand the matrix an empty list: that would skip verification entirely
         # and still leave the build green.
