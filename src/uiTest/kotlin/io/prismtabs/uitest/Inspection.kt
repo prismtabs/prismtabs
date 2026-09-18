@@ -91,16 +91,6 @@ fun IdeaFrame.groupDarkRgbFor(path: String): Int = callJs(
     true,
 )
 
-/** The name of the selected editor tab's file, or `null` with nothing open. */
-fun IdeaFrame.selectedTabName(): String? = callJs<String>(
-    """
-    $SERVICE_PRELUDE
-    var selected = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).getSelectedFiles()
-    selected.length > 0 ? selected[0].getName() : ''
-    """,
-    true,
-).ifEmpty { null }
-
 /**
  * The colour the tab strip holds for [tabName]'s tab as 24-bit RGB, or `null` when it holds none —
  * [IdeaFrame.tabColorOf] without the alpha byte and the string sentinels.

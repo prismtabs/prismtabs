@@ -102,7 +102,11 @@ class TabColourUiTest {
 }
 
 /**
- * Creates [name] in a fresh temporary directory outside the project, and returns its absolute path.
+ * Creates [name] in a fresh temporary directory outside the project, and returns its VFS path.
+ *
+ * The VFS path rather than the NIO one: it is `/`-separated on every OS, which is what
+ * `findFileByPath` expects. Callers still pass it through [jsString], since a temp directory can sit
+ * under a home directory whose name holds a quote.
  *
  * The VFS refresh that makes the file visible runs off the EDT under `ModalityState.nonModal()`, for
  * the reason [createFixtureFile] gives: from an EDT robot script it is logged as a write-unsafe SEVERE.
@@ -111,13 +115,15 @@ private fun IdeaFrame.createFileOutsideProject(name: String): String = callJs(
     """
     importClass(com.intellij.openapi.application.ApplicationManager)
     importClass(com.intellij.openapi.application.ModalityState)
-    var directory = java.nio.file.Files.createTempDirectory('prismtabs-uitest')
+    var directory = java.nio.file.Files.createTempDirectory('$TEMP_DIRECTORY_PREFIX')
     var file = directory.resolve('$name')
     java.nio.file.Files.writeString(file, 'outside the project\n')
+    var virtualFile = null
     ApplicationManager.getApplication().invokeAndWait(new Runnable({
-        run: function() { com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByNioFile(file) }
+        run: function() { virtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByNioFile(file) }
     }), ModalityState.nonModal())
-    '' + file.toString()
+    if (virtualFile == null) throw 'the VFS never saw ' + file
+    '' + virtualFile.getPath()
     """,
     false,
 )
@@ -127,7 +133,7 @@ private fun IdeaFrame.openAbsoluteFile(path: String) {
         """
         importClass(com.intellij.openapi.application.ApplicationManager)
         var project = com.intellij.openapi.wm.impl.ProjectFrameHelper.getFrameHelper(component).getProject()
-        var file = com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByPath('$path')
+        var file = com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByPath(${jsString(path)})
         ApplicationManager.getApplication().invokeAndWait(new Runnable({
             run: function() { com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project).openFile(file, true) }
         }))
@@ -140,14 +146,21 @@ private fun IdeaFrame.openAbsoluteFile(path: String) {
 private fun IdeaFrame.platformFileColourOf(path: String): Int? = callJs<String>(
     """
     var project = com.intellij.openapi.wm.impl.ProjectFrameHelper.getFrameHelper(component).getProject()
-    var file = com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByPath('$path')
+    var file = com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByPath(${jsString(path)})
     var colour = com.intellij.ui.FileColorManager.getInstance(project).getFileColor(file)
     colour == null ? '' : '' + (colour.getRGB() & 0xFFFFFF)
     """,
     true,
 ).ifEmpty { null }?.toInt()
 
-/** Deletes the file [createFileOutsideProject] made, and its directory, through the VFS in a write action. */
+/**
+ * Deletes the file [createFileOutsideProject] made, and its directory, through the VFS in a write action.
+ *
+ * Only ever that directory: the file's own VFS parent, and only while it carries
+ * [TEMP_DIRECTORY_PREFIX]. A path that finds no file deletes nothing, rather than being resolved some
+ * other way — a Windows path whose backslashes a JS literal ate (`C:Users…`) is drive-relative, and its
+ * parent is the IDE's working directory, which a recursive delete then walks into.
+ */
 private fun IdeaFrame.deleteFileOutsideProject(path: String) {
     runJs(
         """
@@ -158,9 +171,9 @@ private fun IdeaFrame.deleteFileOutsideProject(path: String) {
             run: function() {
                 app.runWriteAction(new Runnable({
                     run: function() {
-                        var directory = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
-                            .refreshAndFindFileByNioFile(java.nio.file.Paths.get('$path').getParent())
-                        if (directory != null) directory.delete(null)
+                        var file = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByPath(${jsString(path)})
+                        var directory = file == null ? null : file.getParent()
+                        if (directory != null && directory.getName().startsWith('$TEMP_DIRECTORY_PREFIX')) directory.delete(null)
                     }
                 }))
             }
@@ -169,3 +182,10 @@ private fun IdeaFrame.deleteFileOutsideProject(path: String) {
         false,
     )
 }
+
+/** What [createFileOutsideProject]'s temp directory is named after, and all [deleteFileOutsideProject] will delete. */
+private const val TEMP_DIRECTORY_PREFIX = "prismtabs-uitest"
+
+/** [value] as a single-quoted JavaScript string literal, so a backslash or quote in it reaches the script as itself. */
+private fun jsString(value: String): String =
+    "'" + value.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "\\r") + "'"

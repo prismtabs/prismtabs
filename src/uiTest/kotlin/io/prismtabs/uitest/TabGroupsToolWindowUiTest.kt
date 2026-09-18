@@ -1124,8 +1124,9 @@ class TabGroupsToolWindowUiTest {
                 remoteRobot.toolWindowGroupTree().clickRowWithText("Sample.kt", false)
                 remoteRobot.setClipboardText("nothing copied yet")
                 invokeActionOnToolWindowTree("CopyPaths")
+                // Copy Path copies the OS's own path form, so `\`-separated on Windows.
                 waitFor(ofSeconds(10), errorMessage = "Copy Path copied ${remoteRobot.clipboardText()}") {
-                    remoteRobot.clipboardText().endsWith("/fixture-project/Sample.kt")
+                    remoteRobot.clipboardText().replace('\\', '/').endsWith("/fixture-project/Sample.kt")
                 }
 
                 invokeActionOnToolWindowTree("SelectInProjectView")
