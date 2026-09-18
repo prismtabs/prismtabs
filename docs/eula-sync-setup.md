@@ -66,8 +66,8 @@ If you keep them somewhere else, skip the sibling clone below and use the
 
 ```bash
 mkdir -p ~/dev && cd ~/dev
-git clone git@github.com:yendrrek/prismtabs-website.git
-git clone git@github.com:yendrrek/prismtabs.git
+git clone git@github.com:prismtabs/prismtabs-website.git
+git clone git@github.com:prismtabs/prismtabs.git
 ```
 
 If they are already cloned, just `git pull` in each and make sure they sit next
@@ -154,8 +154,8 @@ In Git Bash:
 
 ```bash
 mkdir -p ~/dev && cd ~/dev
-git clone git@github.com:yendrrek/prismtabs-website.git
-git clone git@github.com:yendrrek/prismtabs.git
+git clone git@github.com:prismtabs/prismtabs-website.git
+git clone git@github.com:prismtabs/prismtabs.git
 ```
 
 Already cloned? `git pull` each and make sure they are siblings.

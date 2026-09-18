@@ -105,7 +105,7 @@ section and are the correct home for these rather than the description prose.
 
 | Field | Value |
 |---|---|
-| Issue tracker | `https://github.com/yendrrek/prismtabs-feedback` |
+| Issue tracker | `https://github.com/prismtabs/prismtabs-feedback` |
 | Documentation | `https://prismtabs.com/docs` |
 | Website | `https://prismtabs.com` |
 | Source code | *leave empty* — the repository is private (item 9) and the best-practices page requires external links to be reachable |
