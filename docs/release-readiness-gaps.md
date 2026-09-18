@@ -347,7 +347,7 @@ says "hide … or show" to match what users actually see.
 had nowhere to report it but the vendor email — and a Marketplace listing with an empty *Issue
 tracker* field gives a prospective buyer no evidence the plugin is maintained.
 
-`github.com/yendrrek/prismtabs-feedback` is now public and holds no code, only issues: a README, a
+`github.com/prismtabs/prismtabs-feedback` is now public and holds no code, only issues: a README, a
 `SECURITY.md`, and two YAML issue forms. Design decisions worth not re-litigating:
 
 - **One tracker for every edition.** Free, Pro and trial reports all land in the same place. It
