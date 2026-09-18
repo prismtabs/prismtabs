@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the plugin
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           sparse-checkout: docs/EULA.md
           sparse-checkout-cone-mode: false
@@ -62,7 +62,7 @@ jobs:
 
       # Only the page and the checker are needed, not the whole site.
       - name: Check out the published page and the checker
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: prismtabs/prismtabs-website
           ssh-key: ${{ secrets.WEBSITE_DEPLOY_KEY }}

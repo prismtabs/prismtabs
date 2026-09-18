@@ -1,6 +1,7 @@
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.models.ProductRelease
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
@@ -17,6 +18,18 @@ version = providers.gradleProperty("pluginVersion").get()
 // Pin client (uiTestImplementation) and server (robotServerPlugin) to the same version —
 // see "UI testing" in README for why a mismatch here is a real, silent-failure risk.
 val remoteRobotVersion = "0.11.23"
+
+// The IDE releases the Plugin Verifier checks against. pluginVerification.ides.select{} and
+// printProductsReleases both read these, so the list CI builds its verify-plugin matrix from is the
+// same list a local verifyPlugin runs against. The channels repeat select{}'s own default (IPGP
+// 2.18.1, createRecommendedPluginVerifierIdesProvider); printProductsReleases defaults to every
+// channel, so without this the two lists would differ.
+val verifiedIdeType = IntelliJPlatformType.IntellijIdea
+val verifiedIdeChannels = listOf(
+    ProductRelease.Channel.RELEASE,
+    ProductRelease.Channel.EAP,
+    ProductRelease.Channel.RC,
+)
 
 repositories {
     mavenCentral()
@@ -126,8 +139,20 @@ intellijPlatform {
             // independent of IDE edition. Switching the *compile* baseline to Ultimate would be
             // a different, unwanted trade-off (risks silently compiling against an Ultimate-only
             // API with no error to catch it) — this only widens what gets verified.
-            select {
-                types = listOf(IntelliJPlatformType.IntellijIdea)
+            //
+            // -PverifyIde=<version> verifies that one release only, as printed by
+            // printProductsReleases without its "IU-" prefix. CI sets it so each IDE gets its own
+            // job: every release in one job needs roughly 45-50 GB of downloaded and extracted
+            // IDEs, and a hosted runner has far less. Left unset, as it is locally, the whole range
+            // is verified in one go.
+            val verifyIde = providers.gradleProperty("verifyIde")
+            if (verifyIde.isPresent) {
+                create(verifiedIdeType, verifyIde.get())
+            } else {
+                select {
+                    types = listOf(verifiedIdeType)
+                    channels = verifiedIdeChannels
+                }
             }
         }
 
@@ -169,6 +194,13 @@ tasks {
         // intellijPlatform.pluginConfiguration.version already reads; a `-D` on the ./gradlew
         // command line would not reach this forked JVM, and neither would the property itself.
         systemProperty("prismtabs.pluginVersion", providers.gradleProperty("pluginVersion").get())
+    }
+
+    // Lists the releases verifyPlugin checks against, one per line; CI turns this into its
+    // verify-plugin matrix. Matches pluginVerification.ides.select{} (see verifiedIdeType).
+    printProductsReleases {
+        types = listOf(verifiedIdeType)
+        channels = verifiedIdeChannels
     }
 
     // Handy while developing: opens a sandbox IDE with the plugin installed.

@@ -11,26 +11,38 @@ on:
       - 'v*'
 
 jobs:
+  # Re-verify here rather than trusting build.yml's last run: tag pushes don't necessarily
+  # correspond to a commit that workflow has already checked (tags aren't branches), so this is the
+  # safety net that guarantees a verified build is what gets signed. The shared workflow runs one
+  # job per IDE; a single verifyPlugin job runs out of disk on a hosted runner.
+  verify-plugin:
+    uses: ./.github/workflows/verify-plugin.yml
+
   publish:
+    needs: verify-plugin
     runs-on: ubuntu-latest
     # A signed plugin ZIP is the same bytes regardless of which OS built it, so a single Linux
-    # runner is correct here — no matrix needed, unlike build.yml's cross-platform `test` job.
+    # runner is correct here — no matrix needed, unlike build.yml's cross-platform `build` job.
     #
     # No environment-based approval gate: required reviewers on GitHub Environments need
     # Team/Enterprise for private repos, and this is a private repo on the free plan. The gate is
     # the tag push itself — only push a `v*` tag once the Windows/Mac cross-platform pass is done,
     # and keep tag pushes out of any scripted/automated flow.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
-      - uses: gradle/actions/setup-gradle@v4
-      # Re-run build + verifyPlugin here rather than trusting build.yml's last run: tag pushes
-      # don't necessarily correspond to a commit that workflow has already checked (tags aren't
-      # branches), so this is the safety net that guarantees a green build is what gets signed.
-      - run: ./gradlew build verifyPlugin
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          # Basic caching is MIT-licensed and free for private repositories. The default,
+          # enhanced caching, is proprietary and needs Gradle's Terms of Use accepted (see
+          # DISTRIBUTION.md in gradle/actions).
+          cache-provider: basic
+      # Re-run build (compile and unit tests) for the same reason the verify-plugin job above
+      # re-verifies: a tag may point at a commit build.yml never checked.
+      - run: ./gradlew build
         shell: bash
       # Blocked until docs/release-readiness-gaps.md item 2 is closed (no certificate chain /
       # private key exist yet) — these secrets won't be set until then, and this step will fail
