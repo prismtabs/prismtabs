@@ -40,6 +40,17 @@ jobs:
     # for an OS-independent check would only burn CI minutes).
     runs-on: ubuntu-latest
     steps:
+      # A hosted Ubuntu runner has only about 14 GB free, and the verification matrix (one Ultimate
+      # IDE per release since pluginSinceBuild, roughly 4 GB extracted each) needs far more. Without
+      # this the job dies with "No space left on device" and leaves no log. Delete the preinstalled
+      # toolchains this job never uses; the JDK is untouched because setup-java installs its own.
+      # `df` before and after records how much room the matrix actually has to work with.
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
