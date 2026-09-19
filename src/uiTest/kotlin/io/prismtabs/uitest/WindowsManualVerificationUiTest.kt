@@ -20,10 +20,10 @@ import java.time.Duration.ofSeconds
  * Windows (or macOS) desktop, in place of a human clicking through it — reuses the same fixtures the
  * permanent `uiTest` suite already relies on rather than inventing new low-level driving code. Not
  * part of the regular suite and not meant to run unattended: it exists to produce screenshots and a
- * written log for a human to review and sign off, matching the doc's own "on real hardware or a VM,
- * not CI" framing, and its pixel assertions need a real desktop's screen-capture pipeline (see
- * README "These tests need an X11 display" for why that pipeline lies on this project's own Linux
- * dev box).
+ * written log for a human to review and sign off, matching the doc's own stance that this pass runs
+ * on real hardware, not in CI, and its pixel assertions need a real desktop's screen-capture
+ * pipeline (see README "These tests need an X11 display" for why that pipeline lies on this
+ * project's own Linux dev box).
  *
  * Both `@Test`s skip unless launched with `-Dprismtabs.manualVerification=true` — matching
  * [MacSettingsShortcutUiTest]'s `assumeTrue` self-gating pattern, but opt-in rather than OS-keyed,

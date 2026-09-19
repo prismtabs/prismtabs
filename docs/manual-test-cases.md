@@ -5,8 +5,8 @@ A functional checklist for clicking through every PrismTabs feature by hand in a
 row/bullet, organised by feature area rather than by OS. It complements, and deliberately
 duplicates none of the depth of, [`docs/cross-platform-manual-verification.md`](cross-platform-manual-verification.md),
 which is the *where* — the same core flow re-run per OS to catch platform chrome, HiDPI, and
-native-dialog differences. Run this doc first on whatever machine is convenient; run that one when
-doing a release pass across Windows/macOS/Linux.
+input differences. Run this doc first on whatever machine is convenient; run that one when doing a
+release pass on Windows and macOS (Linux is covered by day-to-day development).
 
 Automated coverage exists for most of what is below (`./gradlew test` for pure logic,
 `./gradlew uiTest` for the `remote-robot` suite — see README "UI testing"). Note the OS, IDE build,
