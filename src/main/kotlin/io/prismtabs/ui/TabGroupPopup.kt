@@ -306,9 +306,7 @@ private class AddToGroupStep(
      */
     override fun onChosen(selectedValue: TabGroup, finalChoice: Boolean): PopupStep<*>? {
         finalRunnable = Runnable {
-            val emptied = service.assign(file.url, selectedValue)
-            TabRepaint.request(project, file)
-            TabGroupNotifier.notifyChanged(project)
+            val emptied = assignTab(project, service, file, selectedValue)
             promptToDeleteEmptied(project, service, emptied)
         }
         return PopupStep.FINAL_CHOICE
@@ -831,9 +829,23 @@ private const val MAX_GROUP_NAME = 40
  * modal here to race the popup's close.
  */
 private fun addToActiveGroup(project: Project, file: VirtualFile, group: TabGroup, service: TabGroupService) {
-    service.assign(file.url, group)
+    assignTab(project, service, file, group)
+}
+
+/**
+ * Every popup assignment path's shared core: assign, record the group's open tabs, repaint, and
+ * tell the tool window. Returns the group the move emptied, if any, for the caller to prompt about.
+ *
+ * The recording is what lets "Show Group" bring this tab back. The popup only ever acts on an editor
+ * tab, so [file] is open, and the group has just gained an open tab without any editor opening —
+ * the one event [io.prismtabs.listener.TabGroupFileListener] would otherwise have recorded it on.
+ */
+private fun assignTab(project: Project, service: TabGroupService, file: VirtualFile, group: TabGroup): TabGroup? {
+    val emptied = service.assign(file.url, group)
+    TabGroupVisibility.rememberOpenTabs(project, service, group.id)
     TabRepaint.request(project, file)
     TabGroupNotifier.notifyChanged(project)
+    return emptied
 }
 
 /**
@@ -957,8 +969,6 @@ private fun promptForNameAndCreate(
         darkRgb = preset.dark.rgb and 0xFFFFFF,
         order = service.groups().size,
     )
-    val emptied = service.assign(file.url, group)
-    TabRepaint.request(project, file)
-    TabGroupNotifier.notifyChanged(project)
+    val emptied = assignTab(project, service, file, group)
     promptToDeleteEmptied(project, service, emptied)
 }

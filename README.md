@@ -1252,7 +1252,7 @@ IDE is extracted into Gradle 9's transform cache, which Gradle holds immutable. 
 launch failed with "the contents of the immutable workspace have been modified" until the cache was
 deleted by hand. No JCEF property moves that directory, and IPGP 2.19.0 lists no fix.
 
-The whole suite passes there on macOS (95 tests, 3 skipped, on IDEA 2026.2.2, 2026-09-17), once the
+The whole suite passes there on macOS (96 tests, 3 skipped, on IDEA 2026.2.3, 2026-09-19), once the
 helpers stopped assuming 2024.2's component shapes. 2026.2 shows the Project view tree as
 `ProjectViewPane$MyProjectViewTree` and Settings as a non-modal window titled "Settings – <project>",
 paints a tab as a rounded pill inset in its bounds (Islands themes) and blends an unselected tinted

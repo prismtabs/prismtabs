@@ -41,6 +41,31 @@ internal object TabGroupVisibility {
             .filter { service.groupFor(it)?.id == groupId }
 
     /**
+     * Records what is open in [groupId] right now as its [TabGroup.rememberedTabUrls] — unless that
+     * is nothing.
+     *
+     * Called whenever the group *gains* an open tab: a member's editor opening
+     * ([io.prismtabs.listener.TabGroupFileListener]) or an already-open tab joining it (every
+     * assignment path in [io.prismtabs.ui.TabGroupPopup]). The second matters as much as the first:
+     * recorded on opens alone, a tab added to a group after its last open was missing from the
+     * memory, and closing the group's tabs one at a time then showing it left that tab behind.
+     *
+     * Never on a close, which would whittle the memory down to the last survivor — see
+     * [io.prismtabs.listener.TabGroupFileListener]. The empty case is skipped rather than written
+     * for the same reason: a group with no open tabs is exactly a hidden group, and overwriting the
+     * memory there would erase the only record of what to bring back.
+     *
+     * Deliberately **not** licence-gated: this is bookkeeping, and a lapsed subscriber whose memory
+     * silently stopped updating would find the locked tool window's "reopen the tabs" escape hatch
+     * restoring a stale set of files.
+     */
+    fun rememberOpenTabs(project: Project, service: TabGroupService, groupId: String) {
+        val openUrls = openMemberUrls(project, service, groupId)
+        if (openUrls.isEmpty()) return
+        service.rememberOpenTabs(groupId, openUrls)
+    }
+
+    /**
      * Whether [group] currently reads as hidden: it has members, and not one of them is open.
      *
      * An *empty* group is never hidden — it has nothing to show or hide, and calling it hidden would
