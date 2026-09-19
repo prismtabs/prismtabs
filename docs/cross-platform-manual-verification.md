@@ -122,6 +122,11 @@ One entry per pass, newest last: date · OS · build · theme — result.
   items 1–8 on the first-write path.
 - **2026-09-09 · macOS 26.6.2 · plugin 1.4.14 · dark** — PASS, `test` and `uiTest` only (41 run/2
   skipped). No walkthrough, no by-eye checks.
+- **2026-09-19 · Linux, macOS 26.6.2 and Windows 11 · IC-242.20224.300, plugin 1.4.14 at
+  `3712779` · dark and light** — PASS on all three. The release pass: `test` and `uiTest` green,
+  every by-eye check, a real restart, and item 9 as far as it goes without a listing — unlicensed
+  start and the trial, per `manual-test-cases.md`. Only the real-key check is outstanding, and it
+  needs the plugin to be on the Marketplace first.
 
-Not yet signed off for the release build: every change since 2026-09-09 (`8dd5368`, `1f18407`,
-`3d0d161`, `47c177c`, `3712779`), and item 9 on any OS.
+Outstanding for the release: item 9's real subscription key, which can only be checked after the
+first upload.
