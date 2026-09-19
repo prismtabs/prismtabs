@@ -90,6 +90,10 @@ kotlin {
         // option: the Kotlin Gradle plugin has dropped support for it.
         apiVersion.set(KotlinVersion.KOTLIN_2_0)
         languageVersion.set(KotlinVersion.KOTLIN_2_0)
+        // The compiler flags 2.0 as deprecated, but the pin above is deliberate: the warning
+        // cannot be acted on until pluginSinceBuild moves to an IDE bundling a newer Kotlin.
+        // This flag silences only those version-deprecation warnings, nothing else.
+        freeCompilerArgs.add("-Xsuppress-version-warnings")
         jvmDefault.set(JvmDefaultMode.NO_COMPATIBILITY)
     }
 }
