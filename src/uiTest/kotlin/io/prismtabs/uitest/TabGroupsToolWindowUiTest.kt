@@ -260,6 +260,61 @@ class TabGroupsToolWindowUiTest {
     }
 
     /**
+     * The bug: a tab added to a group through the popup was not remembered, so closing the group's
+     * tabs one at a time and then showing it left that tab behind. The memory was written on editor
+     * *opens* only, and adding an already-open tab opens nothing — so whatever the group had recorded
+     * at its last open stood, missing the newcomer.
+     *
+     * The memory is made non-empty before Third.kt joins (Second.kt is closed and reopened, the
+     * ordinary way a user comes back to a file), because an empty one would hide the bug: Show falls
+     * back to every member when it remembers nothing, and would reopen all three regardless.
+     */
+    @Test
+    fun `a tab added to a group through the popup comes back when the group is shown`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                openFile("Sample.kt")
+                openFile("Second.kt")
+                remoteRobot.createGroupViaPopup(this, "Sample.kt", colour = "Blue", name = "Grown")
+                remoteRobot.openTabGroupPopupOn(this, "Second.kt")
+                remoteRobot.clickPopupItem("Add to Group…")
+                remoteRobot.clickPopupItem("Grown")
+                waitFor(ofSeconds(10)) { groupNameFor("Second.kt") == "Grown" }
+
+                closeFile("Second.kt")
+                waitFor(ofSeconds(10)) { openTabNames() == listOf("Sample.kt") }
+                openFile("Second.kt")
+                waitFor(ofSeconds(10)) { rememberedTabUrlsOf("Grown").map { it.substringAfterLast('/') } == listOf("Sample.kt", "Second.kt") }
+
+                openFile("Third.kt")
+                remoteRobot.openTabGroupPopupOn(this, "Third.kt")
+                remoteRobot.clickPopupItem("Add to Group…")
+                remoteRobot.clickPopupItem("Grown")
+                waitFor(ofSeconds(10)) { groupNameFor("Third.kt") == "Grown" }
+
+                closeFile("Sample.kt")
+                closeFile("Second.kt")
+                closeFile("Third.kt")
+                waitFor(ofSeconds(10)) { openTabNames().isEmpty() }
+
+                setGroupHidden("Grown", hidden = false)
+                // Show reopens asynchronously, so this is waited out rather than asserted mid-way.
+                waitFor(ofSeconds(10), errorMessage = "Show did not reopen all three of the group's tabs") {
+                    openTabNames().size == 3
+                }
+                assertEquals(
+                    listOf("Sample.kt", "Second.kt", "Third.kt"),
+                    openTabNames().sorted(),
+                    "Show must reopen the tab that joined the group after its last open",
+                )
+            } finally {
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
      * Hide followed by Show is an identity for a group only *some* of whose files are open. That is
      * what `TabGroupVisibility.hide` recording the exact set it is about to close provides, and it
      * is the case neither hide/show test above reaches — in both of those every member is on the
@@ -355,8 +410,9 @@ class TabGroupsToolWindowUiTest {
 
                 // Closed and returned to, which is the event that rewrites the memory: reopening
                 // Sample.kt records the group's open set as it stands — Sample.kt and Second.kt,
-                // with no Third.kt in it. Note the assignments above all happened *after* their
-                // files were opened, so this is the first open of a member the listener has seen.
+                // with no Third.kt in it. The assignments above, like the popup's, recorded all
+                // three while they were open, so this open has to drop Third.kt from a memory that
+                // holds it, not merely write onto an empty one.
                 closeFile("Sample.kt")
                 waitFor(ofSeconds(10)) { openTabNames() == listOf("Second.kt") }
                 openFile("Sample.kt")

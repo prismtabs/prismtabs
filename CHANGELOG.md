@@ -36,3 +36,6 @@
   Tabs are now closed off the plugin's own stack as well.
 - Tab colours now disappear the moment the plugin is disabled or uninstalled, instead of lingering
   until the next IDE start — which, on a disable, is never prompted for.
+- "Show Group" now brings back a tab that was added to the group from the tab popup. The group's
+  remembered tabs were only updated when a file opened, so a tab that was already open when it
+  joined was left out, and closing the group's tabs by hand and then showing it lost that tab.

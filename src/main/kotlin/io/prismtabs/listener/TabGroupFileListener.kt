@@ -26,7 +26,8 @@ import io.prismtabs.service.TabRepaint
  * one at a time by hand — which, now that hidden is derived from the strip rather than stored (see
  * [TabGroupVisibility]), is a perfectly ordinary way for a group to end up hidden.
  *
- * That memory is written on editor **opens only** — this class deliberately has no `fileClosed`.
+ * Here that memory is written on editor **opens only** — this class deliberately has no `fileClosed`.
+ * (The other writer is an already-open tab joining a group; see [TabGroupVisibility.rememberOpenTabs].)
  * Narrowing it as tabs close was the design before, and it is what left "Show Group" reopening a
  * single file: closing a group's tabs one at a time rewrote the memory on every close, so by the
  * time the last one went the record had been whittled down to just that tab, and the empty-set skip
@@ -47,7 +48,7 @@ internal class TabGroupFileListener : FileEditorManagerListener {
         autoJoinActiveGroup(project, service, file)
         // After the auto-join, so a file that just joined the active group is counted as one of its
         // open tabs on this very event rather than only on the next one.
-        rememberOpenTabsOf(project, service, service.groupFor(file.url)?.id)
+        service.groupFor(file.url)?.let { TabGroupVisibility.rememberOpenTabs(project, service, it.id) }
     }
 
     private fun autoJoinActiveGroup(project: Project, service: TabGroupService, file: VirtualFile) {
@@ -73,25 +74,5 @@ internal class TabGroupFileListener : FileEditorManagerListener {
         // mutation whatever the subscriber order, and costs one extra rebuild of a few dozen rows
         // in the order that was already working.
         TabGroupNotifier.notifyChanged(project)
-    }
-
-    /**
-     * Records what is open in [groupId] right now — unless that is nothing.
-     *
-     * The empty case is the one that has to be skipped rather than written: a group with no open
-     * tabs is exactly a hidden group, and overwriting the memory there would erase the only record
-     * of what to bring back. Now that only opens reach here the set is all but always non-empty —
-     * the file whose opening triggered this is itself a member — so the guard is there for the
-     * platform paths where `getOpenFiles()` does not yet list it, not as a routine branch.
-     *
-     * Deliberately **not** licence-gated, unlike auto-join: this is bookkeeping, and a lapsed
-     * subscriber whose memory silently stopped updating would find the locked tool window's
-     * "reopen the tabs" escape hatch restoring a stale set of files.
-     */
-    private fun rememberOpenTabsOf(project: Project, service: TabGroupService, groupId: String?) {
-        if (groupId == null) return
-        val openUrls = TabGroupVisibility.openMemberUrls(project, service, groupId)
-        if (openUrls.isEmpty()) return
-        service.rememberOpenTabs(groupId, openUrls)
     }
 }

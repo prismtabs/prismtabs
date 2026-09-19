@@ -52,6 +52,14 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
             """,
             true,
         )
+        // The open is queued, not done, when the script returns — and the platform opens editors
+        // asynchronously besides. Returning before the tab is on the strip let the next step race
+        // the editor's `fileOpened`: measured in `a group hidden by closing its tabs one at a time
+        // comes back whole`, where Second.kt's open landed after two of three assignments and
+        // recorded a two-file memory, so Show brought back two files. Waiting here, rather than in
+        // each test, closes that race for every caller.
+        val name = path.substringAfterLast('/')
+        waitFor(Duration.ofSeconds(10)) { name in openTabNames() }
     }
 
     /** The name of the [io.prismtabs.model.TabGroup] `path` is assigned to, or `null`. */
@@ -631,6 +639,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
                 new java.util.ArrayList(), java.lang.Integer.valueOf(service.groups().size())
             )
             service.assign(file.getUrl(), group)
+            ${afterAssignmentJs("group")}
             """,
             true,
         )
@@ -657,6 +666,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
             const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
             const service = project.getService(java.lang.Class.forName('io.prismtabs.service.TabGroupService', true, pluginLoader))
             service.clear(file.getUrl())
+            ${afterAssignmentJs(groupVar = null)}
             """,
             true,
         )
@@ -684,10 +694,34 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
                 if (groups.get(i).getName() == '$groupName') target = groups.get(i)
             }
             service.assign(file.getUrl(), target)
+            ${afterAssignmentJs("target")}
             """,
             true,
         )
     }
+
+    /**
+     * What every production assignment path does after its service call, as script lines for the
+     * script-driven stand-ins above: record the group's open tabs (only for an assignment, named by
+     * [groupVar]), repaint the file's tab, and publish the change to the tool window. The same steps,
+     * through the same objects, as `TabGroupPopup.assignTab` and `removeFromGroups`.
+     *
+     * Without it a stand-in changed the service and told nobody, and the tests using one passed only
+     * because an editor event happened to land after it: `openFile` used to return before its tab
+     * opened, and that late `fileOpened` refreshed the tool window. Once `openFile` waited for the
+     * tab, `a file that auto-joins the active group shows up in the tree at once` timed out waiting
+     * for a row the tree had never been told about.
+     *
+     * Expects the calling script to have bound `project`, `service`, `file` and `pluginLoader`.
+     */
+    private fun afterAssignmentJs(groupVar: String?): String = """
+            const pluginObject = function(name) {
+                return java.lang.Class.forName(name, true, pluginLoader).getField('INSTANCE').get(null)
+            }
+            ${if (groupVar == null) "" else "pluginObject('io.prismtabs.service.TabGroupVisibility').rememberOpenTabs(project, service, $groupVar.getId())"}
+            pluginObject('io.prismtabs.service.TabRepaint').request(project, file)
+            pluginObject('io.prismtabs.service.TabGroupNotifier').notifyChanged(project)
+    """
 
     /**
      * Assigns a file URL under the project that **no file exists at** to the group named
