@@ -21,9 +21,9 @@ verified live, alongside the Plugin Verifier CI matrix and palette settings that
 [Marketplace publishing prep](#marketplace-publishing-prep) has the paid-plugin groundwork laid so
 far — vendor metadata, plugin icon, and a tested licence-verification module — and the deliberately
 short list of what's still left before the actual upload. The
-[cross-platform verification pass](docs/cross-platform-manual-verification.md) is no longer on that
-list: Windows and macOS are both signed off against the current code, on 2026-08-19, each pass
-covering the merged swatch-popup flow and the `forceSaveSettings` fix under it.
+[cross-platform verification pass](docs/cross-platform-manual-verification.md) is a per-release
+routine rather than an item on that list; its sign-off log records which build each OS last
+verified, and which later changes are still unchecked.
 
 ---
 
@@ -660,10 +660,10 @@ was green the whole time. One `OVERRIDE_ONLY_API_USAGES` problem caused it —
 `@ApiStatus.OverrideOnly`. It now goes through `ActionUtil.invokeAction`, the platform's own entry
 point on the 2024.2 floor, which also runs the action's `update` first instead of firing a possibly
 disabled action, and retires a deprecated `AnActionEvent.createFromDataContext` call along the way.
-`verifyPlugin` is green across all seven IDEs it resolves (242 → 262). Full write-up, including the
-one deprecation warning that is unavoidable until the compile floor moves to 243, in
-[cross-platform manual verification](docs/cross-platform-manual-verification.md)'s "verifyPlugin was
-red" section.
+`verifyPlugin` is green across all seven IDEs it resolves (242 → 262). A short account, including the
+one deprecation warning that is unavoidable until the compile floor moves to 243, is in the
+2026-08-19 macOS entry of [cross-platform manual verification](docs/cross-platform-manual-verification.md)'s
+sign-off log.
 
 `plugin.xml` has no `<component>` entries — only `<projectListeners>`, `<applicationConfigurable>`
 and one action — which is what dynamic-plugin-safety requires structurally. That was true by
