@@ -182,11 +182,7 @@ generated and is now set as the `PUBLISH_TOKEN` repo secret (closes item 3). Acc
 
 ## 6. Write the actual listing content
 
-**Current state (2026-09-02):** copy and metadata are done. The two tool-window screenshots
-(`02-tool-window-and-tabs-dark.png`, `04-tool-window-and-tabs-light.png`) were re-shot on
-2026-09-02: both show the pin icon in the stripe and the "Backend 1 tab · active" active-group
-marker. They have since fallen behind the shipped UI twice over — see the screenshot bullet under
-"To close". The drafting is captured in
+**Current state (2026-09-02):** copy and metadata are done. The drafting is captured in
 [`marketplace-listing.md`](marketplace-listing.md) — tagline, description, change notes, Technical
 Information link values, and tags — so the upload step (item 5) is a paste job. What changed this
 pass:
@@ -214,6 +210,13 @@ Group") and the already-open-file one-click join (`a10055f`); `983296d` also dro
 View active-group entry, leaving only the tab-popup row. Both are still single-sourced from
 `plugin.xml` / `CHANGELOG.md` — re-read them at upload time rather than trusting the bullets above.
 
+**Updated (2026-09-20):** the pre-upload re-read is done. `<description>` matches the shipped
+build. `CHANGELOG.md`'s `[Unreleased]` entry lost its "Fixed" section, since a first release has no
+earlier version for those to be fixes against, and `<vendor email>` is now `contact@prismtabs.com`,
+the address the EULA and the website use (`eada49e`). The four Technical Information links all
+return 200. `verifyPlugin` reports Compatible on all eight IDEs, 2024.2 to 2026.3. Re-read
+`<description>` and the changelog once more at upload time only if either changes before then.
+
 **To close:**
 - Under **Technical Information**, fill the dedicated link fields (values in `marketplace-listing.md`):
   *Issue tracker* → the feedback repo, *Documentation* → `prismtabs.com/docs`, *Website* →
@@ -221,19 +224,18 @@ View active-group entry, leaving only the tab-popup row. Both are still single-s
   external links to be reachable).
 - Tags — proposed set (`User Interface`, `Editor`, `Productivity`) in `marketplace-listing.md`;
   JetBrains maps free text onto their controlled list at review.
-- ~~**Screenshots.**~~ — closed 2026-09-05 (`70208f5`). All four shots (≥1200×760) live in
+- ~~**Screenshots.**~~ — closed 2026-09-20 (`1eea92e`). All five shots (≥1200×760) live in
   `docs/marketplace/`, upload in filename order: `01-swatch-popup-and-tabs-dark.png`,
   `02-tool-window-and-tabs-dark.png`, `03-palette-settings-dark.png`,
-  `04-tool-window-and-tabs-light.png`. `01-`, `02-` and `04-` were re-shot against the current build
-  to show the expanded group tree and its member files (the "1 file"/"3 files" wording and Phase 6a's
-  flat-list-to-tree change are both reflected now); `03-palette-settings-dark.png` is unaffected by
-  that feature and was correctly left as-is. Not yet done: the fifth shot of the free `Files…`
-  chooser suggested here previously — membership visibility is a free-tier headline and nothing in
-  the listing shows it yet; still worth doing before upload but not blocking.
-  **Re-verify before upload (noted 2026-09-07):** the paid-feature gate was armed the same day
-  (`267202a`) and `983296d` changed the active-group UI afterwards, so confirm the four shots still
-  match the shipped build — in particular that any tool-window shot shows the licensed/trial UI,
-  not the free-tier upsell panel.
+  `04-tool-window-and-tabs-light.png`, `05-files-in-group-dark.png`. `02` and `04` were re-shot on
+  2026-09-20: every member file's path reads in full, `Tests` is marked active and `Docs` hidden,
+  and the licensed UI is showing, not the free-tier upsell panel. The website's hero images are
+  cropped from these two files (`prismtabs-website` `d5b524a`). `05` was added the same day and
+  closes the gap this bullet used to carry: it is the only shot of the free `Files…` chooser, and
+  so the only one showing that a group lists every file it holds whether or not that file still
+  has a tab open. `01` and `03` were checked against the shipped build the same day: no
+  user-visible text changed after they were shot. Per-shot descriptions are in
+  [`marketplace-listing.md`](marketplace-listing.md).
 
 ## ~~7. Choose and prepare a License/EULA for the paid listing — closed~~
 
@@ -245,9 +247,10 @@ left in this item.
 
 Two non-blocking checks to run before the upload, noted so they aren't missed: the
 `contact@prismtabs.com` mailbox (the only contact route in the agreement, and where §2's
-interoperability requests must go) must actually receive mail; and if `EULA.md` is edited before
-the listing goes live, bump its "Last updated" date and let the sync check confirm the website
-copy matches.
+interoperability requests must go, and now the vendor email on the listing too) must actually
+receive mail — checked 2026-09-20: its MX record points at Purelymail, a test message was
+delivered, and a reply sent from the address arrived; and if `EULA.md` is edited before the listing goes live, bump its "Last updated" date
+and let the sync check confirm the website copy matches.
 
 **Current state (2026-08-26):** drafted and published; not yet attached to the listing. Found
 during an audit against

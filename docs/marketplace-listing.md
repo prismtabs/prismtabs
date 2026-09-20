@@ -4,7 +4,7 @@ The copy and metadata for the JetBrains Marketplace listing, drafted so the actu
 upload (release-readiness-gaps.md item 5) is a paste job, not a writing job. Follows
 `naming-and-terminology.md` house style throughout.
 
-Everything here is done, including the four screenshots in `docs/marketplace/`.
+Everything here is done, including the five screenshots in `docs/marketplace/`.
 
 ---
 
@@ -18,7 +18,7 @@ Everything here is done, including the four screenshots in `docs/marketplace/`.
 | Change notes | `plugin.xml` `<change-notes>`, filled at build time from `CHANGELOG.md`'s `[Unreleased]` via `changelog.getUnreleased()` |
 | Additional Information links | **Technical Information** fields in the admin UI (below) — not prose, not `plugin.xml` |
 | Tags | Entered at upload; JetBrains maps them onto their controlled vocabulary |
-| Screenshots | Uploaded in the admin UI; the four files in `docs/marketplace/`, in filename order |
+| Screenshots | Uploaded in the admin UI; the five files in `docs/marketplace/`, in filename order |
 | Licence | `prismtabs.com/eula` URL, pasted at upload (item 7) |
 
 ## Tagline / card blurb
@@ -125,20 +125,31 @@ and not `Themes` (it tints individual tabs, it is not a colour scheme).
 ## Screenshots
 
 In `docs/marketplace/`, all ≥ 1200 × 760, in the order they should appear in the
-listing (three dark, one light):
+listing (four dark, one light):
 
-1. **`01-swatch-popup-and-tabs-dark.png`** (1394 × 919) — a tab right-clicked, the
+1. **`01-swatch-popup-and-tabs-dark.png`** (1231 × 906) — a tab right-clicked, the
    "New Group" caption above the 8 preset dots, "Add to Group…" / "Manage Groups…"
    / "Remove from Group" below the separator, tinted tabs and code behind. The
    one-right-click pitch; it goes first.
-2. **`02-tool-window-and-tabs-dark.png`** (1853 × 885) — the PrismTabs tool window
-   docked right, listing Tests / Backend / Docs with colour dots and member
-   counts, "Backend 1 file · active" showing the active-group marker (pin toggle
-   pressed in the stripe), "Docs 3 files · hidden" showing the hide feature, editor
-   tabs behind it tinted to match. The paid tier's home.
+2. **`02-tool-window-and-tabs-dark.png`** (1849 × 937) — the PrismTabs tool window
+   docked right, listing Docs / Backend / Tests with colour dots and member
+   counts, each group expanded to its member files and their paths, "Tests 2 files
+   · active" showing the active-group marker (pin toggle pressed in the stripe),
+   "Docs 2 files · hidden" showing the hide feature, editor tabs behind it tinted
+   to match. The paid tier's home.
 3. **`03-palette-settings-dark.png`** (1794 × 1045) — the full `Settings | Tools |
    PrismTabs` dialog, all eight presets renamed to a consistent scheme, the light
    and dark `ColorPanel` per row visible.
-4. **`04-tool-window-and-tabs-light.png`** (1853 × 885) — the same tool window and
+4. **`04-tool-window-and-tabs-light.png`** (1849 × 935) — the same tool window and
    tinted tab strip as shot 2, in the light theme, no popup. Proves the
    light-theme palette work the README documents.
+5. **`05-files-in-group-dark.png`** (1775 × 958) — the free "Files…" chooser, its
+   "Files in Tests" caption above all five members of the group with their paths,
+   over a tinted two-row tab strip. The one shot of membership visibility, which
+   is free forever and which no other shot shows: a group lists every file it
+   holds, whether or not that file still has a tab open.
+
+Shot 5 was taken against a fuller version of the sample project than shots 1–4, so
+its `Tests` group holds five spec files where shot 2's holds two. Each shot is
+internally consistent; only a viewer comparing the two would notice, and a group
+gaining files between two screenshots is not a claim about the plugin either way.
