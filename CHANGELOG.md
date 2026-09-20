@@ -17,25 +17,6 @@
   remember them, then reopen them together later; marking a group active so files opened while it's active join it automatically;
   and a custom palette editor under **Settings | Tools | PrismTabs**.
 - A file that is *already open* joins the active group in one click, from a row in the tab popup
-  (`Add to Group "Auth"`). Auto-join only ever sees files the platform actually has to open, so
-  before this an already-open file had to be closed and reopened to join the group. Free, like
-  every other by-hand assignment.
-
-### Fixed
-
-- Disabling or uninstalling PrismTabs no longer leaves the IDE asking for a restart. Files the
-  plugin opened itself — "Show Group", or a member file opened from the tool window — were opened
-  synchronously, and the platform stores the stack it was on in the creation trace of every toolbar
-  it builds for that editor, which pinned the plugin's class loader for as long as the tab stayed
-  open. The IDE reported this as "not unload-safe because class loader cannot be unloaded" and
-  wrote a several-hundred-megabyte heap snapshot for it. Those files are now opened off the
-  plugin's own stack.
-- The same restart prompt no longer follows a "Hide Group" on IntelliJ IDEA 2026.2 and later.
-  Closing the group's selected tab could make the IDE rebuild the tab strip's toolbar on the
-  plugin's stack, which again pinned the class loader for as long as the group stayed hidden.
-  Tabs are now closed off the plugin's own stack as well.
-- Tab colours now disappear the moment the plugin is disabled or uninstalled, instead of lingering
-  until the next IDE start — which, on a disable, is never prompted for.
-- "Show Group" now brings back a tab that was added to the group from the tab popup. The group's
-  remembered tabs were only updated when a file opened, so a tab that was already open when it
-  joined was left out, and closing the group's tabs by hand and then showing it lost that tab.
+  (`Add to Group "Auth"`). Free, like every other by-hand assignment.
+- PrismTabs can be disabled or uninstalled without restarting the IDE, and tab colours clear the
+  moment it is.

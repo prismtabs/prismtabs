@@ -800,7 +800,8 @@ punish a mid-task user who needs one more, which is exactly the "too limited" ou
 Done so far, none of it published anywhere:
 
 - **Vendor metadata.** `plugin.xml`'s `<vendor>` now carries a real email
-  (`yendrrek@protonmail.com`) and URL (`https://prismtabs.com/`, the plugin's own public docs site)
+  (`contact@prismtabs.com`, the same address the EULA and the website route to) and URL
+  (`https://prismtabs.com/`, the plugin's own public docs site)
   instead of the bare placeholder name — required for the vendor's site/email to show on the
   Marketplace plugin page. It originally pointed at the GitHub repo instead, but that repo is
   private (see [docs/release-readiness-gaps.md](docs/release-readiness-gaps.md)), and JetBrains'
