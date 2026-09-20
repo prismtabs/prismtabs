@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>io.prismtabs</id>
     <name>PrismTabs</name>
-    <vendor email="yendrrek@protonmail.com" url="https://prismtabs.com/">Andrzej Piontek</vendor>
+    <vendor email="contact@prismtabs.com" url="https://prismtabs.com/">Andrzej Piontek</vendor>
 
     <!-- Item 1 of docs/release-readiness-gaps.md: arms PrismTabsLicense's paid-feature gate.
          optional="true" is load-bearing, not cosmetic — it sets isLicenseOptional, which is what
