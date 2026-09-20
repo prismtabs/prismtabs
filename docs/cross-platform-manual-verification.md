@@ -125,8 +125,39 @@ One entry per pass, newest last: date · OS · build · theme — result.
 - **2026-09-19 · Linux, macOS 26.6.2 and Windows 11 · IC-242.20224.300, plugin 1.4.14 at
   `3712779` · dark and light** — PASS on all three. The release pass: `test` and `uiTest` green,
   every by-eye check, a real restart, and item 9 as far as it goes without a listing — unlicensed
-  start and the trial, per `manual-test-cases.md`. Only the real-key check is outstanding, and it
-  needs the plugin to be on the Marketplace first.
+  start, plus a simulated trial and lapse, per `manual-test-cases.md`. The real trial, real key and
+  real lapse are outstanding, and need the plugin to be on the Marketplace first.
 
-Outstanding for the release: item 9's real subscription key, which can only be checked after the
-first upload.
+### Release pass status
+
+The 2026-09-19 pass at `3712779`, on Linux, macOS and Windows, against the steps and checklist
+above.
+
+- [x] Step 1: `./gradlew test` and `./gradlew uiTest`
+- [x] Step 2: by-eye checks
+- [x] Step 3: one real restart (item 8)
+- [ ] Step 4: licence checks (item 9), see below
+- [x] Step 5: sign-off entry
+
+| # | Area | Status |
+|---|---|---|
+| 1 | Swatch popup | [x] |
+| 2 | Tab tint | [x] |
+| 3 | New Group dialog | [x] |
+| 4 | Rename, recolour, active group, Files… | [x] |
+| 5 | Remove from Group | [x] |
+| 6 | Tool window | [x] |
+| 7 | Settings page, ⌘, on macOS | [x] |
+| 8 | Restart persistence | [x] |
+| 9 | Licence | [ ] partial |
+
+Item 9:
+
+- [x] Unlicensed start
+- [x] Trial, simulated with the licence-facade snippets in `manual-test-cases.md` §3
+- [ ] Trial started from the register dialog, then a real key: needs a registered product code, so
+  it can only be checked after the first upload.
+- [x] Lapse across a restart, simulated with the licence-facade snippets in `manual-test-cases.md`
+  §3
+- [ ] Lapse across a restart with a real licence removed: needs a real trial or key, so it also
+  waits for the listing.
