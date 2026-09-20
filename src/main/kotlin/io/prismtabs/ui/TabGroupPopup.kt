@@ -107,6 +107,17 @@ private class CaptionedListPopup(project: Project, step: ListPopupStep<*>) : Lis
             // return is (a bare `@Deprecated`, no removal schedule — the platform still returns its
             // non-deprecated `GroupHeaderSeparator` subclass from here). Naming it would import a
             // deprecation this override has no way to avoid and no reason to advertise.
+            //
+            // The Plugin Verifier reports the deprecation twice all the same — once here, once for
+            // the `mySeparatorComponent` read below — and neither can be removed. Re-checked on
+            // 2026.3 (IU-263.5153.40) as well as the 2024.2 baseline: `GroupedElementsRenderer`
+            // still declares both `createSeparator()` and the `mySeparatorComponent` field as
+            // `SeparatorWithText`, so calling one or reading the other carries the reference
+            // whatever this class declares. Only dropping the platform separator for a hand-built
+            // caption would clear it, at the cost of reimplementing its layout, divider and
+            // theming. The two usages are informational rather than failures: the Verifier counts
+            // them alongside its verdict, not against it ("Compatible. 3 usages of deprecated
+            // API…"), so `verifyPlugin` stays green while they are there.
             override fun createSeparator() =
                 super.createSeparator().apply { textForeground = UIUtil.getListForeground() }
 
