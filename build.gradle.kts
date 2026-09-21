@@ -14,7 +14,8 @@ plugins {
 }
 
 group = providers.gradleProperty("pluginGroup").get()
-version = providers.gradleProperty("pluginVersion").get()
+val pluginVersion = providers.gradleProperty("pluginVersion").get()
+version = pluginVersion
 
 // Pin client (uiTestImplementation) and server (robotServerPlugin) to the same version —
 // see "UI testing" in README for why a mismatch here is a real, silent-failure risk.
@@ -107,9 +108,19 @@ intellijPlatform {
     pluginConfiguration {
         name = providers.gradleProperty("pluginName")
         version = providers.gradleProperty("pluginVersion")
+        // `pluginVersion` is the eagerly-read gradle property from the top of this file, NOT
+        // `version` — inside pluginConfiguration that name resolves to the Property<String>
+        // itself, whose toString() never matches a changelog section, silently emptying the notes.
+        // Renders the section for the version being built, falling back to [Unreleased] before
+        // `patchChangelog` has stamped one. The fallback is not optional: `patchChangelog` MOVES
+        // the entries out of [Unreleased] into the stamped section, so reading [Unreleased] alone
+        // ships an empty <change-notes/> on every build after a release is stamped — including the
+        // zip that gets uploaded.
         changeNotes = provider {
             changelog.renderItem(
-                changelog.getUnreleased().withHeader(false).withEmptySections(false),
+                (changelog.getOrNull(pluginVersion) ?: changelog.getUnreleased())
+                    .withHeader(false)
+                    .withEmptySections(false),
                 Changelog.OutputType.HTML,
             )
         }
