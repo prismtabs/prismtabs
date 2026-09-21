@@ -15,7 +15,7 @@ Everything here is done, including the five screenshots in `docs/marketplace/`.
 | Plugin name | `plugin.xml` `<name>` — `PrismTabs`, do not change |
 | Description / overview | `plugin.xml` `<description>` — **keep it sourced from the archive**, do not detach it by editing in the admin UI (see item 6's note) |
 | Card blurb / "tagline" | Marketplace derives it from the first line of the description; there is no separate field |
-| Change notes | `plugin.xml` `<change-notes>`, filled at build time from `CHANGELOG.md`'s `[Unreleased]` via `changelog.getUnreleased()` |
+| Change notes | `plugin.xml` `<change-notes>`, filled at build time from `CHANGELOG.md`'s section for the version being built, falling back to `[Unreleased]` before `patchChangelog` has stamped one |
 | Additional Information links | **Technical Information** fields in the admin UI (below) — not prose, not `plugin.xml` |
 | Tags | Entered at upload; JetBrains maps them onto their controlled vocabulary |
 | Screenshots | Uploaded in the admin UI; the five files in `docs/marketplace/`, in filename order |
