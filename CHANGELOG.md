@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.4.14] - 2026-09-21
+
 ### Added
 
 - Colour-coded tab groups for editor tabs: right-click a tab for the swatch popup, pick one of
@@ -20,3 +22,6 @@
   (`Add to Group "Auth"`). Free, like every other by-hand assignment.
 - PrismTabs can be disabled or uninstalled without restarting the IDE, and tab colours clear the
   moment it is.
+
+[Unreleased]: https://github.com/prismtabs/prismtabs/compare/v1.4.14...HEAD
+[1.4.14]: https://github.com/prismtabs/prismtabs/commits/v1.4.14
