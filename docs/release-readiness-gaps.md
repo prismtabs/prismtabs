@@ -287,8 +287,10 @@ goes noticed rather than unnoticed; see "Keeping the EULA in sync" in the websit
 ## 8. Submit for review
 
 **Current state:** blocked on everything above. The first upload was submitted and refused over
-Internal API usage; that cause is fixed (item 15, closed) and the resubmission needs a version bump.
-JetBrains' stated turnaround is about two business days once submitted.
+Internal API usage; that cause is fixed and the version is bumped to 1.4.15 (item 15), but the
+resubmission itself hasn't happened — it's gated on item 15's remaining steps (cross-platform pass,
+real `release-date`, upload). JetBrains' stated turnaround is about two business days once
+submitted.
 
 ---
 
@@ -379,12 +381,14 @@ field at the repository — which cannot happen until the listing exists.
 
 ---
 
-## 15. Internal API: closed — the plugin uses none
+## 15. Internal API — code fixed, resubmission still open
 
-**Current state:** closed 2026-09-22. All three call sites the Marketplace refused in 1.4.14 have
-public replacements, `verifyPlugin` writes no `internal-api-usages.txt` on either end of the matrix
-(checked on IU-242.26775.15 and IU-263.5153.40), and `INTERNAL_API_USAGES` is back in
-`failureLevel` where the Verifier puts it by default.
+**Current state:** the code side closed 2026-09-22. All three call sites the Marketplace refused in
+1.4.14 have public replacements, `verifyPlugin` writes no `internal-api-usages.txt` on either end
+of the matrix (checked on IU-242.26775.15 and IU-263.5153.40), and `INTERNAL_API_USAGES` is back in
+`failureLevel` where the Verifier puts it by default. What's left is entirely the human sequence
+below — reply and ticket are done, the version is bumped, and what remains is the cross-platform
+pass and the actual upload.
 
 - **Open path** — `FileEditorOpenOptions` + `FileEditorManagerEx.openFile` → the public
   `FileEditorManager.openFile` via `PlatformTabOpen`.
@@ -400,16 +404,29 @@ unnecessary reimplementation was written and committed (`ff36c2c`) before the Ma
 pointed at the actual method. The rule for next time is in CLAUDE.md §"Internal API": never reason
 from truncated output.
 
-**Still to do:**
+**Done:**
 
-1. Reply to the Marketplace thread: all three call sites now use public API, and thank the reviewer
-   for pointing at `updateFilePresentation` — no exemption is being asked for.
-2. Close [IJPL-256289](https://youtrack.jetbrains.com/issue/IJPL-256289/editorTabColorProvider-has-no-public-my-answer-has-changed-call)
-   as invalid, saying the call already exists. Leaving it open would have JetBrains triage a
-   request for something they already ship.
-3. Bump `pluginVersion` to 1.4.15 and upload — the Marketplace will not take a second zip under
-   `1.4.14`. Item 3's release procedure applies, and `release-version` stays at `14`: a
-   third-component update, not a major release, so it must not reset anyone's trial.
+1. ~~Reply to the Marketplace thread~~ — done; the reviewer's own reply pointed at
+   `updateFilePresentation`.
+2. ~~Close IJPL-256289 as invalid~~ — done, Andrzej replied asking JetBrains to close it.
+3. ~~Bump `pluginVersion`~~ — done: `1.4.15`, stamped in `CHANGELOG.md` (`d7c5398`).
+   `release-version` correctly stayed at `14`.
+
+**Still to do, in order:**
+
+4. Run the pass in `docs/cross-platform-manual-verification.md` on Windows and macOS, against
+   `1.4.15` (commit `d7c5398` or later) — its own rule is to run this before each release, and CI
+   can't substitute (hosted Windows fails the tool-window tests; hosted macOS can't grant the TCC
+   permissions `remote-robot` needs). Worth doing deliberately this time: today's fix rewrote both
+   the tab-*opening* path (`PlatformTabOpen`) and the repaint path (`updateFilePresentation`), and
+   neither has been exercised outside Linux yet.
+5. **Set the real `release-date`, then upload.** 1.4.14 was never actually published — Marketplace
+   refused it — so **1.4.15 is the true first release**, and `plugin.xml`'s own comment on
+   `<product-descriptor>` says `release-date` is "the day that major release is published; the
+   value here is a placeholder until the first one." `20260921` is that placeholder. Update it to
+   the real upload day in a small commit right before uploading (not now — it should be the actual
+   day), and upload as item 5's **first release**, not an update. No trial exists yet, so this
+   costs nothing; it would matter on every release after.
 
 **Do not** reintroduce an internal call to make something easier. `acceptedInternalApiUsages` in
 `build.gradle.kts` is empty and `verifyInternalApiAllowlist` fails the build on any addition; that
