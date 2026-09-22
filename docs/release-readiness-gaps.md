@@ -385,6 +385,10 @@ field at the repository — which cannot happen until the listing exists.
 to the one entry below on both ends of the matrix (checked on IU-242.26775.15 and IU-263.5153.40) —
 and what is left is what has to be said to JetBrains about that entry.
 
+`verifyInternalApiAllowlist` now fails the build on any internal call outside that one entry, so a
+second upload cannot repeat the first one's mistake. It runs automatically after `verifyPlugin`,
+locally and in every per-IDE CI job; README §"`verifyInternalApiAllowlist`" explains it.
+
 The 1.4.14 submission was refused by the Marketplace: *"Your plugin uses the Internal API, which is
 private and must not be used outside the IntelliJ Platform itself."* Three call sites were reported
 across the eight-IDE matrix. Two are fixed and gone — the open path (`FileEditorOpenOptions` and
