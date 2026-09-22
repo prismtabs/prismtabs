@@ -50,16 +50,19 @@ one; README §"Never omit a default argument on a platform Kotlin API" has the f
 
 ## Internal API
 
-Marketplace refuses an upload that uses `@ApiStatus.Internal` platform members. `verifyPlugin`
-alone will not stop one: `INTERNAL_API_USAGES` is dropped from its `failureLevel`, because the
-category cannot be accepted for one call and refused for the next. `verifyInternalApiAllowlist`
-finalizes `verifyPlugin` and is what actually fails the build — it reads the Verifier's report and
-rejects anything outside `acceptedInternalApiUsages` in `build.gradle.kts`, whose one entry is
-`FileEditorManagerImpl.queueUpdateFile` in `TabRepaint`, for which no public API exists.
+Marketplace refuses an upload that uses `@ApiStatus.Internal` platform members, and this plugin
+now uses **none** — `acceptedInternalApiUsages` in `build.gradle.kts` is empty and must stay that
+way. Two things enforce it: `INTERNAL_API_USAGES` is in `verifyPlugin`'s `failureLevel`, and
+`verifyInternalApiAllowlist` finalizes `verifyPlugin`, names any offender, and also fails if that
+level is ever dropped again.
 
-Do not widen that list to get a build green. Read README §"Internal API: what the Marketplace asked
-for" first — it records which public calls were checked and rejected, and
-`PlatformTabOpen`/`PlatformTabClose` show the shape that let the open and close paths drop theirs.
+Getting a build green by adding an entry is the wrong move. Read README §"Internal API: what the
+Marketplace asked for" first: it records how each of 1.4.14's three refused calls was replaced,
+including `TabRepaint`, where the public route is to set `TabInfo.setTabColor` directly and match
+the tab by component identity. The rule that makes such a route findable: a class in an `impl`
+package is *not* automatically off-limits — check the actual annotation with `javap`, since
+`EditorWindow`, `EditorComposite` and `TabInfo` carry none, while a Kotlin-`internal` member
+(mangled, or refused by the Kotlin compiler) is off-limits whatever the Verifier says.
 
 ## Build
 

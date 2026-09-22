@@ -1506,10 +1506,16 @@ Read these before designing anything. They are platform limits, not TODOs.
    render tints at roughly half strength** — the platform blends them against
    `EditorTabs.inactiveColoredFileBackground`. Measured in Phase 0; see
    [that section](#measured-constraint-unselected-tabs-render-tints-at-50-strength).
-5. **There is no stable API to repaint a tab after a colour change.** The only call that moves the
-   tab background is `FileEditorManagerImpl.queueUpdateFile`, which is on the impl class, not the
-   `FileEditorManagerEx` interface. See [Phase 0 finding 3](#3-repaint-queueupdatefile-not-updatefilecolor--and-no-stable-api-exists)
-   and [the Phase 1 decision](#the-repaint-decision) on how it's called without reflection.
+5. **There is no *first-class* API to repaint a tab after a colour change** — but there is a
+   supported way to do it, so unlike 1–4 this one is a rough edge rather than a wall.
+   `editorTabColorProvider` has no companion "my answer has changed" call
+   ([IJPL-256289](https://youtrack.jetbrains.com/issue/IJPL-256289/editorTabColorProvider-has-no-public-my-answer-has-changed-call)),
+   and the platform's own trigger, `FileEditorManagerImpl.queueUpdateFile`, is
+   `@ApiStatus.Internal`. `TabRepaint` instead does what that call ends up doing, over public API:
+   walk the windows to the file's `TabInfo` and set its colour. See
+   [Internal API](#internal-api-what-the-marketplace-asked-for) for the chain and the threading it
+   requires. (Phase 0 and Phase 1 below record this as impossible; that was the conclusion at the
+   time and the sections are kept as written — this entry supersedes them.)
 
 ## Compatibility policy
 
@@ -1549,11 +1555,13 @@ the Verifier.
 
 The 1.4.14 upload was refused by JetBrains Marketplace with "Your plugin uses the Internal API,
 which is private and must not be used outside the IntelliJ Platform itself". `verifyPlugin` had
-been reporting the same thing all along — `INTERNAL_API_USAGES` is dropped from `failureLevel` in
-`build.gradle.kts`, so it printed into `build/reports/pluginVerifier/*/internal-api-usages.txt`
-without failing the build. Three call sites, of which two were replaceable and one is not.
-That hole is now closed by [`verifyInternalApiAllowlist`](#verifyinternalapiallowlist); the rest of
-this section is what the three call sites were and what replaced them.
+been reporting the same thing all along — `INTERNAL_API_USAGES` had been dropped from
+`failureLevel` in `build.gradle.kts`, so it printed into
+`build/reports/pluginVerifier/*/internal-api-usages.txt` without failing the build. Three call
+sites. **All three now have public replacements, and the plugin uses no internal API at all**; the
+level is back on, and [`verifyInternalApiAllowlist`](#verifyinternalapiallowlist) guards an empty
+allowlist. The rest of this section is what each call site was and what replaced it — the third is
+the interesting one, because the first pass concluded it was impossible.
 
 **Opening a tab — replaced.** `TabStrip` used to call
 `FileEditorManagerEx.openFile(file, FileEditorOpenOptions, Continuation)`, building the options
@@ -1574,30 +1582,56 @@ call that hands a plugin its own descriptor — on 2026.3 `PluginManagerCore.get
 `<product-descriptor code="…">` straight out of its own bundled `plugin.xml`, which is the same tag
 the platform would have parsed, so the no-drift property the original call was chosen for is intact.
 
-**The repaint — not replaceable.** `TabRepaint` calls `FileEditorManagerImpl.queueUpdateFile`, and
-nothing public does what it does. Traced through the bytecode on 242 and 263: the tab *background*
-is only ever recomputed by `EditorsSplitters.updateFileBackgroundColorAsync`, which is reached
-solely from `FileEditorManagerImpl`'s `fileUpdateChannel` — that is, from `queueUpdateFile`. Three
-near-misses, each rejected:
+**The repaint — replaced, after a second look.** `TabRepaint` used
+`FileEditorManagerImpl.queueUpdateFile`, and the first pass at this concluded there was no public
+equivalent: the tab *background* is written only by `EditorsSplitters.updateFileBackgroundColor`,
+which is reached solely from `FileEditorManagerImpl`'s `fileUpdateChannel`. That is true, and it is
+the wrong question. The right one is what `updateFileBackgroundColor` *does*, which its bytecode
+answers: `windows → findTabByFile → TabInfo.setTabColor`, with the colour from
+`EditorTabPresentationUtil.getEditorTabBackgroundColor`. Every step of that has a public,
+unmangled, unannotated equivalent on both 2024.2 and 263:
 
-| Candidate | Public? | Why it does not work |
+```
+FileEditorManagerEx.windows      EditorWindow[], from getAllSplitters — detached windows included
+  window.getComposite(file)      that window's EditorComposite for the file
+  composite.component            the EditorCompositePanel the tab is built around
+  window.tabbedPane.tabs.tabs    that window's TabInfos
+  TabInfo.setTabColor(colour)
+```
+
+The one link with no public form is the tab→file direction: `TabInfo.composite` is
+Kotlin-`internal`, and the Kotlin compiler refuses it outright. So `TabRepaint` goes the other way
+and matches by **component identity** — `EditorComposite.getComponent()` returns the very
+`EditorCompositePanel` instance that `TabInfo.getComponent()` holds, identical on both ends of the
+matrix, so the two compare equal by reference.
+
+What made this look impossible the first time was reading "in an `impl` package" as "internal".
+It is not: `EditorWindow`, `EditorComposite`, `EditorTabbedContainer`, `EditorsSplitters`,
+`EditorTabPresentationUtil` and `TabInfo` carry no `@ApiStatus` annotation at all. Only
+`FileEditorManagerImpl` and `FileEditorOpenOptions` do. Check the annotation, not the package.
+
+**The threading is not optional, and is where the first attempt broke.**
+`getEditorTabBackgroundColor` walks every registered `editorTabColorProvider`, and the platform's
+own File Colors provider reads the workspace file index — a slow operation, forbidden on the EDT.
+Calling it there logs `Slow operations are prohibited on EDT`; that arrived as four errors in
+`TabGroupPopupUiTest`, measured rather than predicted. `TabRepaint` therefore splits by who owns
+the answer, which falls out of this plugin registering `order="first"`:
+
+| Case | Colour | Thread |
 | --- | --- | --- |
-| `FileStatusManager.fileStatusChanged(file)` | yes | Reaches `updateFileColor` + icon only — the VCS *foreground*, not the tab background |
-| `refreshIcons()` / `updateFileName(file)` | yes | Icons and titles; neither touches colour |
-| `EditorsSplitters.updateFileBackgroundColorAsync$…` | not `@ApiStatus.Internal`, so the Verifier is silent | Kotlin module-internal, mangled name, and `getSplitters()` is the main window's only — detached editor windows would stop recolouring |
+| File is in a group — assign, recolour, auto-join, remap | this plugin's own; being first, it *is* the final answer | synchronous, chain never consulted |
+| File left a group — remove, delete | cleared at once, then the full chain re-asked | `readAction` → `Dispatchers.EDT`, exactly as `updateFileBackgroundColor` does |
+| Plugin load / unload (`requestAll`) | this plugin's own, which is `null` after `TabGroupColorProvider.stop()` | synchronous — it must finish before the class loader goes, and a coroutine of this plugin's own would be cancelled with it |
 
-Firing `UISettingsListener.TOPIC` ourselves would work and is public, but it lies to every other
-UI-settings listener in the IDE to repaint one tab.
+That last row is also why `requestAll` touches only tabs this plugin claims: another provider's
+colour must not be collateral damage.
 
-So the call stays, and it is the sole remaining entry in `internal-api-usages.txt` — the one
-entry `verifyInternalApiAllowlist` accepts. What it costs
-if it ever goes: every live colour update — assign, remove, recolour, delete, auto-join, VFS remap,
-and the strip cleanup on plugin disable. See
-[Phase 0 finding 3](#3-repaint-queueupdatefile-not-updatefilecolor--and-no-stable-api-exists) and
-[the Phase 1 decision](#the-repaint-decision). Filed with JetBrains as
+With this in, the plugin uses **no internal platform API at all** —
+`verifyPlugin` writes no `internal-api-usages.txt` on either end of the matrix, and
+`INTERNAL_API_USAGES` is back in `failureLevel` where the Verifier puts it by default.
 [IJPL-256289](https://youtrack.jetbrains.com/issue/IJPL-256289/editorTabColorProvider-has-no-public-my-answer-has-changed-call)
-— the draft that went into it is `docs/youtrack-tab-repaint-api.md`, and item 15 of
-`docs/release-readiness-gaps.md` has the rest of the sequence.
+still stands and is still worth having — a first-class "recompute this file's tab presentation"
+call would replace the whole of `TabRepaint` — but it is no longer a blocker for anything.
 
 ### `verifyInternalApiAllowlist`
 
