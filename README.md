@@ -1594,9 +1594,10 @@ entry `verifyInternalApiAllowlist` accepts. What it costs
 if it ever goes: every live colour update — assign, remove, recolour, delete, auto-join, VFS remap,
 and the strip cleanup on plugin disable. See
 [Phase 0 finding 3](#3-repaint-queueupdatefile-not-updatefilecolor--and-no-stable-api-exists) and
-[the Phase 1 decision](#the-repaint-decision). Asking JetBrains for a public tab-colour refresh is
-the documented next step: the issue body is drafted in `docs/youtrack-tab-repaint-api.md`, and
-item 15 of `docs/release-readiness-gaps.md` has the order to do it in.
+[the Phase 1 decision](#the-repaint-decision). Filed with JetBrains as
+[IJPL-256289](https://youtrack.jetbrains.com/issue/IJPL-256289/editorTabColorProvider-has-no-public-my-answer-has-changed-call)
+— the draft that went into it is `docs/youtrack-tab-repaint-api.md`, and item 15 of
+`docs/release-readiness-gaps.md` has the rest of the sequence.
 
 ### `verifyInternalApiAllowlist`
 
