@@ -172,23 +172,21 @@ intellijPlatform {
             }
         }
 
-        // Default failure levels are COMPATIBILITY_PROBLEMS, INTERNAL_API_USAGES and
-        // OVERRIDE_ONLY_API_USAGES. Drop INTERNAL_API_USAGES: TabRepaint deliberately calls
-        // FileEditorManagerImpl.queueUpdateFile (see README "The repaint decision") because no
-        // stable public API exists for a tab-colour repaint. That call is inherently
-        // @ApiStatus.Internal and always trips this category — failing the build on it would
-        // make `verifyPlugin` permanently red for a risk already accepted on purpose. What
-        // still fails the build is COMPATIBILITY_PROBLEMS, which is what actually catches the
-        // scenario the README cares about: queueUpdateFile disappearing on a future IDE.
+        // The Verifier's own default, restored in full — INTERNAL_API_USAGES included. It was
+        // dropped for as long as TabRepaint called FileEditorManagerImpl.queueUpdateFile, since
+        // the category is one switch and cannot accept that one call while refusing the next.
+        // That call is gone (README "Internal API: what the Marketplace asked for"), the plugin
+        // uses no internal API at all, and Marketplace refuses an upload over this category — so
+        // the level that matches the plugin's actual position is the strict one.
         //
-        // Dropped, not ignored: Marketplace refuses an upload over this category, which is what
-        // happened to 1.4.14 and cost two of the three call sites it then had — both of them
-        // reported here on every run, into a file that failed nothing and so was never read.
-        // `verifyInternalApiAllowlist` below is what reads it now; that task, not this list, is
-        // what keeps a *new* internal call from reaching the Marketplace.
-        // README "Internal API: what the Marketplace asked for".
+        // `verifyInternalApiAllowlist` below is kept alongside it deliberately, not redundantly:
+        // it names the offending member and the IDE that reported it, and it fails if anyone
+        // drops this level again to get a build green. 1.4.14 was refused by the Marketplace over
+        // two calls this list would have caught, both reported on every run into a file that
+        // failed nothing and so was never read.
         failureLevel = listOf(
             VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
+            VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES,
             VerifyPluginTask.FailureLevel.OVERRIDE_ONLY_API_USAGES,
         )
     }
@@ -254,19 +252,18 @@ tasks {
     }
 }
 
-// The one internal platform API this plugin is allowed to call, as `verifyInternalApiAllowlist`
-// normalises the Verifier's report: the platform member (no signature) and the PrismTabs class
-// using it. See README "Internal API: what the Marketplace asked for" for why this one has no
-// public equivalent, and what was checked before accepting it.
+// Internal platform APIs this plugin is allowed to call — deliberately **empty**, and the intent
+// is that it stays that way. Every call the Marketplace refused in 1.4.14 now has a public
+// equivalent; README "Internal API: what the Marketplace asked for" records what each one became.
 //
-// Adding an entry here is a decision to ship an API the Marketplace may refuse, so it belongs in
-// a review, not in a red build someone wants green. The entries are signature-free on purpose:
-// a parameter list is spelled differently across the matrix and would make this fail on an IDE
-// rather than on a change.
-val acceptedInternalApiUsages = setOf(
-    "com.intellij.openapi.fileEditor.impl.FileEditorManagerImpl used by io.prismtabs.service.TabRepaint",
-    "com.intellij.openapi.fileEditor.impl.FileEditorManagerImpl.queueUpdateFile used by io.prismtabs.service.TabRepaint",
-)
+// An entry here is a decision to ship an API the Marketplace may refuse, so it belongs in a
+// review with the reasoning written down, not in a red build someone wants green. Entries are
+// signature-free: a parameter list is spelled differently across the matrix and pinning one would
+// fail on an IDE rather than on a change. Format, as `verifyInternalApiAllowlist` normalises a
+// finding — the platform member without its signature, then the PrismTabs class using it:
+//
+//     "com.example.PlatformClass.member used by io.prismtabs.some.Caller"
+val acceptedInternalApiUsages = emptySet<String>()
 
 /**
  * Fails the build on any `@ApiStatus.Internal` platform call that is not [acceptedInternalApiUsages].

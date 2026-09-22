@@ -286,9 +286,9 @@ goes noticed rather than unnoticed; see "Keeping the EULA in sync" in the websit
 
 ## 8. Submit for review
 
-**Current state:** blocked on everything above, and on item 15 — the first upload was submitted and
-refused over Internal API usage. JetBrains' stated turnaround is about two business days once
-submitted.
+**Current state:** blocked on everything above. The first upload was submitted and refused over
+Internal API usage; that cause is fixed (item 15, closed) and the resubmission needs a version bump.
+JetBrains' stated turnaround is about two business days once submitted.
 
 ---
 
@@ -379,47 +379,45 @@ field at the repository — which cannot happen until the listing exists.
 
 ---
 
-## 15. Internal API: the `queueUpdateFile` exemption
+## 15. Internal API: closed — the plugin uses none
 
-**Current state:** open. The code side is done — `verifyPlugin`'s `internal-api-usages.txt` is down
-to the one entry below on both ends of the matrix (checked on IU-242.26775.15 and IU-263.5153.40) —
-and what is left is what has to be said to JetBrains about that entry.
+**Current state:** closed 2026-09-22. All three call sites the Marketplace refused in 1.4.14 now
+have public replacements, `verifyPlugin` writes no `internal-api-usages.txt` on either end of the
+matrix (checked on IU-242.26775.15 and IU-263.5153.40), and `INTERNAL_API_USAGES` is back in
+`failureLevel` where the Verifier puts it by default.
 
-`verifyInternalApiAllowlist` now fails the build on any internal call outside that one entry, so a
-second upload cannot repeat the first one's mistake. It runs automatically after `verifyPlugin`,
-locally and in every per-IDE CI job; README §"`verifyInternalApiAllowlist`" explains it.
+- **Open path** — `FileEditorOpenOptions` + `FileEditorManagerEx.openFile` → the public
+  `FileEditorManager.openFile` via `PlatformTabOpen`.
+- **Licence check** — `PluginManager.getPluginByClass` → a read of the bundled `plugin.xml`.
+- **Repaint** — `FileEditorManagerImpl.queueUpdateFile` → `TabRepaint` walks
+  `FileEditorManagerEx.windows` to the file's `TabInfo` and sets its colour, which is what the
+  platform's own `updateFileBackgroundColor` does. The first pass called this irreplaceable; it was
+  wrong, because "in an `impl` package" was read as "internal". README §"Internal API: what the
+  Marketplace asked for" has the chain, the component-identity trick and the threading split.
 
-The 1.4.14 submission was refused by the Marketplace: *"Your plugin uses the Internal API, which is
-private and must not be used outside the IntelliJ Platform itself."* Three call sites were reported
-across the eight-IDE matrix. Two are fixed and gone — the open path (`FileEditorOpenOptions` and
-`FileEditorManagerEx.openFile`, now the public `FileEditorManager.openFile` via `PlatformTabOpen`)
-and the licence check (`PluginManager.getPluginByClass`, now a read of our own bundled
-`plugin.xml`). README §"Internal API: what the Marketplace asked for" has the full account of both,
-and of why the third has no replacement.
+**What this changes for publishing:** the Marketplace objection is gone outright rather than needing
+an appeal — which matters, because the appeal was unlikely to succeed. JetBrains' approval
+guidelines state the criterion unqualified ("The Plugin does not violate JetBrains' internal API
+usage"), and on the platform forum a JetBrains engineer has said that internal usage with no public
+replacement "cannot be published", with circumvention risking a permanent ban.
 
-The third is `FileEditorManagerImpl.queueUpdateFile` in `TabRepaint`, and it is not replaceable:
-nothing public recomputes an editor tab's *background*, which is the plugin's entire feature. Verify
-that claim before acting on this item rather than trusting it — the platform may have grown one
-since — using CLAUDE.md's `javap` recipe: the background is written by
-`EditorsSplitters.updateFileBackgroundColorAsync`, so the question is whether anything public now
-reaches it other than `FileEditorManagerImpl`'s `fileUpdateChannel`.
+**Still to do:**
 
-**What to do, in order:**
-
-1. ~~File a YouTrack issue~~ **Done 2026-09-22:**
+1. Reply to the Marketplace rejection email saying all three call sites were replaced with public
+   API — no exemption is being asked for. Link
    [IJPL-256289](https://youtrack.jetbrains.com/issue/IJPL-256289/editorTabColorProvider-has-no-public-my-answer-has-changed-call)
-   — filed under `IJPL` (IntelliJ Platform), not `IDEA` as the original draft assumed; JetBrains'
-   own triage may move it, so check the linked issue rather than this project name if it's ever
-   quoted elsewhere. The body that shipped is `docs/youtrack-tab-repaint-api.md` as it stood at
-   commit `6b9bcc0`.
-2. Reply to the Marketplace rejection email naming the two fixed call sites, stating that the third
-   has no public equivalent, and linking IJPL-256289. Do not claim a false positive — it is not one.
-3. Bump `pluginVersion` and upload: the Marketplace will not take a second zip under `1.4.14`.
-   Item 3's release procedure is the one to follow, and `release-version` stays at `14` — this is a
-   third-component update, not a major release, so it must not reset anyone's trial.
+   only as context for *why* the workaround exists, not as a request.
+2. Bump `pluginVersion` and upload: the Marketplace will not take a second zip under `1.4.14`.
+   Item 3's release procedure applies, and `release-version` stays at `14` — a third-component
+   update, not a major release, so it must not reset anyone's trial.
+3. Worth a comment on IJPL-256289 noting a public workaround was found, so the issue reads as
+   "this is awkward" rather than "this is impossible". It stays open on its own merits: the
+   workaround reimplements platform behaviour that a one-line public call would replace.
 
-**Do not** "fix" this by reaching for
-`EditorsSplitters.updateFileBackgroundColorAsync$intellij_platform_ide_impl` because the Verifier
-happens not to flag Kotlin module-internal members. It is a mangled name with no stability promise
-at all, and `getSplitters()` is the main window's alone, so detached editor windows would silently
-stop recolouring. The README section records this and the other two near-misses that were tried.
+**Do not** reintroduce an internal call to make something easier. `acceptedInternalApiUsages` in
+`build.gradle.kts` is empty and `verifyInternalApiAllowlist` fails the build on any addition; that
+task also fails if `INTERNAL_API_USAGES` is dropped from `failureLevel` again. When something looks
+unreachable, check the *annotation* with `javap` rather than the package name — `EditorWindow`,
+`EditorComposite` and `TabInfo` all live in `impl` packages and carry no annotation at all. A
+Kotlin-`internal` member is genuinely off-limits: the compiler refuses it, and reaching it from Java
+to dodge that is the circumvention JetBrains warn about.

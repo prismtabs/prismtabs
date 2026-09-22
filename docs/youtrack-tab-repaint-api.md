@@ -6,6 +6,15 @@
 written. What follows is the draft as submitted, kept for the record; track the issue itself for
 its current status, not this file.
 
+**Superseded in part 2026-09-22:** a public workaround was found after filing — `TabRepaint` now
+walks `FileEditorManagerEx.windows` to the file's `TabInfo` and sets its colour, which is what the
+platform's own `updateFileBackgroundColor` does (README §"Internal API: what the Marketplace asked
+for"). So the issue's "the extension point is effectively unusable" framing is stronger than the
+facts now support. The request still stands on its own merits — the workaround reimplements
+platform behaviour a one-line public call would replace, and matching a tab by component identity
+is not something a plugin should have to do — but it is no longer blocking this plugin. Worth a
+comment on the issue saying so.
+
 **Title:** `editorTabColorProvider` has no public "my answer has changed" call
 
 Everything below the rule is the issue body as filed.
