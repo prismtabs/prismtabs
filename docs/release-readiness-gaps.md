@@ -406,15 +406,14 @@ reaches it other than `FileEditorManagerImpl`'s `fileUpdateChannel`.
 
 **What to do, in order:**
 
-1. File a YouTrack issue on `IDEA` asking for a public API to request a tab-colour repaint for a
-   `VirtualFile` — the `editorTabColorProvider` extension point has no companion "my answer has
-   changed" call, which is the gap. Point at `queueUpdateFile` as the thing plugins reach for, and
-   say what it is for: a group's colour changing, a tab joining or leaving a group, and stripping
-   the plugin's colours off the strip on disable so an uninstalled plugin's colours do not survive
-   until the next IDE start. A drafted issue body is in `docs/youtrack-tab-repaint-api.md`.
+1. ~~File a YouTrack issue~~ **Done 2026-09-22:**
+   [IJPL-256289](https://youtrack.jetbrains.com/issue/IJPL-256289/editorTabColorProvider-has-no-public-my-answer-has-changed-call)
+   — filed under `IJPL` (IntelliJ Platform), not `IDEA` as the original draft assumed; JetBrains'
+   own triage may move it, so check the linked issue rather than this project name if it's ever
+   quoted elsewhere. The body that shipped is `docs/youtrack-tab-repaint-api.md` as it stood at
+   commit `6b9bcc0`.
 2. Reply to the Marketplace rejection email naming the two fixed call sites, stating that the third
-   has no public equivalent, and linking the YouTrack issue. Do not claim a false positive — it is
-   not one.
+   has no public equivalent, and linking IJPL-256289. Do not claim a false positive — it is not one.
 3. Bump `pluginVersion` and upload: the Marketplace will not take a second zip under `1.4.14`.
    Item 3's release procedure is the one to follow, and `release-version` stays at `14` — this is a
    third-component update, not a major release, so it must not reset anyone's trial.

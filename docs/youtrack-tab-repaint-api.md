@@ -1,18 +1,14 @@
 # YouTrack issue: public API to repaint an editor tab's colour
 
-File this on the `IDEA` project at <https://youtrack.jetbrains.com/newIssue?project=IDEA>, under
-subsystem **UI. Tabs**, type **Feature**. It asks for the one platform API PrismTabs cannot do
-without and cannot get publicly; item 15 of `release-readiness-gaps.md` is the wider task it
-belongs to, and the README section "Internal API: what the Marketplace asked for" is the evidence
-behind it.
-
-Before filing, check <https://youtrack.jetbrains.com/issues?q=%23Feature%20%23Unresolved%20> for
-an existing request covering `editorTabColorProvider` invalidation; vote/comment there instead if
-one exists.
+**Filed 2026-09-22:**
+[IJPL-256289](https://youtrack.jetbrains.com/issue/IJPL-256289/editorTabColorProvider-has-no-public-my-answer-has-changed-call)
+— JetBrains routed it to `IJPL` (IntelliJ Platform), not `IDEA` as this draft assumed when it was
+written. What follows is the draft as submitted, kept for the record; track the issue itself for
+its current status, not this file.
 
 **Title:** `editorTabColorProvider` has no public "my answer has changed" call
 
-Everything below the rule is the issue body, in JetBrains' own template, ready to paste.
+Everything below the rule is the issue body as filed.
 
 ---
 
