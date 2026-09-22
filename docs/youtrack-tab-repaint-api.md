@@ -6,14 +6,14 @@
 written. What follows is the draft as submitted, kept for the record; track the issue itself for
 its current status, not this file.
 
-**Superseded in part 2026-09-22:** a public workaround was found after filing — `TabRepaint` now
-walks `FileEditorManagerEx.windows` to the file's `TabInfo` and sets its colour, which is what the
-platform's own `updateFileBackgroundColor` does (README §"Internal API: what the Marketplace asked
-for"). So the issue's "the extension point is effectively unusable" framing is stronger than the
-facts now support. The request still stands on its own merits — the workaround reimplements
-platform behaviour a one-line public call would replace, and matching a tab by component identity
-is not something a plugin should have to do — but it is no longer blocking this plugin. Worth a
-comment on the issue saying so.
+**Invalid — close it 2026-09-22.** The call this issue asks for already exists:
+`FileEditorManager.updateFilePresentation(VirtualFile)`, public, unannotated, present on both ends
+of the matrix, and its implementation calls `queueUpdateFile` itself. A Marketplace reviewer
+pointed it out in reply to the rejection. It was missed here because a `javap` dump of
+`FileEditorManager` was read through `head -40` and the method sits below the cut — so the issue's
+premise ("no public API to invalidate it") is simply false. Close it as invalid rather than leaving
+JetBrains to triage a request for something they already ship. The body below is kept only as the
+record of what was filed.
 
 **Title:** `editorTabColorProvider` has no public "my answer has changed" call
 

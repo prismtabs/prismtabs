@@ -381,38 +381,35 @@ field at the repository — which cannot happen until the listing exists.
 
 ## 15. Internal API: closed — the plugin uses none
 
-**Current state:** closed 2026-09-22. All three call sites the Marketplace refused in 1.4.14 now
-have public replacements, `verifyPlugin` writes no `internal-api-usages.txt` on either end of the
-matrix (checked on IU-242.26775.15 and IU-263.5153.40), and `INTERNAL_API_USAGES` is back in
+**Current state:** closed 2026-09-22. All three call sites the Marketplace refused in 1.4.14 have
+public replacements, `verifyPlugin` writes no `internal-api-usages.txt` on either end of the matrix
+(checked on IU-242.26775.15 and IU-263.5153.40), and `INTERNAL_API_USAGES` is back in
 `failureLevel` where the Verifier puts it by default.
 
 - **Open path** — `FileEditorOpenOptions` + `FileEditorManagerEx.openFile` → the public
   `FileEditorManager.openFile` via `PlatformTabOpen`.
 - **Licence check** — `PluginManager.getPluginByClass` → a read of the bundled `plugin.xml`.
-- **Repaint** — `FileEditorManagerImpl.queueUpdateFile` → `TabRepaint` walks
-  `FileEditorManagerEx.windows` to the file's `TabInfo` and sets its colour, which is what the
-  platform's own `updateFileBackgroundColor` does. The first pass called this irreplaceable; it was
-  wrong, because "in an `impl` package" was read as "internal". README §"Internal API: what the
-  Marketplace asked for" has the chain, the component-identity trick and the threading split.
+- **Repaint** — `FileEditorManagerImpl.queueUpdateFile` → the public
+  `FileEditorManager.updateFilePresentation(VirtualFile)`, whose implementation calls
+  `queueUpdateFile` itself. `requestAll` iterates `FileEditorManager.openFiles`.
 
-**What this changes for publishing:** the Marketplace objection is gone outright rather than needing
-an appeal — which matters, because the appeal was unlikely to succeed. JetBrains' approval
-guidelines state the criterion unqualified ("The Plugin does not violate JetBrains' internal API
-usage"), and on the platform forum a JetBrains engineer has said that internal usage with no public
-replacement "cannot be published", with circumvention risking a permanent ban.
+**The repaint was twice called impossible, and both times that was wrong.** The method was missed
+because a `javap` dump of `FileEditorManager` was read through `head -40`, and it sits below the
+cut. On that basis a Marketplace appeal was drafted, `IJPL-256289` was filed, and a working but
+unnecessary reimplementation was written and committed (`ff36c2c`) before the Marketplace reviewer
+pointed at the actual method. The rule for next time is in CLAUDE.md §"Internal API": never reason
+from truncated output.
 
 **Still to do:**
 
-1. Reply to the Marketplace rejection email saying all three call sites were replaced with public
-   API — no exemption is being asked for. Link
-   [IJPL-256289](https://youtrack.jetbrains.com/issue/IJPL-256289/editorTabColorProvider-has-no-public-my-answer-has-changed-call)
-   only as context for *why* the workaround exists, not as a request.
-2. Bump `pluginVersion` and upload: the Marketplace will not take a second zip under `1.4.14`.
-   Item 3's release procedure applies, and `release-version` stays at `14` — a third-component
-   update, not a major release, so it must not reset anyone's trial.
-3. Worth a comment on IJPL-256289 noting a public workaround was found, so the issue reads as
-   "this is awkward" rather than "this is impossible". It stays open on its own merits: the
-   workaround reimplements platform behaviour that a one-line public call would replace.
+1. Reply to the Marketplace thread: all three call sites now use public API, and thank the reviewer
+   for pointing at `updateFilePresentation` — no exemption is being asked for.
+2. Close [IJPL-256289](https://youtrack.jetbrains.com/issue/IJPL-256289/editorTabColorProvider-has-no-public-my-answer-has-changed-call)
+   as invalid, saying the call already exists. Leaving it open would have JetBrains triage a
+   request for something they already ship.
+3. Bump `pluginVersion` to 1.4.15 and upload — the Marketplace will not take a second zip under
+   `1.4.14`. Item 3's release procedure applies, and `release-version` stays at `14`: a
+   third-component update, not a major release, so it must not reset anyone's trial.
 
 **Do not** reintroduce an internal call to make something easier. `acceptedInternalApiUsages` in
 `build.gradle.kts` is empty and `verifyInternalApiAllowlist` fails the build on any addition; that

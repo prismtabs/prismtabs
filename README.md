@@ -1506,16 +1506,13 @@ Read these before designing anything. They are platform limits, not TODOs.
    render tints at roughly half strength** — the platform blends them against
    `EditorTabs.inactiveColoredFileBackground`. Measured in Phase 0; see
    [that section](#measured-constraint-unselected-tabs-render-tints-at-50-strength).
-5. **There is no *first-class* API to repaint a tab after a colour change** — but there is a
-   supported way to do it, so unlike 1–4 this one is a rough edge rather than a wall.
-   `editorTabColorProvider` has no companion "my answer has changed" call
-   ([IJPL-256289](https://youtrack.jetbrains.com/issue/IJPL-256289/editorTabColorProvider-has-no-public-my-answer-has-changed-call)),
-   and the platform's own trigger, `FileEditorManagerImpl.queueUpdateFile`, is
-   `@ApiStatus.Internal`. `TabRepaint` instead does what that call ends up doing, over public API:
-   walk the windows to the file's `TabInfo` and set its colour. See
-   [Internal API](#internal-api-what-the-marketplace-asked-for) for the chain and the threading it
-   requires. (Phase 0 and Phase 1 below record this as impossible; that was the conclusion at the
-   time and the sections are kept as written — this entry supersedes them.)
+5. ~~**There is no stable API to repaint a tab after a colour change.**~~ **Not a constraint —
+   this one was a mistake.** `FileEditorManager.updateFilePresentation(VirtualFile)` is public,
+   unannotated, present since well before the 2024.2 floor, and reaches the same
+   `fileUpdateChannel` as the internal `queueUpdateFile`. It was missed by reading a truncated
+   `javap` dump as a complete API listing. Phase 0 finding 3, the Phase 1 "repaint decision" and
+   `IJPL-256289` all rest on that error and are superseded by this entry; see
+   [Internal API](#internal-api-what-the-marketplace-asked-for).
 
 ## Compatibility policy
 
@@ -1561,7 +1558,7 @@ been reporting the same thing all along — `INTERNAL_API_USAGES` had been dropp
 sites. **All three now have public replacements, and the plugin uses no internal API at all**; the
 level is back on, and [`verifyInternalApiAllowlist`](#verifyinternalapiallowlist) guards an empty
 allowlist. The rest of this section is what each call site was and what replaced it — the third is
-the interesting one, because the first pass concluded it was impossible.
+the interesting one, because it was twice concluded to be impossible and twice was not.
 
 **Opening a tab — replaced.** `TabStrip` used to call
 `FileEditorManagerEx.openFile(file, FileEditorOpenOptions, Continuation)`, building the options
@@ -1582,56 +1579,32 @@ call that hands a plugin its own descriptor — on 2026.3 `PluginManagerCore.get
 `<product-descriptor code="…">` straight out of its own bundled `plugin.xml`, which is the same tag
 the platform would have parsed, so the no-drift property the original call was chosen for is intact.
 
-**The repaint — replaced, after a second look.** `TabRepaint` used
-`FileEditorManagerImpl.queueUpdateFile`, and the first pass at this concluded there was no public
-equivalent: the tab *background* is written only by `EditorsSplitters.updateFileBackgroundColor`,
-which is reached solely from `FileEditorManagerImpl`'s `fileUpdateChannel`. That is true, and it is
-the wrong question. The right one is what `updateFileBackgroundColor` *does*, which its bytecode
-answers: `windows → findTabByFile → TabInfo.setTabColor`, with the colour from
-`EditorTabPresentationUtil.getEditorTabBackgroundColor`. Every step of that has a public,
-unmangled, unannotated equivalent on both 2024.2 and 263:
+**The repaint — replaced by a public call that was there all along.** `TabRepaint` used
+`FileEditorManagerImpl.queueUpdateFile`. The public equivalent is
+`FileEditorManager.updateFilePresentation(VirtualFile)`: its `FileEditorManagerImpl` override is
+`updateFileName`'s exact bytecode with one call added — `queueUpdateFile(file)` — so it reaches the
+same `fileUpdateChannel`, and therefore the same `EditorsSplitters.updateFileBackgroundColor` and
+the same re-query of `EditorTabColorProvider`, through the platform's own code. It carries no
+`@ApiStatus` annotation, is byte-identical on 2024.2 and 263, and the platform calls it itself from
+`DiffFileEditorBase` and `com.intellij.vcs.log.impl.VcsLogEditorUtil` among two dozen others.
 
-```
-FileEditorManagerEx.windows      EditorWindow[], from getAllSplitters — detached windows included
-  window.getComposite(file)      that window's EditorComposite for the file
-  composite.component            the EditorCompositePanel the tab is built around
-  window.tabbedPane.tabs.tabs    that window's TabInfos
-  TabInfo.setTabColor(colour)
-```
+Both methods no-op for a file that is not open, which is right here: a closed file has no tab to
+repaint. `requestAll` therefore iterates `FileEditorManager.openFiles`.
 
-The one link with no public form is the tab→file direction: `TabInfo.composite` is
-Kotlin-`internal`, and the Kotlin compiler refuses it outright. So `TabRepaint` goes the other way
-and matches by **component identity** — `EditorComposite.getComponent()` returns the very
-`EditorCompositePanel` instance that `TabInfo.getComponent()` holds, identical on both ends of the
-matrix, so the two compare equal by reference.
+**Why this took two attempts to find, which is the part worth remembering.** The first pass dumped
+`FileEditorManager`'s members through `head -40` and read the truncated list as the whole API.
+`updateFilePresentation` sits below that cut. Everything that followed — the conclusion that no
+public repaint existed, the Marketplace appeal that was being drafted, and a working but wholly
+unnecessary reimplementation over `FileEditorManagerEx.windows` and `TabInfo` matched by component
+identity — rested on a `head`. **Do not draw a negative conclusion about the platform from
+truncated output.** The reimplementation is gone; it is recorded here only because the mistake that
+produced it is easy to repeat.
 
-What made this look impossible the first time was reading "in an `impl` package" as "internal".
-It is not: `EditorWindow`, `EditorComposite`, `EditorTabbedContainer`, `EditorsSplitters`,
-`EditorTabPresentationUtil` and `TabInfo` carry no `@ApiStatus` annotation at all. Only
-`FileEditorManagerImpl` and `FileEditorOpenOptions` do. Check the annotation, not the package.
-
-**The threading is not optional, and is where the first attempt broke.**
-`getEditorTabBackgroundColor` walks every registered `editorTabColorProvider`, and the platform's
-own File Colors provider reads the workspace file index — a slow operation, forbidden on the EDT.
-Calling it there logs `Slow operations are prohibited on EDT`; that arrived as four errors in
-`TabGroupPopupUiTest`, measured rather than predicted. `TabRepaint` therefore splits by who owns
-the answer, which falls out of this plugin registering `order="first"`:
-
-| Case | Colour | Thread |
-| --- | --- | --- |
-| File is in a group — assign, recolour, auto-join, remap | this plugin's own; being first, it *is* the final answer | synchronous, chain never consulted |
-| File left a group — remove, delete | cleared at once, then the full chain re-asked | `readAction` → `Dispatchers.EDT`, exactly as `updateFileBackgroundColor` does |
-| Plugin load / unload (`requestAll`) | this plugin's own, which is `null` after `TabGroupColorProvider.stop()` | synchronous — it must finish before the class loader goes, and a coroutine of this plugin's own would be cancelled with it |
-
-That last row is also why `requestAll` touches only tabs this plugin claims: another provider's
-colour must not be collateral damage.
-
-With this in, the plugin uses **no internal platform API at all** —
-`verifyPlugin` writes no `internal-api-usages.txt` on either end of the matrix, and
-`INTERNAL_API_USAGES` is back in `failureLevel` where the Verifier puts it by default.
+With this in, the plugin uses **no internal platform API at all** — `verifyPlugin` writes no
+`internal-api-usages.txt` on either end of the matrix, and `INTERNAL_API_USAGES` is back in
+`failureLevel` where the Verifier puts it by default.
 [IJPL-256289](https://youtrack.jetbrains.com/issue/IJPL-256289/editorTabColorProvider-has-no-public-my-answer-has-changed-call)
-still stands and is still worth having — a first-class "recompute this file's tab presentation"
-call would replace the whole of `TabRepaint` — but it is no longer a blocker for anything.
+was filed before the method was found and should be closed as invalid: the call it asks for exists.
 
 ### `verifyInternalApiAllowlist`
 
