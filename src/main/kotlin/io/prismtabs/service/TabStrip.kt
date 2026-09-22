@@ -4,7 +4,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.thisLogger
-import com.intellij.openapi.fileEditor.ex.FileEditorManagerEx
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import kotlinx.coroutines.CancellationException
@@ -41,33 +41,26 @@ import java.util.concurrent.Executor
  * so a group hidden and left hidden kept the loader alive through the user's Disable. 2024.2 reuses
  * the toolbar and never showed it.
  *
- * **Why the blocking API cannot avoid it.** `FileEditorManager.openFile(file, focus)` does not
- * merely call into the platform and return: it ends in `FileEditorManagerImplKt
+ * **Why calling the platform from here cannot avoid it.** `FileEditorManager.openFile(file, focus)`
+ * does not merely call into the platform and return: it ends in `FileEditorManagerImplKt
  * .waitBlockingAndPumpEdt`, which *pumps the event queue* until the editor is ready. The editor is
  * built by a coroutine that was already dispatched onto the EDT and would otherwise run on a stack
  * rooted at `EventQueue.dispatchEvent` with nothing of ours beneath it — but pumping dispatches it
- * nested inside our own call, so every frame of ours ends up underneath it after all. The stacks
- * in that snapshot show exactly this: the top forty frames are the platform's own coroutine
+ * nested inside the call, so every frame beneath it ends up underneath the editor after all. The
+ * stacks in that snapshot show exactly this: the top forty frames are the platform's own coroutine
  * machinery, and PrismTabs appears only below `waitBlockingAndPumpEdt`. `closeFile` has no such
- * detour to blame; it simply runs on the caller's stack.
+ * detour to blame; it simply runs on the caller's stack. Either way the fix is the same — keep
+ * this plugin's frames off that stack entirely — and once they are, the pumping is harmless,
+ * because there is nothing left beneath the editor to record.
  *
  * Deferring with `invokeLater`, a queue, or a background thread does not help by itself: each
  * still runs *some* class of this plugin's — the runnable, the lambda — and that class is then the
- * one on the stack instead. Two things genuinely leave the stack behind, one per direction:
- *
- * - **Opening** calls the platform's *suspending* `openFile` from a background coroutine. That
- *   overload wraps its whole EDT half in `withContext(Dispatchers.EDT)` (confirmed in the platform
- *   bytecode), and a `withContext` from a background dispatcher genuinely dispatches: the frames
- *   below the suspension point are not rebuilt, so the editor, and every toolbar in it, is built on
- *   a clean EDT stack. The options are the platform's own defaults with `requestFocus` set, which
- *   is byte-for-byte what `FileEditorManager.openFile(file, focus)` builds (its bytecode passes
- *   argument 3 and defaults the other nine). They are built by [PlatformOpenOptions] rather than
- *   here, because constructing them *from Kotlin* is what broke this on every IDE from 2025.2 on —
- *   see that class.
- * - **Closing** has no suspending counterpart on any IDE from 2024.2 to 2026.2, so
- *   [PlatformTabClose] hands the platform's `closeFile` to the EDT as a Java method reference run by
- *   a JDK `CompletableFuture` task — the one shape whose frames are all the JDK's and the
- *   platform's. See that class.
+ * one on the stack instead. What genuinely leaves the stack behind is handing the platform's own
+ * method to the EDT as a Java *bound method reference* run by a JDK `CompletableFuture` task: the
+ * frames are then the executor's, the JDK's, and a hidden class HotSpot leaves out of a
+ * `Throwable`'s backtrace, with nothing of this plugin's among them. Both directions do exactly
+ * that — [PlatformTabOpen] for `openFile`, [PlatformTabClose] for `closeFile` — and those two
+ * classes document the shape and why only that shape works.
  *
  * Opening and closing are otherwise unchanged; only the stack they happen on is.
  */
@@ -101,11 +94,12 @@ internal class TabStrip(private val project: Project, private val scope: Corouti
     private val requests = Channel<Request>(Channel.UNLIMITED)
 
     /**
-     * Runs [PlatformTabClose]'s task on the EDT. This lambda itself only ever runs on the draining
-     * coroutine's background thread, when the task is handed over, so it is never beneath a close.
+     * Runs [PlatformTabOpen]'s and [PlatformTabClose]'s tasks on the EDT. This lambda itself only
+     * ever runs on the draining coroutine's background thread, when the task is handed over, so it
+     * is never beneath an open or a close.
      *
-     * Non-modal, as the write-intent lock `closeFile` needs requires, and dropped if the project
-     * closes first — in which case the close never completes, and nor does the wait on it, which
+     * Non-modal, as the write-intent lock those two calls need requires, and dropped if the project
+     * closes first — in which case the task never completes, and nor does the wait on it, which
      * is then cancelled with [scope].
      */
     private val edt = Executor { task ->
@@ -124,15 +118,15 @@ internal class TabStrip(private val project: Project, private val scope: Corouti
                 // that *does* arrive as an `Error`, and letting one past here does not fail one
                 // request — it ends the coroutine draining this channel, so every open and close for
                 // the rest of the session is stranded silently. That is what a `NoSuchMethodError`
-                // from [PlatformOpenOptions]' constructor did in 1.4.14. Cancellation is rethrown
+                // from a Kotlin-built `FileEditorOpenOptions` did in 1.4.14, on the open path this
+                // class no longer takes at all (see [PlatformTabOpen]). Cancellation is rethrown
                 // because it is not a failure to report: it is this scope being shut down with the
                 // project, and swallowing it would leave the loop running past its own death.
                 try {
-                    val manager = FileEditorManagerEx.getInstanceEx(project)
+                    val manager = FileEditorManager.getInstance(project)
                     when (request) {
-                        is Open -> {
-                            val options = PlatformOpenOptions.withRequestFocus(request.requestFocus)
-                            request.files.forEach { manager.openFile(it, options) }
+                        is Open -> request.files.forEach {
+                            PlatformTabOpen.openFile(manager, it, request.requestFocus, edt).await()
                         }
                         is Close -> request.files.forEach { PlatformTabClose.closeFile(manager, it, edt).await() }
                     }

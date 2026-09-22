@@ -180,6 +180,12 @@ intellijPlatform {
         // make `verifyPlugin` permanently red for a risk already accepted on purpose. What
         // still fails the build is COMPATIBILITY_PROBLEMS, which is what actually catches the
         // scenario the README cares about: queueUpdateFile disappearing on a future IDE.
+        //
+        // Dropped, not ignored: Marketplace refuses an upload over this category, which is what
+        // happened to 1.4.14 and cost two of the three call sites it then had. So read
+        // build/reports/pluginVerifier/<ide>/plugins/io.prismtabs/<version>/internal-api-usages.txt
+        // before every upload, and expect exactly the TabRepaint entries — anything else is a new
+        // one to remove, not to accept. README "Internal API: what the Marketplace asked for".
         failureLevel = listOf(
             VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
             VerifyPluginTask.FailureLevel.OVERRIDE_ONLY_API_USAGES,

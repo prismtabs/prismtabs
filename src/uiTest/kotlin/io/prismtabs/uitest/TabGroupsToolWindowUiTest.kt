@@ -92,7 +92,7 @@ class TabGroupsToolWindowUiTest {
      * `TabGroupVisibility` directly for the reason given there — and which leaves the *button*, the
      * control most users reach for, driven by nothing. What that gap hid was worse than an unclicked
      * button: in 1.4.14, Show Group could not open a single tab on any IDE from 2025.2 on (see
-     * `PlatformOpenOptions`), and the whole suite stayed green, because this sandbox runs the 2024.2
+     * `PlatformTabOpen`), and the whole suite stayed green, because this sandbox runs the 2024.2
      * baseline the plugin compiles against, where the call it made still resolved. This test cannot
      * catch *that* — only `verifyPlugin` and `PlatformDefaultArgumentCallsTest` can — but it is what
      * notices the day the button stops reaching the toggle at all.

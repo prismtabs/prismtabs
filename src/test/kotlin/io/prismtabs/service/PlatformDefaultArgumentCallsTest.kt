@@ -26,9 +26,9 @@ import java.util.jar.JarFile
  * synthetic constructor gained a parameter on 2025.2, another on 2025.3 and another on 2026.1. Every
  * IDE from 2025.2 on threw on the first tab [TabStrip] (then `TabOpener`) tried to open, which — being an `Error` —
  * killed the coroutine draining its queue, so Show Group and "open this member from the tree" did
- * nothing at all for the rest of the session. [PlatformOpenOptions] is the fix and explains the
- * shape of it; this is what stops the next one, in a second, rather than after eight IDE downloads
- * in `verifyPlugin`.
+ * nothing at all for the rest of the session. That options object is gone from the open path
+ * altogether — see [PlatformTabOpen] — but the trap it fell into is not, and this is what stops the
+ * next one, in a second, rather than after eight IDE downloads in `verifyPlugin`.
  *
  * Scoped to the platform classes that carry **no compatibility promise** — those in an `impl`,
  * `internal` or `ex` package, `FileEditorOpenOptions` among them. Three things are deliberately left
@@ -58,7 +58,7 @@ class PlatformDefaultArgumentCallsTest {
             emptyList<String>(),
             offenders.sorted(),
             "these call a platform default-argument synthetic, whose descriptor is not stable across " +
-                "IDE versions — pass every argument explicitly, or build the value in Java (see PlatformOpenOptions)",
+                "IDE versions — pass every argument explicitly, or build the value in Java",
         )
     }
 
