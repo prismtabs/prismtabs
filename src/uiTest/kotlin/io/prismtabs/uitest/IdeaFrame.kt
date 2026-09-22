@@ -821,7 +821,10 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
 
     /**
      * Whether the running build is a **paid build** — whether its `plugin.xml` carries a
-     * `<product-descriptor>`, which is the same thing `PrismTabsLicense.isPaidBuild` reads.
+     * `<product-descriptor>`. The same fact `PrismTabsLicense.isPaidBuild` decides on, reached the
+     * other way about: this reads the descriptor the platform parsed, that one reads the tag out of
+     * the bundled `plugin.xml` (see its doc for why it cannot use the platform's copy), so the two
+     * agreeing is worth something.
      *
      * Not a licence question but a *platform capability* one, which is why it is asked separately
      * from [paidFeaturesEnabled]: `DynamicPlugins.checkCanUnloadWithoutRestart` refuses outright for

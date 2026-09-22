@@ -651,9 +651,9 @@ internal fun chooseMemberFile(
         promptToUnassignMissing(project, group, service, row)
         return
     }
-    // Not `OpenFileDescriptor.navigate` and not `FileEditorManager.openFile`: both open the editor
-    // synchronously, on this plugin's own stack, which pins its class loader for the life of the
-    // editor. See [io.prismtabs.service.TabStrip].
+    // Not `OpenFileDescriptor.navigate`, and not `FileEditorManager.openFile` called from here:
+    // both open the editor on this plugin's own stack, which pins its class loader for the life of
+    // the editor. See [io.prismtabs.service.TabStrip].
     project.service<TabStrip>().open(listOf(file), requestFocus = true)
 }
 

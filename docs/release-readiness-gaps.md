@@ -286,8 +286,9 @@ goes noticed rather than unnoticed; see "Keeping the EULA in sync" in the websit
 
 ## 8. Submit for review
 
-**Current state:** blocked on everything above. JetBrains' stated turnaround is about two business
-days once submitted.
+**Current state:** blocked on everything above, and on item 15 — the first upload was submitted and
+refused over Internal API usage. JetBrains' stated turnaround is about two business days once
+submitted.
 
 ---
 
@@ -375,3 +376,47 @@ away" 1–3), so those get answered before they are asked.
 
 Still to do here is item 6's Technical Information step — pointing the listing's *Issue tracker*
 field at the repository — which cannot happen until the listing exists.
+
+---
+
+## 15. Internal API: the `queueUpdateFile` exemption
+
+**Current state:** open. The code side is done — `verifyPlugin`'s `internal-api-usages.txt` is down
+to the one entry below on both ends of the matrix (checked on IU-242.26775.15 and IU-263.5153.40) —
+and what is left is what has to be said to JetBrains about that entry.
+
+The 1.4.14 submission was refused by the Marketplace: *"Your plugin uses the Internal API, which is
+private and must not be used outside the IntelliJ Platform itself."* Three call sites were reported
+across the eight-IDE matrix. Two are fixed and gone — the open path (`FileEditorOpenOptions` and
+`FileEditorManagerEx.openFile`, now the public `FileEditorManager.openFile` via `PlatformTabOpen`)
+and the licence check (`PluginManager.getPluginByClass`, now a read of our own bundled
+`plugin.xml`). README §"Internal API: what the Marketplace asked for" has the full account of both,
+and of why the third has no replacement.
+
+The third is `FileEditorManagerImpl.queueUpdateFile` in `TabRepaint`, and it is not replaceable:
+nothing public recomputes an editor tab's *background*, which is the plugin's entire feature. Verify
+that claim before acting on this item rather than trusting it — the platform may have grown one
+since — using CLAUDE.md's `javap` recipe: the background is written by
+`EditorsSplitters.updateFileBackgroundColorAsync`, so the question is whether anything public now
+reaches it other than `FileEditorManagerImpl`'s `fileUpdateChannel`.
+
+**What to do, in order:**
+
+1. File a YouTrack issue on `IDEA` asking for a public API to request a tab-colour repaint for a
+   `VirtualFile` — the `editorTabColorProvider` extension point has no companion "my answer has
+   changed" call, which is the gap. Point at `queueUpdateFile` as the thing plugins reach for, and
+   say what it is for: a group's colour changing, a tab joining or leaving a group, and stripping
+   the plugin's colours off the strip on disable so an uninstalled plugin's colours do not survive
+   until the next IDE start. A drafted issue body is in `docs/youtrack-tab-repaint-api.md`.
+2. Reply to the Marketplace rejection email naming the two fixed call sites, stating that the third
+   has no public equivalent, and linking the YouTrack issue. Do not claim a false positive — it is
+   not one.
+3. Bump `pluginVersion` and upload: the Marketplace will not take a second zip under `1.4.14`.
+   Item 3's release procedure is the one to follow, and `release-version` stays at `14` — this is a
+   third-component update, not a major release, so it must not reset anyone's trial.
+
+**Do not** "fix" this by reaching for
+`EditorsSplitters.updateFileBackgroundColorAsync$intellij_platform_ide_impl` because the Verifier
+happens not to flag Kotlin module-internal members. It is a mangled name with no stability promise
+at all, and `getSplitters()` is the main window's alone, so detached editor windows would silently
+stop recolouring. The README section records this and the other two near-misses that were tried.

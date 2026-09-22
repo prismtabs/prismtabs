@@ -9,8 +9,8 @@ import org.junit.jupiter.api.Test
 
 /**
  * Plain JUnit 5, same split as [LicenseSignatureVerificationTest]: [PrismTabsLicense.decide] is the
- * freemium truth table with the two platform reads ([PrismTabsLicense.paidFeaturesEnabled]'s own
- * `PluginManager` and `LicensingFacade` calls) lifted out as parameters, so the paywall's actual
+ * freemium truth table with the two reads ([PrismTabsLicense.paidFeaturesEnabled]'s own descriptor
+ * and `LicensingFacade` calls) lifted out as parameters, so the paywall's actual
  * decision is testable without an IDE. Every row matters — inverting either operand silently flips
  * the plugin between "everything free" and "everything locked", and nothing else would catch it.
  */
@@ -37,9 +37,9 @@ class PrismTabsLicenseTest {
     }
 
     /**
-     * The clause that lets the gates be wired before `plugin.xml` gains its `<product-descriptor>`:
-     * with no product to license, `isLicensed()` answers `false` for everyone, and without this a
-     * `runIde`/`uiTest`/locally built plugin would lock features that were never for sale.
+     * The clause that keeps a build with no `<product-descriptor>` out of the paywall: with no
+     * product to license, `isLicensed()` answers `false` for everyone, and without this such a
+     * build would lock features that were never for sale.
      */
     @Test
     fun `a build that is not sold at all is never gated, whatever the facade says`() {

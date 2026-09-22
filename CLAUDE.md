@@ -44,9 +44,18 @@ Never omit a defaulted argument on a `com.intellij` function or constructor. Kot
 omission into a call to a *synthetic* member (`foo$default`, or a constructor taking every parameter
 plus a `DefaultConstructorMarker`) whose descriptor changes whenever the platform adds a parameter —
 so it links fine against the 2024.2 baseline and throws `NoSuchMethodError` on the user's newer IDE.
-Pass every argument explicitly, or build the value in Java, as `PlatformOpenOptions` does for
-`FileEditorOpenOptions()`. `PlatformDefaultArgumentCallsTest` fails on a new one; README
-§"Never omit a default argument on a platform Kotlin API" has the full account.
+Pass every argument explicitly, or build the value in Java, where the zero-argument constructor
+Kotlin generates but refuses to call is reachable. `PlatformDefaultArgumentCallsTest` fails on a new
+one; README §"Never omit a default argument on a platform Kotlin API" has the full account.
+
+## Internal API
+
+Marketplace refuses an upload that uses `@ApiStatus.Internal` platform members, so `verifyPlugin`'s
+`internal-api-usages.txt` must stay at its one accepted entry: `FileEditorManagerImpl
+.queueUpdateFile` in `TabRepaint`, for which no public API exists. Before adding a second, read
+README §"Internal API: what the Marketplace asked for" — it records which public calls were checked
+and rejected, and `PlatformTabOpen`/`PlatformTabClose` show the shape that let the open and close
+paths drop theirs.
 
 ## Build
 
