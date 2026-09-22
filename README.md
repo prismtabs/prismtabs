@@ -1552,6 +1552,8 @@ which is private and must not be used outside the IntelliJ Platform itself". `ve
 been reporting the same thing all along — `INTERNAL_API_USAGES` is dropped from `failureLevel` in
 `build.gradle.kts`, so it printed into `build/reports/pluginVerifier/*/internal-api-usages.txt`
 without failing the build. Three call sites, of which two were replaceable and one is not.
+That hole is now closed by [`verifyInternalApiAllowlist`](#verifyinternalapiallowlist); the rest of
+this section is what the three call sites were and what replaced them.
 
 **Opening a tab — replaced.** `TabStrip` used to call
 `FileEditorManagerEx.openFile(file, FileEditorOpenOptions, Continuation)`, building the options
@@ -1587,13 +1589,48 @@ near-misses, each rejected:
 Firing `UISettingsListener.TOPIC` ourselves would work and is public, but it lies to every other
 UI-settings listener in the IDE to repaint one tab.
 
-So the call stays, and it is the sole remaining entry in `internal-api-usages.txt`. What it costs
+So the call stays, and it is the sole remaining entry in `internal-api-usages.txt` — the one
+entry `verifyInternalApiAllowlist` accepts. What it costs
 if it ever goes: every live colour update — assign, remove, recolour, delete, auto-join, VFS remap,
 and the strip cleanup on plugin disable. See
 [Phase 0 finding 3](#3-repaint-queueupdatefile-not-updatefilecolor--and-no-stable-api-exists) and
 [the Phase 1 decision](#the-repaint-decision). Asking JetBrains for a public tab-colour refresh is
 the documented next step: the issue body is drafted in `docs/youtrack-tab-repaint-api.md`, and
 item 15 of `docs/release-readiness-gaps.md` has the order to do it in.
+
+### `verifyInternalApiAllowlist`
+
+`failureLevel` is one switch over the whole `INTERNAL_API_USAGES` category, so accepting
+`queueUpdateFile` — which has to be accepted — silenced every other internal call too. Both calls
+that got 1.4.14 refused were reported on every single run, into a file that failed nothing and so
+was never read. Neither was even internal when it was written: JetBrains annotated
+`FileEditorManagerEx.openFile` at 261 and `PluginManager.getPluginByClass` at 262, so no compiler
+warning existed either, and that silenced report was the only signal there ever was.
+
+The task reads the Verifier's own report back and fails on any finding that is not in
+`acceptedInternalApiUsages` in `build.gradle.kts`. It finalizes `verifyPlugin`, so `./gradlew
+verifyPlugin` — locally, and in each of `verify-plugin.yml`'s per-IDE jobs — cannot skip it. It can
+also be run alone, against the report already on disk, without triggering the matrix download.
+
+Findings are normalised to *platform member, without signature* + *PrismTabs class, without the
+`$1` synthetic suffix*, so an entry survives a recompile and reads the same on every IDE:
+
+```
+com.intellij.openapi.fileEditor.impl.FileEditorManagerImpl.queueUpdateFile used by io.prismtabs.service.TabRepaint
+```
+
+Three behaviours are deliberate and were each tested by hand:
+
+- **An unparseable line fails the build.** If JetBrains change the report's wording, this check
+  would otherwise pass everything silently — the exact failure it exists to prevent.
+- **No report directories at all fails the build**, naming a failed `verifyPlugin` as the likely
+  cause, rather than reporting a clean plugin it never checked.
+- **An accepted entry that stops being reported only logs a note.** A platform that de-internalises
+  `queueUpdateFile` is good news, and going red for it on one EAP build of the matrix would be the
+  wrong way to hear it.
+
+Adding an entry is a decision to ship an API the Marketplace may refuse. It belongs in a review,
+with the reasoning written down, not in a red build someone wants green.
 
 ## Renaming
 

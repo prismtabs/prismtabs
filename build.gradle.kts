@@ -182,10 +182,11 @@ intellijPlatform {
         // scenario the README cares about: queueUpdateFile disappearing on a future IDE.
         //
         // Dropped, not ignored: Marketplace refuses an upload over this category, which is what
-        // happened to 1.4.14 and cost two of the three call sites it then had. So read
-        // build/reports/pluginVerifier/<ide>/plugins/io.prismtabs/<version>/internal-api-usages.txt
-        // before every upload, and expect exactly the TabRepaint entries — anything else is a new
-        // one to remove, not to accept. README "Internal API: what the Marketplace asked for".
+        // happened to 1.4.14 and cost two of the three call sites it then had — both of them
+        // reported here on every run, into a file that failed nothing and so was never read.
+        // `verifyInternalApiAllowlist` below is what reads it now; that task, not this list, is
+        // what keeps a *new* internal call from reaching the Marketplace.
+        // README "Internal API: what the Marketplace asked for".
         failureLevel = listOf(
             VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
             VerifyPluginTask.FailureLevel.OVERRIDE_ONLY_API_USAGES,
@@ -251,6 +252,133 @@ tasks {
         // explicitly. WindowsManualVerificationUiTest's assumeTrue opt-in gate relies on this.
         systemProperty("prismtabs.manualVerification", System.getProperty("prismtabs.manualVerification", "false"))
     }
+}
+
+// The one internal platform API this plugin is allowed to call, as `verifyInternalApiAllowlist`
+// normalises the Verifier's report: the platform member (no signature) and the PrismTabs class
+// using it. See README "Internal API: what the Marketplace asked for" for why this one has no
+// public equivalent, and what was checked before accepting it.
+//
+// Adding an entry here is a decision to ship an API the Marketplace may refuse, so it belongs in
+// a review, not in a red build someone wants green. The entries are signature-free on purpose:
+// a parameter list is spelled differently across the matrix and would make this fail on an IDE
+// rather than on a change.
+val acceptedInternalApiUsages = setOf(
+    "com.intellij.openapi.fileEditor.impl.FileEditorManagerImpl used by io.prismtabs.service.TabRepaint",
+    "com.intellij.openapi.fileEditor.impl.FileEditorManagerImpl.queueUpdateFile used by io.prismtabs.service.TabRepaint",
+)
+
+/**
+ * Fails the build on any `@ApiStatus.Internal` platform call that is not [acceptedInternalApiUsages].
+ *
+ * `pluginVerification.failureLevel` cannot express this: INTERNAL_API_USAGES is one switch over the
+ * whole category, so accepting TabRepaint's `queueUpdateFile` — which has to be accepted, nothing
+ * public repaints a tab background — silences every other internal call as well. That is not a
+ * hypothetical hole. It is how `FileEditorManagerEx.openFile` and `PluginManager.getPluginByClass`
+ * reached a Marketplace upload and got 1.4.14 refused: both were reported by the Verifier on every
+ * run, into `internal-api-usages.txt`, which nothing read because nothing failed. Worse, neither was
+ * internal when it was written — JetBrains annotated them later (261 and 262), so no compiler
+ * warning existed either, and the Verifier's silenced report was the only signal there ever was.
+ *
+ * Reads the Verifier's own output rather than the plugin's bytecode: which members carry the
+ * annotation is a fact about each IDE in the matrix, not about this plugin, and the Verifier is the
+ * thing that already resolves one against the other. `verificationReportsDirectory` is read off the
+ * task instead of hardcoded so the two cannot drift.
+ *
+ * Finalizes `verifyPlugin` rather than merely depending on it, so a plain `./gradlew verifyPlugin`
+ * — what a developer and `.github/workflows/verify-plugin.yml` both run — cannot skip it. It does
+ * not depend on `verifyPlugin` in turn, deliberately: that would make re-reading a report already
+ * on disk cost the 45-50 GB of IDE downloads the whole matrix needs, and the point of a separate
+ * task is that it is cheap enough to run on its own.
+ */
+val verifyInternalApiAllowlist = tasks.register("verifyInternalApiAllowlist") {
+    description = "Fails on any internal platform API usage the Verifier reports that is not accepted in build.gradle.kts."
+    group = "verification"
+
+    val reportsDirectory = tasks.named<VerifyPluginTask>("verifyPlugin").flatMap { it.verificationReportsDirectory }
+    val accepted = acceptedInternalApiUsages
+    // The report is rewritten by every run and is cheap to re-read; nothing here is worth caching,
+    // and a stale "up to date" on this particular check would defeat its purpose.
+    outputs.upToDateWhen { false }
+
+    doLast {
+        val reportsRoot = reportsDirectory.get().asFile
+
+        // One directory per verified IDE. None at all means verifyPlugin produced nothing to check
+        // — never that the plugin is clean — so say so rather than pass.
+        val ideReports = reportsRoot.listFiles()?.filter { it.isDirectory }.orEmpty().sortedBy { it.name }
+        check(ideReports.isNotEmpty()) {
+            "no Plugin Verifier reports under $reportsRoot, so nothing was checked. If verifyPlugin " +
+                "itself failed above, fix that first — this task has no output to read until it succeeds."
+        }
+
+        // "Internal <kind> <member> is <verb> in <user>. This <kind> is marked with @…Internal …"
+        // `by` as well as `in`: an internal supertype is reported as "is extended by"/"is
+        // implemented by", and that is a usage to catch, not a format change to fall over on.
+        val usage = Regex("""^Internal \w+ (.+?) is \w+ (?:in|by) (.+)$""")
+
+        // Signature off both sides, and the JVM's synthetic-class suffix off the caller: `(Project,
+        // VirtualFile) : void` and `TabStrip$1` are spelled by the compiler and the IDE version, not
+        // by the decision being accepted, and pinning either would make this fail on a recompile.
+        fun normalise(line: String): String? {
+            val head = line.substringBeforeLast(". This ")
+            val (member, user) = usage.find(head)?.destructured ?: return null
+            val calledMember = member.substringBefore('(').substringBefore(" : ").trim()
+            val callingClass = user.substringBefore('(')
+                .let { if ('(' in user) it.substringBeforeLast('.') else it }
+                .substringBefore('$')
+                .trim()
+            return "$calledMember used by $callingClass"
+        }
+
+        val offenders = sortedMapOf<String, MutableSet<String>>()
+        val seen = mutableSetOf<String>()
+        var reportsRead = 0
+
+        ideReports.forEach { ide ->
+            // Absent when the Verifier found no internal usage at all on that IDE — a pass, not a
+            // gap: the file is written only when there is something to write.
+            ide.walkTopDown().filter { it.isFile && it.name == "internal-api-usages.txt" }.forEach { report ->
+                reportsRead++
+                report.readLines()
+                    .filter { it.isNotBlank() }
+                    .forEach { line ->
+                        val normalised = normalise(line.trim())
+                            ?: error("could not parse a Plugin Verifier finding in $report — its report format has changed, so this check is no longer reading what it thinks it is:\n  $line")
+                        seen += normalised
+                        if (normalised !in accepted) {
+                            offenders.getOrPut(normalised) { sortedSetOf() } += ide.name
+                        }
+                    }
+            }
+        }
+
+        if (offenders.isNotEmpty()) {
+            error(
+                buildString {
+                    appendLine("Internal platform API used without being accepted in build.gradle.kts:")
+                    offenders.forEach { (finding, ides) -> appendLine("  $finding  [${ides.joinToString(", ")}]") }
+                    appendLine()
+                    appendLine("JetBrains Marketplace refuses an upload over these — it is what got 1.4.14 refused.")
+                    appendLine("Replace the call with public API; README \"Internal API: what the Marketplace asked for\"")
+                    appendLine("records the public alternatives already checked and rejected for the repaint.")
+                    appendLine("If it genuinely has no public equivalent, that is a deliberate decision to review, and")
+                    append("it goes in acceptedInternalApiUsages in build.gradle.kts with the reasoning written down.")
+                },
+            )
+        }
+
+        // Not a failure: a platform that de-internalises an accepted call is good news, and going red
+        // for it on one EAP build of the matrix would be the wrong way to hear it.
+        (accepted - seen).forEach {
+            logger.lifecycle("verifyInternalApiAllowlist: no longer reported, so the entry can go: $it")
+        }
+        logger.lifecycle("verifyInternalApiAllowlist: ${ideReports.size} IDE report(s), $reportsRead with internal usage, all accepted.")
+    }
+}
+
+tasks.named("verifyPlugin") {
+    finalizedBy(verifyInternalApiAllowlist)
 }
 
 intellijPlatformTesting {

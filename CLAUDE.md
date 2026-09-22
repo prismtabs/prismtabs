@@ -50,12 +50,16 @@ one; README §"Never omit a default argument on a platform Kotlin API" has the f
 
 ## Internal API
 
-Marketplace refuses an upload that uses `@ApiStatus.Internal` platform members, so `verifyPlugin`'s
-`internal-api-usages.txt` must stay at its one accepted entry: `FileEditorManagerImpl
-.queueUpdateFile` in `TabRepaint`, for which no public API exists. Before adding a second, read
-README §"Internal API: what the Marketplace asked for" — it records which public calls were checked
-and rejected, and `PlatformTabOpen`/`PlatformTabClose` show the shape that let the open and close
-paths drop theirs.
+Marketplace refuses an upload that uses `@ApiStatus.Internal` platform members. `verifyPlugin`
+alone will not stop one: `INTERNAL_API_USAGES` is dropped from its `failureLevel`, because the
+category cannot be accepted for one call and refused for the next. `verifyInternalApiAllowlist`
+finalizes `verifyPlugin` and is what actually fails the build — it reads the Verifier's report and
+rejects anything outside `acceptedInternalApiUsages` in `build.gradle.kts`, whose one entry is
+`FileEditorManagerImpl.queueUpdateFile` in `TabRepaint`, for which no public API exists.
+
+Do not widen that list to get a build green. Read README §"Internal API: what the Marketplace asked
+for" first — it records which public calls were checked and rejected, and
+`PlatformTabOpen`/`PlatformTabClose` show the shape that let the open and close paths drop theirs.
 
 ## Build
 
