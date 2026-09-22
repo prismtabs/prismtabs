@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [1.4.15] - 2026-09-22
+
+### Fixed
+
+- Replaced every use of internal IntelliJ Platform API with public equivalents. No user-visible
+  behaviour changes; this only concerns Marketplace review, which the 1.4.14 upload had been
+  refused over.
+
 ## [1.4.14] - 2026-09-21
 
 ### Added
@@ -23,5 +31,6 @@
 - PrismTabs can be disabled or uninstalled without restarting the IDE, and tab colours clear the
   moment it is.
 
-[Unreleased]: https://github.com/prismtabs/prismtabs/compare/v1.4.14...HEAD
+[Unreleased]: https://github.com/prismtabs/prismtabs/compare/v1.4.15...HEAD
+[1.4.15]: https://github.com/prismtabs/prismtabs/compare/v1.4.14...v1.4.15
 [1.4.14]: https://github.com/prismtabs/prismtabs/commits/v1.4.14
