@@ -1,7 +1,7 @@
 # YouTrack issue: public API to repaint an editor tab's colour
 
 File this on the `IDEA` project at <https://youtrack.jetbrains.com/newIssue?project=IDEA>, under
-subsystem **Editor. Editor Tabs**, type **Feature**. It asks for the one platform API PrismTabs
+subsystem **UI. Tabs**, type **Feature**. It asks for the one platform API PrismTabs
 cannot do without and cannot get publicly; item 15 of `release-readiness-gaps.md` is the wider task
 it belongs to, and the README section "Internal API: what the Marketplace asked for" is the
 evidence behind it.
