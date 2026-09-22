@@ -57,12 +57,16 @@ way. Two things enforce it: `INTERNAL_API_USAGES` is in `verifyPlugin`'s `failur
 level is ever dropped again.
 
 Getting a build green by adding an entry is the wrong move. Read README §"Internal API: what the
-Marketplace asked for" first: it records how each of 1.4.14's three refused calls was replaced,
-including `TabRepaint`, where the public route is to set `TabInfo.setTabColor` directly and match
-the tab by component identity. The rule that makes such a route findable: a class in an `impl`
-package is *not* automatically off-limits — check the actual annotation with `javap`, since
-`EditorWindow`, `EditorComposite` and `TabInfo` carry none, while a Kotlin-`internal` member
-(mangled, or refused by the Kotlin compiler) is off-limits whatever the Verifier says.
+Marketplace asked for" first — it records how each of 1.4.14's three refused calls was replaced.
+
+**Before concluding the platform has no public equivalent, dump the whole type and read all of it.**
+The repaint was called impossible for two rounds, and a Marketplace appeal drafted over it, because
+`javap` output for `FileEditorManager` was piped through `head -40`; the method that does the job,
+`updateFilePresentation`, sits below that cut. Never pipe a listing through `head` and then reason
+from its absence. Two further rules that matter here: a class in an `impl` package is *not*
+automatically off-limits — check the annotation, since `EditorWindow`, `EditorComposite` and
+`TabInfo` carry none — while a Kotlin-`internal` member (mangled, or refused by the Kotlin
+compiler) is off-limits whatever the Verifier says.
 
 ## Build
 
