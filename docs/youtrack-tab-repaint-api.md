@@ -61,9 +61,8 @@ apply on it — only the visibility and the declaring type need to change.
 
 ## Additional information
 
-**Why this is needed**, concretely: PrismTabs
-(<https://github.com/prismtabs/prismtabs-feedback>) groups editor tabs under a user-chosen colour,
-and every one of these has to repaint tabs that did not themselves change:
+**Why this is needed**, concretely: PrismTabs groups editor tabs under a user-chosen colour, and
+every one of these has to repaint tabs that did not themselves change:
 
 - a file is added to or removed from a group;
 - a group is recoloured or deleted;
