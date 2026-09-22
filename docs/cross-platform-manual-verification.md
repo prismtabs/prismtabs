@@ -11,14 +11,14 @@ against the build that will be tagged. Linux is covered by day-to-day developmen
    whose flags turn off native macOS behaviour a real user gets.
 3. One real restart (item 8).
 4. The licence checks (item 9).
-5. Append a sign-off entry.
+5. Append a sign-off entry to your own tracking copy of this file (see "Sign-off log" below).
 
 CI can't do this pass: hosted Windows runners fail the tool-window tests (`ui-tests.yml` is kept as
 a debugging aid only), and hosted macOS can't grant the TCC permissions `remote-robot` needs.
 
 ## Checklist
 
-The numbering is referenced by the sign-off log; don't renumber.
+The numbering is referenced by the sign-off log kept in your tracking copy; don't renumber.
 
 | # | Area | Automated by | Still by hand |
 |---|---|---|---|
@@ -98,66 +98,5 @@ Known noise in `idea.log`, none with `io.prismtabs` frames: `GradleJvmSupportMat
 
 ## Sign-off log
 
-One entry per pass, newest last: date · OS · build · theme — result.
-
-- **2026-08-09 · Windows 11 (10.0.26200) · IC-242.20224.300 · dark, 125%** — PASS, items 1–8.
-  Blue tint read from pixels: selected `46,92,156`, unselected `37,61,94` (untinted `30,31,34`).
-- **2026-08-16 · macOS 26.6.1, Apple Silicon, Retina 2x · IC-242.20224.300 · dark** — PASS,
-  items 1–8, suite 10/10. Selected Blue reads `45,92,156` (colour management). Its restart check
-  only passed because `tabGroups.xml` already existed; see 2026-08-19.
-- **2026-08-19 · Windows 11 (10.0.22000) · IC-242.20224.300 · dark, 125%** — PASS, suite 13/13,
-  items 1–8. Found and fixed the silent `forceSaveSettings` failure.
-- **2026-08-19 · macOS 26.6.2 · IC-242.20224.300, plugin 1.2.1-SNAPSHOT · dark + light spot-check**
-  — PASS, suite 14/14, items 1–8 on the first-write path. First light-theme check: selected Blue
-  `175,203,250`, unselected `214,228,252` against white. Also found `verifyPlugin` red in CI since
-  2026-08-08: a direct call to override-only `AnAction.actionPerformed`, replaced with
-  `ActionUtil.invokeAction` (deprecated from 243; move to `performAction` when the floor does).
-- **2026-08-21 · Windows 11 (10.0.26200) · plugin 1.3.2-SNAPSHOT · dark, 125%** — PASS, suite
-  19/19, `verifyPlugin` green on 7 IDEs, items 1–8. First check of the empty-group prompt, all three
-  triggers. The walkthrough was stale against it and was fixed.
-- **2026-08-21 · macOS 26.6.2 · plugin 1.3.3-SNAPSHOT · dark** — PASS, suite 20/20, `verifyPlugin`
-  green on 7 IDEs, items 1–8. The prompt uses native button order (Keep left of Delete Group).
-- **2026-09-08 · Windows 11 (10.0.26200) · plugin 1.4.14 · dark, 125%** — PASS. First pass with
-  the paid gate armed. `test` 108 green, `verifyPlugin` green on 8 IDEs, `uiTest` 40 run/3 skipped,
-  items 1–8 on the first-write path.
-- **2026-09-09 · macOS 26.6.2 · plugin 1.4.14 · dark** — PASS, `test` and `uiTest` only (41 run/2
-  skipped). No walkthrough, no by-eye checks.
-- **2026-09-19 · Linux, macOS 26.6.2 and Windows 11 · IC-242.20224.300, plugin 1.4.14 at
-  `3712779` · dark and light** — PASS on all three. The release pass: `test` and `uiTest` green,
-  every by-eye check, a real restart, and item 9 as far as it goes without a listing — unlicensed
-  start, plus a simulated trial and lapse, per `manual-test-cases.md`. The real trial, real key and
-  real lapse are outstanding, and need the plugin to be on the Marketplace first.
-
-### Release pass status
-
-The 2026-09-19 pass at `3712779`, on Linux, macOS and Windows, against the steps and checklist
-above.
-
-- [x] Step 1: `./gradlew test` and `./gradlew uiTest`
-- [x] Step 2: by-eye checks
-- [x] Step 3: one real restart (item 8)
-- [ ] Step 4: licence checks (item 9), see below
-- [x] Step 5: sign-off entry
-
-| # | Area | Status |
-|---|---|---|
-| 1 | Swatch popup | [x] |
-| 2 | Tab tint | [x] |
-| 3 | New Group dialog | [x] |
-| 4 | Rename, recolour, active group, Files… | [x] |
-| 5 | Remove from Group | [x] |
-| 6 | Tool window | [x] |
-| 7 | Settings page, ⌘, on macOS | [x] |
-| 8 | Restart persistence | [x] |
-| 9 | Licence | [ ] partial |
-
-Item 9:
-
-- [x] Unlicensed start
-- [x] Trial, simulated with the licence-facade snippets in `manual-test-cases.md` §3
-- [ ] Trial started from the register dialog, then a real key: needs a registered product code, so
-  it can only be checked after the first upload.
-- [x] Lapse across a restart, simulated with the licence-facade snippets in `manual-test-cases.md`
-  §3
-- [ ] Lapse across a restart with a real licence removed: needs a real trial or key, so it also
-  waits for the listing.
+One entry per pass, newest last: date · OS · build · theme — result. Tracked in a copy of this
+file kept outside the repo, not here.

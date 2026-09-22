@@ -47,26 +47,25 @@ session and revert it afterwards.
 ---
 
 ## 1. Swatch popup — creating a new group
-`DONE`
 
 Right-click any editor tab → **Tab Group…** opens the popup for every case below.
 
-- [x] Popup shows a **"New Group"** caption above a row of all 8 preset colour dots (grey, blue,
+- [ ] Popup shows a **"New Group"** caption above a row of all 8 preset colour dots (grey, blue,
       red, yellow, green, pink, purple, cyan), each legible against the popup background.
       *Automated: partial — the caption and all eight presets in order, each dot in its own colour
       (`TabGroupPopupUiTest` "the swatch row offers all eight presets, each dot in its own colour").
       Left for a human: legibility.*
-- [x] Click away to another tab — the now-unselected, tinted tab is still legible, at roughly half
+- [ ] Click away to another tab — the now-unselected, tinted tab is still legible, at roughly half
       the strength of the selected reading (the platform's ~50% blend — see README "Measured
       constraint").
       *Automated: partial — the half-strength blend is asserted on the painted tab (same test as
       above). Left for a human: legibility.*
-- [x] Repeat the whole flow for **every one of the 8 presets** at least once — each should look
+- [ ] Repeat the whole flow for **every one of the 8 presets** at least once — each should look
       distinct and legible, both selected and unselected.
       *Automated: partial — every preset starts a group with its own colours and paints them
       (`PaywallUiTest` "every preset still colours a new group while the licence is lapsed"); no two
       presets share a colour in either theme (`TabGroupPaletteTest`). Left for a human: legibility.*
-- [x] Repeat with the IDE in **Light theme** as well as **Dark** — all 8 presets stay legible in
+- [ ] Repeat with the IDE in **Light theme** as well as **Dark** — all 8 presets stay legible in
       both.
       *Automated: not automated — legibility is a visual judgement. That a tab switches to the light
       variant with the theme is automated (`TabColourUiTest` "switching theme retints a coloured tab
@@ -76,7 +75,7 @@ Right-click any editor tab → **Tab Group…** opens the popup for every case b
 
 Open it via its right-hand stripe button (or **View | Tool Windows | PrismTabs**).
 
-- [x] Tool window icon and the Hide/Show eye icons render crisply (not blurry) at your display's
+- [ ] Tool window icon and the Hide/Show eye icons render crisply (not blurry) at your display's
       scaling.
       *Automated: not automated — a visual judgement (`PrismTabsIconsTest` only checks the SVGs exist
       with the right stroke colour per theme).*
@@ -94,7 +93,7 @@ reload: a plugin with a product code cannot load or unload dynamically (see §4)
       hide/show, active-group auto-join, palette editing in Settings) all unlock.
       *Automated: partial — every paid feature unlocking once the gate reads licensed is covered in
       `PaywallUiTest`. Left for a human: starting a real trial, which needs a JetBrains Account.*
-- [x] **Lapse across a restart.** What is under test is the *transition*, not the locked state: a
+- [ ] **Lapse across a restart.** What is under test is the *transition*, not the locked state: a
       freshly built paid build with no licence boots locked already, so unlock it first or you will
       only ever see a gate that was shut the whole time. Four steps, in this order, using the
       console recipe below:
@@ -144,7 +143,7 @@ The platform never unloads a paid plugin in place, so on this build both steps a
 the in-place unload is only possible on a build without the product descriptor, where
 `PluginUnloadUiTest` covers it (it skips itself on the paid build).
 
-- [x] With at least one assigned group and an open tab showing it, go to **Settings | Plugins**,
+- [ ] With at least one assigned group and an open tab showing it, go to **Settings | Plugins**,
       find PrismTabs, and **Disable** it. Confirm no error dialog appears and the IDE offers
       **Restart IDE**; after the restart the plugin is off and tabs carry no PrismTabs colour.
       If the IDE disables it without offering a restart, your build has no `<product-descriptor>`,
