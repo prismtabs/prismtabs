@@ -59,6 +59,14 @@ Sign every release with this same key. Never generate a new one.
 Upload `build/distributions/prismtabs-<version>-signed.zip`, not the unsigned
 `prismtabs-<version>.zip` next to it.
 
+Sign again after any change to the code or to `plugin.xml`. `signPlugin` signs the zip that
+`buildPlugin` produced, and an existing `-signed.zip` is not rebuilt by a later `buildPlugin` alone.
+
+The Marketplace remembers the `release-date` of every `release-version` it has seen, including from a
+refused upload. A different `release-date` for the same `release-version` fails with "You cannot
+release updates with the same release version (14) but different release dates". The descriptor in
+`plugin.xml` holds the registered pair (`14`, `20260921`); leave it alone.
+
 For the first upload, add the plugin as a **new plugin** (not an update) on the vendor account. Then,
 under **Sales Info → Add to Marketplace**:
 
