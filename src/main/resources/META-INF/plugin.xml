@@ -23,7 +23,7 @@
          reads its last digit as a separate number (20241 -> 2024 and 1). It is pluginVersion's
          first two components with the dot dropped — 1.4.14 -> 14 — so the minor component must
          stay a single digit: after 1.9 comes 2.0. ProductDescriptorTest enforces both. -->
-    <product-descriptor code="PPRISMTABS" release-date="20260921" release-version="14" optional="true"/>
+    <product-descriptor code="PPRISMTABS" release-date="20260923" release-version="14" optional="true"/>
 
     <description><![CDATA[
         Colour-coded tab groups for IntelliJ editor tabs.
