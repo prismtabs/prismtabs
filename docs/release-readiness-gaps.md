@@ -85,10 +85,7 @@ The scratch copy no longer exists.
 plaintext on disk, not actually encrypted — that's now closed too. All ten files are imported as
 attachments in a KeePassXC vault at `~/.local/share/keepassxc/prismtabs-secrets.kdbx`, group
 `PrismTabsCICD`, each verified byte-for-byte against the original before it was shredded (`shred
--u -z`) and the plaintext directory removed. To rebuild `signPlugin`'s env vars from the vault:
-`keepassxc-cli attachment-export <db> PrismTabsCICD/chain.pem chain.pem <out>` (same pattern for
-`private_key.pem`/`private_key.pass`), then export their contents as `CERTIFICATE_CHAIN`/
-`PRIVATE_KEY`/`PRIVATE_KEY_PASSWORD`.
+-u -z`) and the plaintext directory removed. To sign by hand, follow [`marketplace-upload.md`](marketplace-upload.md).
 
 ## ~~3. Wire (or deliberately skip) CI publishing — closed~~
 
