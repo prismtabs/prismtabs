@@ -15,7 +15,7 @@ not to exist as described, stop and report rather than substituting something pl
 | Decision | Value | Reason |
 |---|---|---|
 | Language | Kotlin | SDK-idiomatic; all modern platform samples and the official plugin template are Kotlin |
-| Build | Gradle KTS + `org.jetbrains.intellij.platform` **2.18.1** | Current release of IPGP 2.x |
+| Build | Gradle KTS + `org.jetbrains.intellij.platform` **2.19.0** | Current release of IPGP 2.x |
 | Compile baseline | **IntelliJ IDEA 2024.2** (`sinceBuild = 242`) | See §0.1 |
 | JDK | **21** | Required for platform 2024.2+; 2026.2+ requires Java 25 to *build against*, but Java 21 bytecode runs fine on the newer JBR |
 | `untilBuild` | **unset (open-ended)** | Widest range; guarded by Plugin Verifier instead |

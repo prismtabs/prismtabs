@@ -161,7 +161,7 @@ Themes verified:        expUI_dark + Light (IC-242.20224.300)
 
 ### Verification on 2026.2
 
-**Downloading 2026.2:** the IntelliJ Platform Gradle Plugin (2.18.1) no longer serves
+**Downloading 2026.2:** the IntelliJ Platform Gradle Plugin (2.19.0) no longer serves
 `intellijIdeaCommunity()` for builds 253+ — Community stopped being republished as a separate
 artifact from 2025.3 onward. `intellijIdea("2026.2")` (the unified type, product code `IU`) is what
 resolves it; this doesn't change anything about `build.gradle.kts`, which already verifies against

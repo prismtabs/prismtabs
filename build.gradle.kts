@@ -9,7 +9,7 @@ import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
 plugins {
     kotlin("jvm") version "2.4.10"
-    id("org.jetbrains.intellij.platform") version "2.18.1"
+    id("org.jetbrains.intellij.platform") version "2.19.0"
     id("org.jetbrains.changelog") version "2.5.0"
 }
 
@@ -24,7 +24,7 @@ val remoteRobotVersion = "0.11.23"
 // The IDE releases the Plugin Verifier checks against. pluginVerification.ides.select{} and
 // printProductsReleases both read these, so the list CI builds its verify-plugin matrix from is the
 // same list a local verifyPlugin runs against. The channels repeat select{}'s own default (IPGP
-// 2.18.1, createRecommendedPluginVerifierIdesProvider); printProductsReleases defaults to every
+// 2.19.0, createRecommendedPluginVerifierIdesProvider); printProductsReleases defaults to every
 // channel, so without this the two lists would differ.
 val verifiedIdeType = IntelliJPlatformType.IntellijIdea
 val verifiedIdeChannels = listOf(
@@ -138,7 +138,7 @@ intellijPlatform {
             // Deliberately NOT recommended(): that infers the type to query from whatever we
             // actually compile against (IntellijIdeaCommunity, "IC", via dependencies{} above).
             // IPGP's own IntelliJPlatformType.validateVersion() rejects any IC release at build
-            // 253 (2025.3) or above outright (confirmed by reading IPGP 2.18.1 sources) — even
+            // 253 (2025.3) or above outright (confirmed by reading IPGP 2.19.0 sources) — even
             // JetBrains' one remaining IC 2025.3 release (253.28294.334) gets discarded by it,
             // swallowed in a runCatching{}.getOrNull(), so recommended() silently caps at 2025.2.
             //
