@@ -16,14 +16,16 @@
          release deliberately — roughly once a year — and ships features in between as x.y.Z
          updates; resetting on every feature release would hand a non-paying user the paid tier
          for a trial's length every few months. release-date is the day that major release is
-         published; the value here is a placeholder until the first one (see gap doc item 1).
+         published. The Marketplace has 14 registered against 20260921 and refuses any other date for
+         that release-version ("You cannot release updates with the same release version (14) but
+         different release dates"), so do not change it without also changing release-version.
 
          release-version is NOT free-form: the Plugin Verifier rejects fewer than two digits
          outright ("The <release-version> parameter (1) format is invalid"), and the Marketplace
          reads its last digit as a separate number (20241 -> 2024 and 1). It is pluginVersion's
          first two components with the dot dropped — 1.4.14 -> 14 — so the minor component must
          stay a single digit: after 1.9 comes 2.0. ProductDescriptorTest enforces both. -->
-    <product-descriptor code="PPRISMTABS" release-date="20260923" release-version="14" optional="true"/>
+    <product-descriptor code="PPRISMTABS" release-date="20260921" release-version="14" optional="true"/>
 
     <description><![CDATA[
         Colour-coded tab groups for IntelliJ editor tabs.
