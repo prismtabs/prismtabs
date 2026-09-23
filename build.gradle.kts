@@ -85,10 +85,14 @@ kotlin {
     jvmToolchain(21)
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_21)
-        // Pin to the Kotlin API bundled with the OLDEST supported IDE (2024.2, build 242,
-        // ships Kotlin 2.0 — see pluginSinceBuild in gradle.properties). Do not raise this
-        // casually: raising it risks NoSuchMethodError on older IDEs. 1.9 is no longer an
-        // option: the Kotlin Gradle plugin has dropped support for it.
+        // Kotlin 2.0 is the lowest API the Kotlin Gradle plugin still accepts, and it is one
+        // above the OLDEST supported IDE's: 2024.2 (build 242, see pluginSinceBuild in
+        // gradle.properties) bundles stdlib 1.9.24, the one this plugin runs against there
+        // (kotlin.stdlib.default.dependency=false). So the compiler will accept a stdlib call
+        // that 2024.2 lacks, and that call would throw NoSuchMethodError there at runtime.
+        // The guard is verifyPlugin's IU-242 run, which must stay Compatible; it is also why
+        // verifyPluginProjectConfiguration warns "Kotlin apiVersion exceeds since-build
+        // requirements". Do not raise this: every step up widens that gap.
         apiVersion.set(KotlinVersion.KOTLIN_2_0)
         languageVersion.set(KotlinVersion.KOTLIN_2_0)
         // The compiler flags 2.0 as deprecated, but the pin above is deliberate: the warning
