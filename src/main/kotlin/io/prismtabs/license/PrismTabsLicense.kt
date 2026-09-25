@@ -13,8 +13,8 @@ import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
- * JetBrains Marketplace licence check for the Freemium + Yearly Subscription (no fallback) model
- * — see the README's "Marketplace publishing prep" section for the decision and the free/paid
+ * JetBrains Marketplace licence check for the Freemium + Yearly/Monthly Subscription (no fallback)
+ * model — see the README's "Marketplace publishing prep" section for the decision and the free/paid
  * feature split. Subscription expiry is handled by the signed stamp itself, so [isLicensed] needs
  * no scheme-specific logic; what freemium does change is the shape of the call sites. Callers gate
  * individual paid features (tool window, collapse/expand, active-group auto-join, palette editing),

@@ -750,9 +750,22 @@ how the check was driven, not evidence of a problem in the plugin being checked.
 ## Marketplace publishing prep
 
 **Decision:** PrismTabs will be sold under JetBrains Marketplace's **Freemium** model, priced as a
-**Yearly Subscription without a Fallback License** at **$14/year personal, $29/year per user
-commercial**, with a **14-day trial** of the paid features. This supersedes an earlier Perpetual License decision (see git
-history) — reasoning below.
+**Yearly/Monthly Subscription without a Fallback License** at **$14/year or $1.46/month personal,
+$29/year or $3.02/month per user commercial**, with a **14-day trial** of the paid features, and a
+**free licence for the Marketplace's open-source community programme**. This supersedes an earlier
+Perpetual License decision (see git history) — reasoning below.
+
+**Monthly billing and open-source licences** (decided 2026-09-25, after the first release was
+approved yearly-only): each monthly price is the yearly price divided by 9.6 (12 months less 20%),
+so paying yearly saves 20% (12 × $1.46 = $17.52, 12 × $3.02 = $36.24). That is deliberate: the
+Marketplace's Yearly Subscription box always reads "save 20% with a yearly subscription", and
+JetBrains confirmed (2026-09-25) that this text cannot be changed per plugin. An earlier $1.40 /
+$2.90 plan saved only 16.7%, which would have made the box wrong. The yearly prices did not change.
+Open-source users get Pro free through the Marketplace's community programme: JetBrains verifies
+eligibility on the user's JetBrains Account, and the programme needs the annual billing period,
+which PrismTabs has. Neither change touches code or `plugin.xml`: `PrismTabsLicense` checks only the
+signed stamp for `PPRISMTABS`, whatever the billing period or licence type behind it. The EULA's
+§1.2 grants the paid features under a "community licence" as well as a subscription or trial.
 
 **Why not Perpetual:** the original reasoning was "the plugin has no backend/hosting cost and the
 Plugin Verifier CI matrix (see [Compatibility policy](#compatibility-policy)) keeps compatibility
@@ -905,7 +918,9 @@ a licence first, and the uiTest suite entitles itself before each test.
 3. Upload the plugin (first release, not an update), then in **Sales Info → Add to Marketplace**:
    confirm/register product code `PPRISMTABS`, choose **Freemium**, then the **Yearly Subscription
    without a Fallback License** scheme, set the personal price to $14/year and the commercial
-   price to $29/year per user, and set the trial to 14 days (not the 30-day default).
+   price to $29/year per user, and set the trial to 14 days (not the 30-day default). Monthly
+   billing ($1.46 / $3.02) and the open-source free licence are added after approval by emailing
+   marketplace@jetbrains.com, since submitted Sales Info fields cannot be edited in the form.
 4. Write the actual listing content — tagline, full description, ≥1200×760 screenshots, tags. Not
    started; `plugin.xml`'s `<description>` is a reasonable first draft of the prose but the
    screenshots and tags still need doing.
