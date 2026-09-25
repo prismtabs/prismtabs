@@ -74,9 +74,10 @@ under **Sales Info → Add to Marketplace**:
 |---|---|
 | Product code | `PPRISMTABS` |
 | Model | Freemium |
-| Scheme | Yearly Subscription without a Fallback License |
-| Personal price | $14 per year |
-| Commercial price | $29 per year per user |
+| Scheme | Yearly/Monthly Subscription without a Fallback License |
+| Personal price | $14 per year, $1.46 per month |
+| Commercial price | $29 per year per user, $3.02 per month per user |
+| Community discounts | Open source: free licence (needs the yearly billing period) |
 | Trial | 14 days (the default is 30) |
 | Licence | `prismtabs.com/eula` URL, or the full EULA text if the form wants text |
 

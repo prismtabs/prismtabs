@@ -18,7 +18,7 @@ import java.time.Duration.ofSeconds
 
 /**
  * The free tier, end-to-end: what an unsubscribed user actually gets once PrismTabs is a paid
- * plugin (Freemium + Yearly Subscription — see the README's "Marketplace publishing prep").
+ * plugin (Freemium + Yearly/Monthly Subscription — see the README's "Marketplace publishing prep").
  *
  * These are the only tests that exercise the locked side of the four paid-feature gates. Every
  * *other* uiTest here runs entitled — [RemoteRobotExtension] installs that state before each test

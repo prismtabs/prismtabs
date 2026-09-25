@@ -173,6 +173,10 @@ generated and is now set as the `PUBLISH_TOKEN` repo secret (closes item 3). Acc
   pricing card as of `docs(pricing)` / `d57b11b`, 2026-09-06), and set the trial to **14 days**
   rather than the 30-day default (decided 2026-09-15; the options are 7, 10, 14 or 30 — see README
   "Marketplace publishing prep"). Check that `prismtabs.com`'s pricing card says 14 days too.
+- Monthly billing ($1.46/month personal, $3.02/month per user commercial) and the open-source free
+  licence were requested on 2026-09-25, after approval, by emailing marketplace@jetbrains.com:
+  submitted Sales Info fields cannot be changed in the form. See README "Marketplace publishing
+  prep".
 - Attach the licence (item 7): paste the `prismtabs.com/eula` URL into the licence field at upload
   time (per the best-practices doc it's added here, not via a `plugin.xml` tag); paste the full
   EULA text as the fallback if the form wants text rather than a link.

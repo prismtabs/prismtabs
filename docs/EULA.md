@@ -8,7 +8,7 @@
 
 # PrismTabs End-User Licence Agreement
 
-**Last updated: 6 September 2026**
+**Last updated: 25 September 2026**
 
 This End-User Licence Agreement ("Agreement") is a legal agreement between you (either an
 individual or a single entity, "you" or "Licensee") and Andrzej Piontek, an individual trader
@@ -25,11 +25,13 @@ The Software is distributed under a Freemium model. A core set of features is pr
 charge, without a subscription, for as long as you use the Software.
 
 ### 1.2 Paid features
-Additional ("paid") features are made available only while you hold an active subscription or an
-active free trial, purchased or activated through the JetBrains Marketplace. Subject to your
+Additional ("paid") features are made available only while you hold an active subscription, an
+active free licence granted through a JetBrains Marketplace community programme such as its
+open-source programme (a "community licence"), or an active free trial, purchased or activated
+through the JetBrains Marketplace. Subscriptions may be billed yearly or monthly. Subject to your
 compliance with this Agreement, the Licensor grants you a non-exclusive, non-transferable,
 non-sublicensable, revocable licence to install and use the paid features for the duration of your
-active subscription or trial, on the following basis:
+active subscription, community licence, or trial, on the following basis:
 
 - Under an individual subscription, one named individual may use the paid features on any number of
   devices that individual personally uses.
@@ -39,12 +41,16 @@ active subscription or trial, on the following basis:
   uses the paid features. A subscription may be reassigned to a different individual when the
   original user no longer needs it, but not on a rotating basis to serve more individuals than the
   number of subscriptions held.
+- Under a community licence, one named individual may use the paid features on any number of
+  devices that individual personally uses, only for the purposes and for the period that the
+  community programme's terms permit.
 
 ### 1.3 No fallback licence
-This subscription does not include a fallback licence. When your subscription or trial lapses,
-expires, or is cancelled and not renewed, access to the paid features ends automatically and
-immediately. The free features described in §1.1 continue to work without interruption. No
-previously-generated data or settings are deleted as a result of a lapsed subscription.
+This subscription does not include a fallback licence. When your subscription, community licence,
+or trial lapses, expires, or is cancelled and not renewed, access to the paid features ends
+automatically and immediately. The free features described in §1.1 continue to work without
+interruption. No previously-generated data or settings are deleted as a result of a lapsed
+subscription.
 
 ### 1.4 Trial
 A free trial period, as configured on the JetBrains Marketplace listing at the time of your

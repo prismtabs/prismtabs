@@ -218,7 +218,7 @@ tinting is invisible (§2.4).
   `VirtualFileListener`) — see `TabGroupVfsListener` and `TabGroupService.remapUrl`.
 - README documenting the four constraints from §2 — set expectations before anyone files an issue asking
   for the chip.
-- **In progress:** JetBrains Marketplace paid-plugin publishing prep (Freemium model, Yearly
+- **In progress:** JetBrains Marketplace paid-plugin publishing prep (Freemium model, Yearly/Monthly
   Subscription without a Fallback License — see the README's [Marketplace publishing
   prep](../README.md#marketplace-publishing-prep)). Vendor metadata, plugin icon, a tested
   licence-verification module and its call sites (one per paid feature, not a single gate) are done;
