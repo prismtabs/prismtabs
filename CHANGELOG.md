@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.4.16] - 2026-09-28
+
 ### Changed
 
 - PrismTabs now requires IntelliJ Platform 2025.1 or newer (previously 2024.2).
@@ -43,6 +45,7 @@
 - PrismTabs can be disabled or uninstalled without restarting the IDE, and tab colours clear the
   moment it is.
 
-[Unreleased]: https://github.com/prismtabs/prismtabs/compare/v1.4.15...HEAD
+[Unreleased]: https://github.com/prismtabs/prismtabs/compare/v1.4.16...HEAD
+[1.4.16]: https://github.com/prismtabs/prismtabs/compare/v1.4.15...v1.4.16
 [1.4.15]: https://github.com/prismtabs/prismtabs/compare/v1.4.14...v1.4.15
 [1.4.14]: https://github.com/prismtabs/prismtabs/commits/v1.4.14
