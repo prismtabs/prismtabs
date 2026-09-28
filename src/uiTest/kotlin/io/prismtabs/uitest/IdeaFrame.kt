@@ -1435,9 +1435,9 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     ).split(',').filter { it.isNotEmpty() }
 
     /**
-     * Clears the tool-window tree's selection, on the EDT, by walking the frame for the `JTree` the
-     * panel names `PrismTabs.GroupTree` (the same component [toolWindowGroupTree] locates by
-     * XPath).
+     * Clears the tool-window tree's selection, on the EDT, by finding the `JTree` the panel names
+     * `PrismTabs.GroupTree` in whichever window shows it (the same component [toolWindowGroupTree]
+     * locates by XPath).
      *
      * Needed because the tree — and its selection — outlive any one test: `TabGroupsPanel.refresh`
      * deliberately *falls* a selection onto a surviving row rather than clearing it (that is the
@@ -1451,18 +1451,9 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
             """
             importClass(com.intellij.openapi.application.ApplicationManager)
 
-            function findTree(c) {
-                if (c instanceof javax.swing.JTree && c.getName() == 'PrismTabs.GroupTree') return c
-                if (!c.getComponentCount) return null
-                const n = c.getComponentCount()
-                for (let i = 0; i < n; i++) {
-                    var found = findTree(c.getComponent(i))
-                    if (found != null) return found
-                }
-                return null
-            }
+            $GROUP_TREE_JS
 
-            const tree = findTree(component)
+            const tree = findGroupTree()
             if (tree != null) {
                 ApplicationManager.getApplication().invokeAndWait(new Runnable({
                     run: function() { tree.clearSelection() }
