@@ -72,6 +72,13 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    // Runtime only, and not for any test here: from the 2025.1 baseline the platform test
+    // framework's JUnit5TestSessionListener, which it registers as a JUnit Platform launcher
+    // listener, references JUnit 4's junit.framework.TestCase. Without JUnit 4 on the runtime
+    // classpath the launcher cannot start at all ("Provider com.intellij.tests.
+    // JUnit5TestSessionListener could not be instantiated" <- NoClassDefFoundError:
+    // junit/framework/TestCase), so no test runs. 2024.2's test framework did not need it.
+    testRuntimeOnly("junit:junit:4.13.2")
 
     // `kotlin.stdlib.default.dependency = false` (gradle.properties) opts every source set out of
     // the automatic stdlib dependency — main/test get it transitively via the platform's bundled
@@ -85,13 +92,13 @@ kotlin {
     jvmToolchain(21)
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_21)
-        // Pin to the Kotlin API bundled with the OLDEST supported IDE (2024.2, build 242,
-        // ships Kotlin 2.0 — see pluginSinceBuild in gradle.properties). Do not raise this
-        // casually: raising it risks NoSuchMethodError on older IDEs. 1.9 is no longer an
-        // option: the Kotlin Gradle plugin has dropped support for it.
-        apiVersion.set(KotlinVersion.KOTLIN_2_0)
-        languageVersion.set(KotlinVersion.KOTLIN_2_0)
-        // The compiler flags 2.0 as deprecated, but the pin above is deliberate: the warning
+        // Pin to the Kotlin API bundled with the OLDEST supported IDE (2025.1, build 251,
+        // ships Kotlin 2.1.10 — read from kotlin.KotlinVersionCurrentValue with javap; see
+        // pluginSinceBuild in gradle.properties). Do not raise this casually: raising it risks
+        // NoSuchMethodError on older IDEs.
+        apiVersion.set(KotlinVersion.KOTLIN_2_1)
+        languageVersion.set(KotlinVersion.KOTLIN_2_1)
+        // The compiler may flag 2.1 as deprecated, but the pin above is deliberate: the warning
         // cannot be acted on until pluginSinceBuild moves to an IDE bundling a newer Kotlin.
         // This flag silences only those version-deprecation warnings, nothing else.
         freeCompilerArgs.add("-Xsuppress-version-warnings")
@@ -184,10 +191,16 @@ intellijPlatform {
         // drops this level again to get a build green. 1.4.14 was refused by the Marketplace over
         // two calls this list would have caught, both reported on every run into a file that
         // failed nothing and so was never read.
+        //
+        // MISSING_DEPENDENCIES because a `<depends>` the IDE cannot resolve stops the plugin
+        // loading there at all, and without this level the Verifier only prints it: adding the
+        // com.intellij.marketplace dependency against the old 242 floor reported "1 missing
+        // mandatory dependency" on 2024.2 and 2024.3 and still built green.
         failureLevel = listOf(
             VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
             VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES,
             VerifyPluginTask.FailureLevel.OVERRIDE_ONLY_API_USAGES,
+            VerifyPluginTask.FailureLevel.MISSING_DEPENDENCIES,
         )
     }
 
