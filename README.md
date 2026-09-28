@@ -710,14 +710,16 @@ Subscription without a Fallback License**, product code `PPRISMTABS`:
 
 | | Yearly | Monthly |
 |---|---|---|
-| Personal | $14 | $1.46 |
-| Commercial, per user | $29 | $3.02 |
+| Personal | $14 | $1.5 |
+| Commercial, per user | $29 | $3.1 |
 
 - **Trial:** 14 days of the paid features, then a silent drop to the free tier, never a lockout.
   The Marketplace offers only 7, 10, 14 or 30 days.
-- **Monthly price** is the yearly price divided by 9.6, so paying yearly saves exactly 20%. The
-  Marketplace's pricing box always reads "save 20% with a yearly subscription" and cannot be
-  changed per plugin, so keep this ratio whenever a price changes.
+- **Monthly price** is the yearly price divided by 9.6 and rounded to one decimal place, which is
+  all the Marketplace's monthly price field accepts (confirmed with Marketplace support
+  2026-09-28). The Marketplace's pricing box always reads "save 20% with a yearly subscription" and
+  cannot be changed per plugin; the rounding means the real saving is ~19-22%, not exactly 20%, so
+  don't take that label literally.
 - **Open-source licence:** Pro is free through the Marketplace community programme. JetBrains
   verifies eligibility; the EULA's §1.2 grants the paid features under a community licence.
 - **No fallback licence:** `untilBuild` is unset (see [Compatibility policy](#compatibility-policy)),
