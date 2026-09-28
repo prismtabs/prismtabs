@@ -71,6 +71,17 @@
 
     <depends>com.intellij.modules.platform</depends>
 
+    <!-- JetBrains Marketplace Licensing, which backs LicensingFacade. Required, not optional:
+         PrismTabsLicense reads a null facade as "not answered yet" and lets the paid features run,
+         so without this plugin the gate fails open for good. IntelliJ IDEA bundles it; Android
+         Studio does not, and a PrismTabs installed there without it (from disk, or with the
+         licensing plugin removed) had every paid feature unlocked — reproduced 2026-09-28. With
+         the dependency the IDE installs it alongside a Marketplace install and refuses to load
+         PrismTabs without it. It is also why pluginSinceBuild is 251: the paid 2024.2-2024.3 IDEs
+         build licensing into their core and have no plugin by this id, so the Plugin Verifier
+         reported the dependency unavailable there and PrismTabs would not have loaded. -->
+    <depends>com.intellij.marketplace</depends>
+
     <extensions defaultExtensionNs="com.intellij">
         <!-- Confirmed EP: com.intellij.editorTabColorProvider
 

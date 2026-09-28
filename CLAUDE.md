@@ -43,7 +43,7 @@ resolve); the counts above are this machine's `ideaIC-2024.2-win`.
 Never omit a defaulted argument on a `com.intellij` function or constructor. Kotlin compiles the
 omission into a call to a *synthetic* member (`foo$default`, or a constructor taking every parameter
 plus a `DefaultConstructorMarker`) whose descriptor changes whenever the platform adds a parameter —
-so it links fine against the 2024.2 baseline and throws `NoSuchMethodError` on the user's newer IDE.
+so it links fine against the compile baseline and throws `NoSuchMethodError` on the user's newer IDE.
 Pass every argument explicitly, or build the value in Java, where the zero-argument constructor
 Kotlin generates but refuses to call is reachable. `PlatformDefaultArgumentCallsTest` fails on a new
 one; README §"Never omit a default argument on a platform Kotlin API" has the full account.

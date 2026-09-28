@@ -23,7 +23,7 @@ hand before each one. Everything is covered end-to-end by real UI tests (`./grad
 
 1. IntelliJ IDEA → **Open** → select this folder. It imports as a Gradle project.
 2. Set the Gradle JVM to **JDK 21** (Settings → Build Tools → Gradle → Gradle JVM).
-   This is required by the 2024.2 platform baseline.
+   This is required by the 2025.1 platform baseline.
 3. First sync downloads the IntelliJ Platform artifacts (a few hundred MB). Be patient.
 
 If Gradle sync fails on the wrapper, run `gradle wrapper --gradle-version=9.3.0` once with a
@@ -42,7 +42,7 @@ See [UI testing](#ui-testing) for `./gradlew uiTest` — the `remote-robot` suit
 ### Noisy but harmless log output from `buildPlugin` / `runIde`
 
 `buildPlugin` runs a `buildSearchableOptions` subtask that boots a real headless sandbox IDE
-(the 2024.2 baseline from `platformVersion`) and walks *every* Settings panel — including stock
+(the 2025.1 baseline from `platformVersion`) and walks *every* Settings panel — including stock
 JetBrains ones PrismTabs never touches — to index search terms. None of the following indicate a
 problem with PrismTabs itself, and the plugin zip is still produced correctly:
 
@@ -762,6 +762,15 @@ separately: the PrismTabs tool window (`TabGroupsPanel` shows an upsell panel in
   `IdeaPluginDescriptorImpl.isLicenseOptional`, which lets the plugin load unlicensed. A bare
   `<product-descriptor>` marks PrismTabs as fully paid, and the platform disables the whole plugin
   once an unlicensed user dismisses the register dialog.
+- **`<depends>com.intellij.marketplace</depends>` is mandatory too.** `LicensingFacade` is
+  provided by the JetBrains Marketplace Licensing plugin, and `isLicensed` reads a missing facade
+  as "not answered yet", which `decide` lets through — right for the first moment of IDE startup,
+  but permanent if the licensing plugin is absent. IntelliJ IDEA bundles it; Android Studio does
+  not. Reproduced 2026-09-28: PrismTabs installed from disk into Android Studio, with no licensing
+  plugin, had every paid feature unlocked. The dependency makes the IDE install the licensing
+  plugin with a Marketplace install and refuse to load PrismTabs without it, instead of failing
+  open. Treating a null facade as unlicensed would not do instead: it would lock paying users out
+  for that first moment of every startup.
 - **Nothing is held hostage.** Clearing an active group stays free, and the locked tool window
   still offers "reopen the tabs of N hidden groups". `TabGroupFileListener` re-checks on every file
   open, so auto-join stops the moment a subscription lapses.
@@ -1092,7 +1101,7 @@ own doc comment, and `docs/cross-platform-manual-verification.md` for how to run
 
 ### The newest platform: `runIdeForUiTestsLatest`
 
-`runIdeForUiTests` runs the 2024.2 compile baseline. `runIdeForUiTestsLatest` is the same sandbox on
+`runIdeForUiTests` runs the 2025.1 compile baseline. `runIdeForUiTestsLatest` is the same sandbox on
 an *installed* IDE of 2026.2 or later, started the same way and driven by the same `./gradlew
 uiTest`. Only one of the two can run at a time, because both listen on :8082. It exists because the
 platform changes underneath the plugin: `PluginUnloadUiTest`'s Hide Group scenario only reproduces
@@ -1366,10 +1375,19 @@ Read these before designing anything. They are platform limits, not TODOs.
 
 ## Compatibility policy
 
-Compile against the **oldest** supported platform and run forward. `sinceBuild = 242`,
+Compile against the **oldest** supported platform and run forward. `sinceBuild = 251`,
 `untilBuild` deliberately unset, correctness guarded by the Plugin Verifier rather than a
 hard ceiling. Raising `platformVersion` in `gradle.properties` drops older IDEs — don't do it
 casually.
+
+The floor was 242 (2024.2) until 1.4.15 and moved to 251 (2025.1) before any user had installed
+PrismTabs, for licensing rather than for API: the `com.intellij.marketplace` dependency described
+under [How the licence check works](#how-the-licence-check-works) cannot resolve on the paid
+2024.2-2024.3 IDEs, which build licensing into their core. The move also raised the Kotlin pin to
+2.1 and moved `PrismTabsLicense` to the `ActionUtil.invokeAction(action, event, onDone)` overload.
+That overload is itself deprecated from 252, and its replacement, `performAction`, does not exist
+on 251, so one deprecation note on 252 and later remains until the floor moves again. The
+2024.2 measurements recorded elsewhere in this file are left as they were taken.
 
 ### Never omit a default argument on a platform Kotlin API
 
