@@ -64,7 +64,7 @@ import javax.swing.tree.TreeSelectionModel
  * invention, and it is what makes a group's membership knowable once its tabs are closed.
  *
  * This whole tool window — and with it hide/show, which is only driven from here — is a paid
- * feature (see the README's "Marketplace publishing prep"). It is gated inside [TabGroupsPanel]
+ * feature (see the README's "Licensing and pricing"). It is gated inside [TabGroupsPanel]
  * rather than by declining to register the tool window at all: a subscription can be activated
  * while the IDE is running, and a stripe button that only appears after a restart would read as the
  * plugin being broken.
