@@ -72,6 +72,13 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    // Runtime only, and not for any test here: from the 2025.1 baseline the platform test
+    // framework's JUnit5TestSessionListener, which it registers as a JUnit Platform launcher
+    // listener, references JUnit 4's junit.framework.TestCase. Without JUnit 4 on the runtime
+    // classpath the launcher cannot start at all ("Provider com.intellij.tests.
+    // JUnit5TestSessionListener could not be instantiated" <- NoClassDefFoundError:
+    // junit/framework/TestCase), so no test runs. 2024.2's test framework did not need it.
+    testRuntimeOnly("junit:junit:4.13.2")
 
     // `kotlin.stdlib.default.dependency = false` (gradle.properties) opts every source set out of
     // the automatic stdlib dependency — main/test get it transitively via the platform's bundled
@@ -85,17 +92,13 @@ kotlin {
     jvmToolchain(21)
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_21)
-        // Kotlin 2.0 is the lowest API the Kotlin Gradle plugin still accepts, and it is one
-        // above the OLDEST supported IDE's: 2024.2 (build 242, see pluginSinceBuild in
-        // gradle.properties) bundles stdlib 1.9.24, the one this plugin runs against there
-        // (kotlin.stdlib.default.dependency=false). So the compiler will accept a stdlib call
-        // that 2024.2 lacks, and that call would throw NoSuchMethodError there at runtime.
-        // The guard is verifyPlugin's IU-242 run, which must stay Compatible; it is also why
-        // verifyPluginProjectConfiguration warns "Kotlin apiVersion exceeds since-build
-        // requirements". Do not raise this: every step up widens that gap.
-        apiVersion.set(KotlinVersion.KOTLIN_2_0)
-        languageVersion.set(KotlinVersion.KOTLIN_2_0)
-        // The compiler flags 2.0 as deprecated, but the pin above is deliberate: the warning
+        // Pin to the Kotlin API bundled with the OLDEST supported IDE (2025.1, build 251,
+        // ships Kotlin 2.1.10 — read from kotlin.KotlinVersionCurrentValue with javap; see
+        // pluginSinceBuild in gradle.properties). Do not raise this casually: raising it risks
+        // NoSuchMethodError on older IDEs.
+        apiVersion.set(KotlinVersion.KOTLIN_2_1)
+        languageVersion.set(KotlinVersion.KOTLIN_2_1)
+        // The compiler may flag 2.1 as deprecated, but the pin above is deliberate: the warning
         // cannot be acted on until pluginSinceBuild moves to an IDE bundling a newer Kotlin.
         // This flag silences only those version-deprecation warnings, nothing else.
         freeCompilerArgs.add("-Xsuppress-version-warnings")
@@ -188,19 +191,22 @@ intellijPlatform {
         // drops this level again to get a build green. 1.4.14 was refused by the Marketplace over
         // two calls this list would have caught, both reported on every run into a file that
         // failed nothing and so was never read.
+        //
+        // MISSING_DEPENDENCIES because a `<depends>` the IDE cannot resolve stops the plugin
+        // loading there at all, and without this level the Verifier only prints it: adding the
+        // com.intellij.marketplace dependency against the old 242 floor reported "1 missing
+        // mandatory dependency" on 2024.2 and 2024.3 and still built green.
         failureLevel = listOf(
             VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
             VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES,
             VerifyPluginTask.FailureLevel.OVERRIDE_ONLY_API_USAGES,
+            VerifyPluginTask.FailureLevel.MISSING_DEPENDENCIES,
         )
     }
 
     // Read from environment variables only — never from Gradle properties, so there's no risk of
-    // a value ending up in gradle.properties and getting committed. Locally these are simply
-    // unset, so `signPlugin`/`publishPlugin` fail with Gradle's own "no value" error if ever run
-    // by hand before the certificate (release-readiness-gaps.md item 2) or Marketplace token
-    // (item 4) exist; .github/workflows/publish.yml supplies the same three names from repo
-    // secrets when it eventually runs signPlugin/publishPlugin.
+    // a value ending up in gradle.properties and getting committed. .github/workflows/publish.yml
+    // supplies them from repository secrets; docs/releasing.md says where the originals live.
     signing {
         certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
         privateKey = providers.environmentVariable("PRIVATE_KEY")

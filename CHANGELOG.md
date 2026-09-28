@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Changed
+
+- PrismTabs now requires IntelliJ Platform 2025.1 or newer (previously 2024.2).
+- PrismTabs now depends on the JetBrains Marketplace Licensing plugin. IntelliJ IDEA and the other
+  JetBrains IDEs bundle it; in an IDE that does not, such as Android Studio, the IDE installs it
+  together with PrismTabs.
+
+### Fixed
+
+- In an IDE without the JetBrains Marketplace Licensing plugin, the paid features were available
+  without a trial or subscription.
+
 ## [1.4.15] - 2026-09-22
 
 ### Fixed

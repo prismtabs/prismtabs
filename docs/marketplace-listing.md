@@ -1,155 +1,44 @@
-# Marketplace listing content
+# Marketplace listing
 
-The copy and metadata for the JetBrains Marketplace listing, drafted so the actual
-upload (release-readiness-gaps.md item 5) is a paste job, not a writing job. Follows
-`naming-and-terminology.md` house style throughout.
+Where each part of the JetBrains Marketplace listing comes from, and the values set by hand in the
+admin UI. Copy follows [`naming-and-terminology.md`](naming-and-terminology.md).
 
-Everything here is done, including the five screenshots in `docs/marketplace/`.
+## Sources
 
----
-
-## Where each piece goes
-
-| Listing surface | Source of the copy |
+| Listing surface | Source |
 |---|---|
-| Plugin name | `plugin.xml` `<name>` — `PrismTabs`, do not change |
-| Description / overview | `plugin.xml` `<description>` — **keep it sourced from the archive**, do not detach it by editing in the admin UI (see item 6's note) |
-| Card blurb / "tagline" | Marketplace derives it from the first line of the description; there is no separate field |
-| Change notes | `plugin.xml` `<change-notes>`, filled at build time from `CHANGELOG.md`'s section for the version being built, falling back to `[Unreleased]` before `patchChangelog` has stamped one |
-| Additional Information links | **Technical Information** fields in the admin UI (below) — not prose, not `plugin.xml` |
-| Tags | Entered at upload; JetBrains maps them onto their controlled vocabulary |
-| Screenshots | Uploaded in the admin UI; the five files in `docs/marketplace/`, in filename order |
-| Licence | `prismtabs.com/eula` URL, pasted at upload (item 7) |
+| Name | `plugin.xml` `<name>`. Do not change it. |
+| Summary line | The first line of `<description>`. There is no separate tagline field. |
+| Description | `plugin.xml` `<description>`. Edit it there, never in the admin UI, which would detach it from the archive. |
+| Change notes | `CHANGELOG.md`, rendered into `<change-notes>` at build time. |
+| Pricing | Sales Info in the admin UI and the website pricing card. |
+| Licence | `https://prismtabs.com/eula`. |
 
-## Tagline / card blurb
-
-No dedicated field exists. The Marketplace and the IDE's own Plugins panel both show
-the **first line** of the description as the one-line summary, so that line is the
-tagline:
-
-> Colour-coded tab groups for IntelliJ editor tabs.
-
-Kept deliberately close to the website hero ("Colour groups, built for your IntelliJ
-tabs") without being identical — the website lede can be looser; this one has to also
-work as a bare list-row summary with no styling around it.
-
-## Description
-
-Lives in `plugin.xml` `<description>` and is mirrored here for review. It expands the
-earlier draft with an explicit Free/paid split (matching the README's "Marketplace
-publishing prep" section and the website) and a feature list, and keeps the existing
-links block last because the description is the only listing surface the IDE's own
-Plugins panel renders.
-
-Deliberately **no price string** in this copy: the archive for a given version is
-frozen, the EULA carries a price-change clause, and the Marketplace has its own
-pricing field. "A paid subscription" here; the number lives only on the Sales Info
-scheme and the website pricing card.
-
-```
-Colour-coded tab groups for IntelliJ editor tabs.
-
-Right-click a tab for the colour swatch popup: pick one of 8 preset colours to
-start a new group and name it, or "Add to Group…" to put the tab in a group you
-already have. "Manage Groups…" lets you list a group's files, rename, recolour,
-delete, or mark a group active — files opened while a group is active join it
-automatically, and a file that was already open joins it in one click, from the
-same popup.
-
-The PrismTabs tool window lists every group with its colour and member count,
-expands each one to the files it holds, and can hide a group (closing its tabs,
-remembering them) or show it again. Right-clicking one of those files removes it
-from its group — no need to open the file first, which is the one thing a tab's
-own menu cannot offer. Assignments persist across restarts, along with the tabs a
-hidden group remembers, and follow a file through a rename or move. The preset
-palette itself is editable under Settings | Tools | PrismTabs.
-
-Free forever
-  • Assign tabs to 8 preset colours, each measured for contrast on both light and
-    dark editor tabs
-  • Unlimited named groups — create, rename, recolour, delete
-  • "Files…" lists everything in a group, open tab or not, and reopens any of it
-  • Assignments persist across restarts and survive file renames and moves
-
-Paid — a 14-day free trial, then a subscription
-  • The PrismTabs tool window for managing every group at a glance, each group
-    expanding to the files it holds
-  • Hide a group to close its tabs and remember them, then show it to reopen them
-    together
-  • Mark a group active so newly opened files join it automatically
-  • Rename or repaint any preset colour under Settings | Tools | PrismTabs
-
-When the trial ends, PrismTabs drops to the Free tier — never a lockout. Your
-groups and colours stay either way.
-
-prismtabs.com has the manual, the tier breakdown and the licence agreement. Bugs
-and feature requests, for every edition, go to the public feedback tracker —
-anything touching a purchase should be emailed instead, as that tracker is public.
-```
-
-(The `<description>` renders the two links as anchors and the bullet lists as
-`<ul>`; the block above is the plain-text shape of it.)
-
-## Change notes
-
-Sourced from `CHANGELOG.md` `[Unreleased]`. Reworded during this pass to match
-`naming-and-terminology.md`: "Chrome-style colour groups" → "Colour-coded tab
-groups" (item 13 already made this fix in `plugin.xml`; the changelog had drifted),
-and "the \"Tab Groups\" tool window" → "the PrismTabs tool window" (unquoted, per
-`naming-and-terminology.md` §1).
+Keep prices out of `<description>`: each version's archive is frozen, and prices can change.
 
 ## Technical Information links
-
-Fill these in the admin UI. They render in the listing's *Additional Information*
-section and are the correct home for these rather than the description prose.
 
 | Field | Value |
 |---|---|
 | Issue tracker | `https://github.com/prismtabs/prismtabs-feedback` |
 | Documentation | `https://prismtabs.com/docs` |
 | Website | `https://prismtabs.com` |
-| Source code | *leave empty* — the repository is private (item 9) and the best-practices page requires external links to be reachable |
+| Source code | Empty. The repository is private, and every listing link must be reachable. |
 
 ## Tags
 
-Enter at upload; JetBrains maps free-text tags onto their controlled list during
-review, so treat these as the intent rather than exact final strings:
-
-- **User Interface** — the plugin's whole surface is IDE chrome
-- **Editor** — it acts on editor tabs specifically
-- **Productivity** — tab organisation for large working sets
-
-Not `Navigation` (PrismTabs colours and groups tabs, it does not move between them)
-and not `Themes` (it tints individual tabs, it is not a colour scheme).
+`User Interface`, `Editor`, `Productivity`. Not `Navigation` (PrismTabs does not move between tabs)
+and not `Themes` (it is not a colour scheme).
 
 ## Screenshots
 
-In `docs/marketplace/`, all ≥ 1200 × 760, in the order they should appear in the
-listing (four dark, one light):
+`docs/marketplace/`, at least 1200 × 760, uploaded in filename order:
 
-1. **`01-swatch-popup-and-tabs-dark.png`** (1231 × 906) — a tab right-clicked, the
-   "New Group" caption above the 8 preset dots, "Add to Group…" / "Manage Groups…"
-   / "Remove from Group" below the separator, tinted tabs and code behind. The
-   one-right-click pitch; it goes first.
-2. **`02-tool-window-and-tabs-dark.png`** (1849 × 937) — the PrismTabs tool window
-   docked right, listing Docs / Backend / Tests with colour dots and member
-   counts, each group expanded to its member files and their paths, "Tests 2 files
-   · active" showing the active-group marker (pin toggle pressed in the stripe),
-   "Docs 2 files · hidden" showing the hide feature, editor tabs behind it tinted
-   to match. The paid tier's home.
-3. **`03-palette-settings-dark.png`** (1794 × 1045) — the full `Settings | Tools |
-   PrismTabs` dialog, all eight presets renamed to a consistent scheme, the light
-   and dark `ColorPanel` per row visible.
-4. **`04-tool-window-and-tabs-light.png`** (1849 × 935) — the same tool window and
-   tinted tab strip as shot 2, in the light theme, no popup. Proves the
-   light-theme palette work the README documents.
-5. **`05-files-in-group-dark.png`** (1775 × 958) — the free "Files…" chooser, its
-   "Files in Tests" caption above all five members of the group with their paths,
-   over a tinted two-row tab strip. The one shot of membership visibility, which
-   is free forever and which no other shot shows: a group lists every file it
-   holds, whether or not that file still has a tab open.
+1. `01-swatch-popup-and-tabs-dark.png`: the swatch popup on a right-clicked tab.
+2. `02-tool-window-and-tabs-dark.png`: the PrismTabs tool window with an active and a hidden group.
+3. `03-palette-settings-dark.png`: Settings | Tools | PrismTabs.
+4. `04-tool-window-and-tabs-light.png`: shot 2 in the light theme.
+5. `05-files-in-group-dark.png`: the free `Files…` chooser.
 
-Shot 5 was taken against a fuller version of the sample project than shots 1–4, so
-its `Tests` group holds five spec files where shot 2's holds two. Each shot is
-internally consistent; only a viewer comparing the two would notice, and a group
-gaining files between two screenshots is not a claim about the plugin either way.
+Shots 2 and 4 show the licensed UI, not the free-tier upsell panel. The website hero images are
+cropped from them, so re-shoot both sites together.

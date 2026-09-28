@@ -2,6 +2,8 @@ package io.prismtabs.license
 
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionPlaces
+import com.intellij.openapi.actionSystem.ActionUiKind
+import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.actionSystem.ex.ActionUtil
 import com.intellij.openapi.application.ApplicationManager
@@ -13,8 +15,8 @@ import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
- * JetBrains Marketplace licence check for the Freemium + Yearly Subscription (no fallback) model
- * — see the README's "Marketplace publishing prep" section for the decision and the free/paid
+ * JetBrains Marketplace licence check for the Freemium + Yearly/Monthly Subscription (no fallback)
+ * model — see the README's "Licensing and pricing" section for the decision and the free/paid
  * feature split. Subscription expiry is handled by the signed stamp itself, so [isLicensed] needs
  * no scheme-specific logic; what freemium does change is the shape of the call sites. Callers gate
  * individual paid features (tool window, collapse/expand, active-group auto-join, palette editing),
@@ -171,27 +173,35 @@ object PrismTabsLicense {
         }
         // ActionUtil.invokeAction, not a direct actionPerformed call. AnAction.actionPerformed is
         // @ApiStatus.OverrideOnly, and OVERRIDE_ONLY_API_USAGES is in build.gradle.kts's
-        // failureLevel deliberately (unlike INTERNAL_API_USAGES, dropped there for TabRepaint's one
-        // accepted risk) — so invoking it failed `verifyPlugin` outright on every IDE in the
-        // matrix. It was also the wrong call on its own merits: invokeAction runs the action's own
-        // `update` first via lastUpdateAndCheckDumb and performs it only if it enabled itself,
-        // where a bare actionPerformed fires a disabled action regardless.
+        // failureLevel deliberately — so invoking it failed `verifyPlugin` outright on every IDE in
+        // the matrix. It was also the wrong call on its own merits: invokeAction runs the action's
+        // own `update` first and performs it only if it enabled itself, where a bare
+        // actionPerformed fires a disabled action regardless.
         //
-        // The remaining wrinkle is a *warning*, not a failure, and is unavoidable at our floor:
-        // this overload is undeprecated on 242 but deprecated from 243 on, in favour of the
-        // ActionUtil.performAction(..., ActionUiKind) that only exists from 243 (measured: 0
-        // deprecation findings on IU-242, 1 on each of 243/251/252/253/261/262). Compiling against
-        // 242 means taking the older call and its DEPRECATED_API_USAGES note — the same accepted
-        // trade-off CaptionedListPopup makes for SeparatorWithText. Switch to performAction on the
-        // day the floor moves to 243.
+        // The (action, event, onDone) overload, with the event built by AnActionEvent.createEvent,
+        // is the one the deprecated (action, dataContext, place, inputEvent, onDone) overload names
+        // as its replacement. That older overload was the only choice while the floor was 242,
+        // where ActionUiKind did not exist; from 251 both calls here are public and carry no
+        // @ApiStatus annotation (checked with `javap -v` per CLAUDE.md's recipe on 2025.1).
         //
-        // Both checked with `javap` per CLAUDE.md's recipe. Note invokeAction builds the event
-        // itself via the non-deprecated createFromInputEvent, which is what also retires the
-        // deprecated createFromDataContext call this used to make.
+        // This overload is deprecated in turn from 252, in favour of ActionUtil.performAction(action,
+        // event), which 251 does not have (javap on 2025.1 and 2025.2.6). So one
+        // DEPRECATED_API_USAGES note on 252 and later is unavoidable at a 251 floor — a warning,
+        // not a failure, the same accepted trade-off CaptionedListPopup makes for
+        // SeparatorWithText. Switch to performAction on the day the floor moves to 252.
         //
-        // Trailing nulls are the InputEvent (there is no originating one — this upsell is raised by
-        // a gate, not by a keystroke) and the `onDone` callback, left unused on purpose: see
+        // The trailing nulls are the InputEvent (there is none — this upsell is raised by a gate,
+        // not by a keystroke) and the `onDone` callback, left unused on purpose: see
         // [requestLicense]'s doc for why nothing here re-reads the licence when the dialog closes.
-        ActionUtil.invokeAction(registerAction, dataContext, ActionPlaces.UNKNOWN, null, null)
+        // Every argument is passed explicitly, per CLAUDE.md's rule on platform default arguments.
+        val event = AnActionEvent.createEvent(
+            registerAction,
+            dataContext,
+            null,
+            ActionPlaces.UNKNOWN,
+            ActionUiKind.NONE,
+            null,
+        )
+        ActionUtil.invokeAction(registerAction, event, null)
     }
 }

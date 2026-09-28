@@ -37,8 +37,7 @@ The numbering is referenced by the sign-off log kept in your tracking copy; don'
 - **Unlicensed start:** plugin stays enabled (not in `config/disabled_plugins.txt`), tool window
   shows the upsell panel, free features work.
 - **Trial, then a real key:** start the 14-day trial from the register dialog; paid features
-  unlock (the tool window updates on next show or group change, by design). Repeat with a real key
-  once listed.
+  unlock (the tool window updates on next show or group change, by design). Repeat with a real key.
 - **Lapse across a restart:** while licensed, mark a group active, hide another, rename a preset.
   Remove the licence, restart. The plugin loads in the free tier, all state survived, new files
   don't auto-join, and the locked tool window offers **Reopen the tabs of N hidden groups**.

@@ -16,8 +16,8 @@ not to exist as described, stop and report rather than substituting something pl
 |---|---|---|
 | Language | Kotlin | SDK-idiomatic; all modern platform samples and the official plugin template are Kotlin |
 | Build | Gradle KTS + `org.jetbrains.intellij.platform` **2.19.0** | Current release of IPGP 2.x |
-| Compile baseline | **IntelliJ IDEA 2024.2** (`sinceBuild = 242`) | See §0.1 |
-| JDK | **21** | Required for platform 2024.2+; 2026.2+ requires Java 25 to *build against*, but Java 21 bytecode runs fine on the newer JBR |
+| Compile baseline | **IntelliJ IDEA 2025.1** (`sinceBuild = 251`) | Was 2024.2; see §0.1 |
+| JDK | **21** | Required for platform 2024.2+ (so for the 2025.1 floor too); 2026.2+ requires Java 25 to *build against*, but Java 21 bytecode runs fine on the newer JBR |
 | `untilBuild` | **unset (open-ended)** | Widest range; guarded by Plugin Verifier instead |
 | Tests | **JUnit 5** | Spock is not viable here — see §7 |
 | Scope | Full Chrome UX incl. rename / recolour / collapse | With the collapse caveat in §5 |
@@ -35,6 +35,11 @@ standard IntelliJ compatibility model. The realistic floor options:
 Every API this plugin needs (`EditorTabColorProvider`, `JBPopupFactory`, `PersistentStateComponent`,
 `EditorTabPopupMenu`, Kotlin UI DSL v2) predates 2023, so the floor is a policy choice, not a technical one.
 Start at 242; dropping to 231 later is a one-line change plus a verifier run.
+
+**Update, 2026-09-28: the floor is now 2025.1 (build 251).** Licensing, not API, forced it: the
+`com.intellij.marketplace` dependency that stops the paid-feature gate failing open in Android Studio
+cannot resolve on the paid 2024.2-2024.3 IDEs. See README §"Compatibility policy". The reasoning
+above is kept as the original decision.
 
 **Do not set `untilBuild`.** Use `pluginVerification { ides { ... } }` to check 2024.2, 2024.3, 2025.1,
 2025.2, 2025.3, 2026.1, 2026.2 in CI.
@@ -218,19 +223,9 @@ tinting is invisible (§2.4).
   `VirtualFileListener`) — see `TabGroupVfsListener` and `TabGroupService.remapUrl`.
 - README documenting the four constraints from §2 — set expectations before anyone files an issue asking
   for the chip.
-- **In progress:** JetBrains Marketplace paid-plugin publishing prep (Freemium model, Yearly
-  Subscription without a Fallback License — see the README's [Marketplace publishing
-  prep](../README.md#marketplace-publishing-prep)). Vendor metadata, plugin icon, a tested
-  licence-verification module and its call sites (one per paid feature, not a single gate) are done;
-  the gates stay inert until `plugin.xml` gains a `<product-descriptor code="PPRISMTABS"
-  release-date="…" release-version="…" optional="true"/>`, which is deliberately deferred until the
-  actual release date is known. The `optional="true"` is required, not optional: it sets
-  `IdeaPluginDescriptorImpl.isLicenseOptional` (verified in the 2024.2 bytecode) and is what lets
-  the plugin load unlicensed for the freemium free tier — a bare `<product-descriptor>` makes the
-  platform disable the whole plugin for a non-subscriber. See the README's [Marketplace publishing
-  prep](../README.md#marketplace-publishing-prep). The cross-platform manual verification pass is
-  now done on macOS and Windows; see
-  [cross-platform manual verification](cross-platform-manual-verification.md)'s sign-off log.
+- ~~JetBrains Marketplace paid-plugin publishing.~~ Done — published as Freemium with a
+  subscription; see the README's [Licensing and pricing](../README.md#licensing-and-pricing) and
+  [releasing](releasing.md).
 
 ### Phase 6 — Group membership visibility
 
@@ -520,7 +515,7 @@ hidden at all.
 | Risk | Likelihood | Mitigation |
 |---|---|---|
 | Colours invisible under Islands / certain themes | Medium | Phase 0 gate; tool window + emoji-dot fallback |
-| Repaint API renamed between 2024.2 and 2026.2 | Medium | **[VERIFY]** in Phase 0, check the Incompatible Changes list, guard with reflection only if forced |
+| Repaint API renamed between 2024.2 and a newer IDE | Low | Public `FileEditorManager.updateFilePresentation`, checked by the Plugin Verifier matrix |
 | `getEditorTabColor` called so often it lags | Low | Pure map lookup, no locks on the read path |
 | File URL keys break on rename | High (eventually) | Fixed: `TabGroupVfsListener` remaps on rename/move |
 | JetBrains ships IJPL-59322 natively | Low near-term | The issue is 3+ years old and still open; watch it |
@@ -553,21 +548,3 @@ toolchain, for no benefit. Recommendation:
   listed in the README ("Two UI-testing findings", "Three more…", "A fourth…"), none of which a
   manual pass had noticed. See the README's "UI testing" for how to run it and why `remote-robot`
   rather than IDE Starter.
-
----
-
-## 8. Bootstrapping prompt for Claude Code
-
-> Build an IntelliJ IDEA plugin in Kotlin called "Tab Groups" following the attached implementation plan.
-> Start with Phase 0 only and stop for review before Phase 1.
->
-> Scaffold from the JetBrains IntelliJ Platform Plugin Template structure: Gradle KTS,
-> `org.jetbrains.intellij.platform` version 2.18.1, `intellijIdea("2024.2")`, JDK 21,
-> `sinceBuild = "242"`, no `untilBuild`, `kotlin.stdlib.default.dependency=false`.
->
-> Anything marked [VERIFY] in the plan: inspect the attached platform sources and report what you find
-> before writing code against it. If a described API doesn't exist, stop and tell me — do not substitute
-> something that looks similar.
-
-Feed it the plan file plus §2 verbatim; the constraints are the part most likely to get "helpfully"
-designed around.

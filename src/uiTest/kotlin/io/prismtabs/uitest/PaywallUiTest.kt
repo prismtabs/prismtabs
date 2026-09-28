@@ -18,7 +18,7 @@ import java.time.Duration.ofSeconds
 
 /**
  * The free tier, end-to-end: what an unsubscribed user actually gets once PrismTabs is a paid
- * plugin (Freemium + Yearly Subscription — see the README's "Marketplace publishing prep").
+ * plugin (Freemium + Yearly/Monthly Subscription — see the README's "Licensing and pricing").
  *
  * These are the only tests that exercise the locked side of the four paid-feature gates. Every
  * *other* uiTest here runs entitled — [RemoteRobotExtension] installs that state before each test
@@ -322,7 +322,7 @@ class PaywallUiTest {
      * regression that over-gated — a `requirePaidFeature` added to the popup's swatch handler, say —
      * would make all of them pass harder while breaking the product for every unsubscribed user.
      *
-     * What it covers is not arbitrary: it is what the README's "Marketplace publishing prep" section
+     * What it covers is not arbitrary: it is what the README's "Licensing and pricing" section
      * sells as free (manual colouring, unlimited groups), and what the locked tool window's own
      * upsell promises in as many words — "Colouring tabs and managing groups from a tab's
      * right-click menu stays free". The first test in this class asserts that sentence is
