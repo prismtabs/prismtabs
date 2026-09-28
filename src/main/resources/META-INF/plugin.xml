@@ -3,7 +3,7 @@
     <name>PrismTabs</name>
     <vendor email="contact@prismtabs.com" url="https://prismtabs.com/">Andrzej Piontek</vendor>
 
-    <!-- Item 1 of docs/release-readiness-gaps.md: arms PrismTabsLicense's paid-feature gate.
+    <!-- Arms PrismTabsLicense's paid-feature gate; see docs/releasing.md for when to change it.
          optional="true" is load-bearing, not cosmetic — it sets isLicenseOptional, which is what
          lets the plugin load and fall back to the free tier for an unlicensed user. A bare
          product-descriptor makes the platform disable the whole plugin instead once the register

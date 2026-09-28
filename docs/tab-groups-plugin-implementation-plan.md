@@ -218,19 +218,9 @@ tinting is invisible (§2.4).
   `VirtualFileListener`) — see `TabGroupVfsListener` and `TabGroupService.remapUrl`.
 - README documenting the four constraints from §2 — set expectations before anyone files an issue asking
   for the chip.
-- **In progress:** JetBrains Marketplace paid-plugin publishing prep (Freemium model, Yearly/Monthly
-  Subscription without a Fallback License — see the README's [Marketplace publishing
-  prep](../README.md#marketplace-publishing-prep)). Vendor metadata, plugin icon, a tested
-  licence-verification module and its call sites (one per paid feature, not a single gate) are done;
-  the gates stay inert until `plugin.xml` gains a `<product-descriptor code="PPRISMTABS"
-  release-date="…" release-version="…" optional="true"/>`, which is deliberately deferred until the
-  actual release date is known. The `optional="true"` is required, not optional: it sets
-  `IdeaPluginDescriptorImpl.isLicenseOptional` (verified in the 2024.2 bytecode) and is what lets
-  the plugin load unlicensed for the freemium free tier — a bare `<product-descriptor>` makes the
-  platform disable the whole plugin for a non-subscriber. See the README's [Marketplace publishing
-  prep](../README.md#marketplace-publishing-prep). The cross-platform manual verification pass is
-  now done on macOS and Windows; see
-  [cross-platform manual verification](cross-platform-manual-verification.md)'s sign-off log.
+- ~~JetBrains Marketplace paid-plugin publishing.~~ Done — published as Freemium with a
+  subscription; see the README's [Licensing and pricing](../README.md#licensing-and-pricing) and
+  [releasing](releasing.md).
 
 ### Phase 6 — Group membership visibility
 
@@ -520,7 +510,7 @@ hidden at all.
 | Risk | Likelihood | Mitigation |
 |---|---|---|
 | Colours invisible under Islands / certain themes | Medium | Phase 0 gate; tool window + emoji-dot fallback |
-| Repaint API renamed between 2024.2 and 2026.2 | Medium | **[VERIFY]** in Phase 0, check the Incompatible Changes list, guard with reflection only if forced |
+| Repaint API renamed between 2024.2 and a newer IDE | Low | Public `FileEditorManager.updateFilePresentation`, checked by the Plugin Verifier matrix |
 | `getEditorTabColor` called so often it lags | Low | Pure map lookup, no locks on the read path |
 | File URL keys break on rename | High (eventually) | Fixed: `TabGroupVfsListener` remaps on rename/move |
 | JetBrains ships IJPL-59322 natively | Low near-term | The issue is 3+ years old and still open; watch it |
@@ -553,21 +543,3 @@ toolchain, for no benefit. Recommendation:
   listed in the README ("Two UI-testing findings", "Three more…", "A fourth…"), none of which a
   manual pass had noticed. See the README's "UI testing" for how to run it and why `remote-robot`
   rather than IDE Starter.
-
----
-
-## 8. Bootstrapping prompt for Claude Code
-
-> Build an IntelliJ IDEA plugin in Kotlin called "Tab Groups" following the attached implementation plan.
-> Start with Phase 0 only and stop for review before Phase 1.
->
-> Scaffold from the JetBrains IntelliJ Platform Plugin Template structure: Gradle KTS,
-> `org.jetbrains.intellij.platform` version 2.18.1, `intellijIdea("2024.2")`, JDK 21,
-> `sinceBuild = "242"`, no `untilBuild`, `kotlin.stdlib.default.dependency=false`.
->
-> Anything marked [VERIFY] in the plan: inspect the attached platform sources and report what you find
-> before writing code against it. If a described API doesn't exist, stop and tell me — do not substitute
-> something that looks similar.
-
-Feed it the plan file plus §2 verbatim; the constraints are the part most likely to get "helpfully"
-designed around.

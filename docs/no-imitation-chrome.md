@@ -2,15 +2,11 @@
 
 Design-rationale note. PrismTabs deliberately does not build browser-style
 tab-group furniture into the editor tab strip; it colours real tabs and puts
-group management in a tool window. This document records why, so the reasoning
-(three platform constraints, plus an impl-class repaint call) does not stay
-scattered across the README.
+group management in a tool window. This document records why.
 
 The user-facing form of this is the manual's FAQ entry *"Is there a collapsible
 group bar in the tab strip, like browser tab groups?"* in
-`prismtabs-website/docs.html`. The phrase "no imitation chrome layered over the
-tab strip" was previously in the website Features intro and has since been
-removed from it as too abstract and defensive for a features lede.
+`prismtabs-website/docs.html`.
 
 ---
 
@@ -44,7 +40,7 @@ resize.
 
 ## Why PrismTabs does not do it
 
-Three platform limits make it a bad idea. They are documented under **"Constraints
+Two platform limits make it a bad idea. They are documented under **"Constraints
 that are not going away"** in the plugin `README.md`; the short version:
 
 1. **There is no public API for an in-strip group chip.** The browser-style
@@ -52,13 +48,7 @@ that are not going away"** in the plugin `README.md`; the short version:
    Reproducing it means custom-painting `JBEditorTabs`, which is internal,
    unstable, and free to change shape between IDE builds. (`README.md`,
    constraint 3.)
-2. **There is no stable API to repaint a tab, either.** Even the plain colour
-   change already has to route through an impl-class call
-   (`FileEditorManagerImpl.queueUpdateFile`) rather than a published interface;
-   see the Phase 0 finding and the Phase 1 repaint decision in the README. An
-   overlay that tracked tab geometry would be standing on the same soft ground,
-   only more of it.
-3. **Tab text colour is not ours to set.** `getEditorTabForegroundColor` is
+2. **Tab text colour is not ours to set.** `getEditorTabForegroundColor` is
    experimental and tied to file status, so even the colouring we *do* ship is
    background-only. (`README.md`, constraint 2.)
 

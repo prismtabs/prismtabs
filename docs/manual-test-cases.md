@@ -110,9 +110,8 @@ reload: a plugin with a product code cannot load or unload dynamically (see §4)
   4. **Restart the IDE** yourself, only to confirm the lapsed state and your other changes
      persisted across it.
 
-  No product code is registered on the Marketplace yet (`docs/release-readiness-gaps.md` item
-  5), so there is no real trial or licence to remove locally — fake the licence facade instead,
-  live, in the same `runIde` sandbox: **Find Action → "IDE Scripting Console"** (action id
+  A real trial or licence cannot be removed and restored mid-session, so fake the licence facade
+  instead, live, in the same `runIde` sandbox: **Find Action → "IDE Scripting Console"** (action id
   `IdeScriptingConsole`), not the Groovy plugin's own "Groovy Console" — that one runs your
   script in a separate JVM with no platform `Application`, so
   `LicensingFacade.setInstance` NPEs on `getMessageBus()`. Pick **Groovy** when it asks for a
@@ -132,7 +131,7 @@ reload: a plugin with a product code cannot load or unload dynamically (see §4)
   This only simulates entitlement the same way `IdeaFrame.simulateEntitled`/`simulateUnlicensed`
   do for the uiTest suite (the "facade hasn't answered yet" row of `PrismTabsLicense.decide`) —
   it cannot prove a real, JetBrains-signed stamp verifies. That's what the trial/real-key bullet
-  above is for, once the plugin is actually listed.
+  above is for.
   *Automated: partial — the lapse and the restart are each automated (`PersistenceUiTest`,
   `PaywallUiTest`). Left for a human: restarting the IDE to confirm what survives.*
 
