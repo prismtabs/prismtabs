@@ -2,28 +2,20 @@
 
 Colour-coded tab groups for IntelliJ editor tabs.
 
-**Status: Phase 5 (hardening) in progress.** Features are complete through Phase 4: a **PrismTabs
-tool window** (right-hand stripe) lists every group with its colour dot, member count and hidden
-state, and can rename, recolour, delete, mark **active**, or **hide/show** a group. Hiding is "close and
-remember" — IntelliJ has no collapsible in-strip chip and no API to build one, so hiding closes
-the group's open tabs and records them, and showing reopens them in order; see
-[Phase 4 result](#phase-4-result). Everything is covered end-to-end by real UI tests
-(`./gradlew uiTest`, see [UI testing](#ui-testing)) driving an actual sandbox IDE, not just
-`./gradlew test`'s plain-JUnit coverage.
-[Phase 3 result](#phase-3-result) has group management and the active-group inheritance rule;
-[Phase 2 result](#phase-2-result) has the swatch popup's base structure and the light/dark
-colour-model change; [Phase 1 result](#phase-1-result) has the repaint decision they build on;
-[Phase 0 result](#phase-0-result-passed) is the groundwork under all of it.
-The three items Phase 0 left open — light-theme legibility, the newest-platform repaint check, and
-the Islands-theme bug — are now closed; see [Checked: all three open items](#checked-all-three-open-items-closed-2026-08-09).
-[Phase 5 result](#phase-5-result) has what's left of hardening: dynamic-plugin-loading is now
-verified live, alongside the Plugin Verifier CI matrix and palette settings that shipped earlier.
-[Marketplace publishing prep](#marketplace-publishing-prep) has the paid-plugin groundwork laid so
-far — vendor metadata, plugin icon, and a tested licence-verification module — and the deliberately
-short list of what's still left before the actual upload. The
-[cross-platform verification pass](docs/cross-platform-manual-verification.md) is a per-release
-routine rather than an item on that list; its sign-off log records which build each OS last
-verified, and which later changes are still unchecked.
+**Status: published on JetBrains Marketplace** as a freemium plugin. Features: a swatch popup on
+the tab context menu to colour tabs into named groups, and a **PrismTabs tool window** (right-hand
+stripe) that lists every group with its colour, member count and hidden state, and can rename,
+recolour, delete, mark **active**, or **hide/show** a group. Hiding is "close and remember":
+IntelliJ has no collapsible in-strip chip and no API to build one, so hiding closes the group's
+open tabs and records them, and showing reopens them in order; see
+[Phase 4 result](#phase-4-result).
+
+The phase sections below record the design decisions and platform findings behind each part of
+the plugin. [Licensing and pricing](#licensing-and-pricing) covers the paid tier,
+[docs/releasing.md](docs/releasing.md) how to ship a release, and the
+[cross-platform verification pass](docs/cross-platform-manual-verification.md) what to check by
+hand before each one. Everything is covered end-to-end by real UI tests (`./gradlew uiTest`, see
+[UI testing](#ui-testing)) driving an actual sandbox IDE.
 
 ---
 
@@ -31,7 +23,7 @@ verified, and which later changes are still unchecked.
 
 1. IntelliJ IDEA → **Open** → select this folder. It imports as a Gradle project.
 2. Set the Gradle JVM to **JDK 21** (Settings → Build Tools → Gradle → Gradle JVM).
-   This is required by the 2024.2 platform baseline.
+   This is required by the 2025.1 platform baseline.
 3. First sync downloads the IntelliJ Platform artifacts (a few hundred MB). Be patient.
 
 If Gradle sync fails on the wrapper, run `gradle wrapper --gradle-version=9.3.0` once with a
@@ -50,7 +42,7 @@ See [UI testing](#ui-testing) for `./gradlew uiTest` — the `remote-robot` suit
 ### Noisy but harmless log output from `buildPlugin` / `runIde`
 
 `buildPlugin` runs a `buildSearchableOptions` subtask that boots a real headless sandbox IDE
-(the 2024.2 baseline from `platformVersion`) and walks *every* Settings panel — including stock
+(the 2025.1 baseline from `platformVersion`) and walks *every* Settings panel — including stock
 JetBrains ones PrismTabs never touches — to index search terms. None of the following indicate a
 problem with PrismTabs itself, and the plugin zip is still produced correctly:
 
@@ -105,22 +97,19 @@ whose default `isDumbAware()` is literally `this instanceof DumbAware`. A provid
 implement the marker is silently skipped during indexing. A pure map lookup is genuinely dumb-safe,
 so the marker is honest — but it must be declared.
 
-### 3. Repaint: `queueUpdateFile`, not `updateFileColor` — and no stable API exists
+### 3. Repaint: `updateFilePresentation`, not `updateFileColor`
 
-Verified by bytecode inspection on 2024.2. The two are **not** equivalent:
+The platform caches each tab's background colour, so a group change must ask it to re-query the
+provider. The calls are **not** equivalent:
 
 | Call | Path | Effect |
 |---|---|---|
+| `FileEditorManager.updateFilePresentation(file)` | → `FileEditorManagerImpl.queueUpdateFile` → `fileUpdateChannel` → `updateFileBackgroundColor` → `TabInfo.setTabColor` | **the tab background** |
 | `updateFileColor(file)` | → `EditorsSplitters.scheduleUpdateFileColor` | foreground / text attributes **only** |
-| `queueUpdateFile(file)` | → `fileUpdateChannel` → `updateFileBackgroundColor` → `TabInfo.setTabColor` | **the tab background** |
 
 Calling `updateFileColor` succeeds and does nothing visible, which is a convincing false negative.
-
-**Open problem for Phase 1:** both methods are declared on `FileEditorManagerImpl`, *not* on the
-`FileEditorManagerEx` interface. `FileEditorManagerEx` exposes only `refreshIcons()`. There is no
-stable public API for forcing a tab-colour repaint, so Phase 1 must choose between reflection
-(with a version-guard and a verifier check across the support matrix) or finding an indirect
-trigger. Decide this deliberately — do not let it default to reflection by accident.
+`io.prismtabs.service.TabRepaint` calls `updateFilePresentation`, which is public and unannotated;
+see [Internal API](#internal-api-what-the-marketplace-asked-for).
 
 ### Measured constraint: unselected tabs render tints at ~50% strength
 
@@ -147,14 +136,12 @@ All three were verified against a *running* IDE, not read off documentation. See
       theme. Every one of the 8 presets is legible on both selected and unselected tabs, with a
       wide margin — full numbers in [Palette](#palette).
 - [x] **Newest platform.** Re-verified on **IntelliJ IDEA 2026.2 (`IU-262.8665.258`)**, the newest
-      release at the time of writing. `queueUpdateFile` still exists, is still `public`, and still
-      reaches the tab background by the same route. PrismTabs also loads and runs on it unmodified.
+      release at the time of writing. The repaint call still reaches the tab background by the same
+      route. PrismTabs also loads and runs on it unmodified.
 - [x] **Islands theme (2025.3+).** **IJPL-237068 does not reproduce on 2026.2.** Islands has its own
       tab painter, and it honours a custom tab colour on selected tabs.
 
 ```
-Repaint API on 2024.2:  FileEditorManagerImpl.queueUpdateFile(VirtualFile)  [impl class, not the EX interface]
-Repaint API on 2026.2:  FileEditorManagerImpl.queueUpdateFile(VirtualFile)  [unchanged — same class, same signature]
 Themes verified:        expUI_dark + Light (IC-242.20224.300)
                         Islands Dark + Islands Light (IU-262.8665.258)
 ```
@@ -169,7 +156,7 @@ resolves it; this doesn't change anything about `build.gradle.kts`, which alread
 `pluginVerification`).
 
 **Repaint chain, confirmed unchanged by `javap` on 2026.2, not just "still compiles":**
-`FileEditorManagerImpl.queueUpdateFile` is `public final`, still delegates to the same
+`FileEditorManagerImpl.queueUpdateFile`, which `updateFilePresentation` calls, still delegates to the same
 `fileUpdateChannel` field, which still resolves to `EditorsSplitters.updateFileBackgroundColorAsync`
 → `updateFileBackgroundColor` → `TabInfo.setTabColor`. The colour it reads is still
 `EditorTabPresentationUtil.getEditorTabBackgroundColor`'s first non-null result over
@@ -213,37 +200,6 @@ including every file nested under a renamed/moved directory. See its doc comment
 **Acceptance: passed**, verified manually in `runIde` (`IC-242.20224.300`, `expUI_dark`) —
 a tab assigned Red via the right-click menu was still red after a full IDE restart, and Clear
 Group also worked. No `io.prismtabs` errors or exceptions appeared in `idea.log`.
-
-### The repaint decision
-
-Phase 0 left one question open: how does Phase 1 call `FileEditorManagerImpl.queueUpdateFile`,
-which sits on the impl class rather than the public `FileEditorManagerEx` interface? Reflection
-was the plan's default fallback. Instead, `io.prismtabs.service.TabRepaint` uses a **compile-time
-cast**, not reflection:
-
-```kotlin
-(FileEditorManagerEx.getInstanceEx(project) as? FileEditorManagerImpl)?.queueUpdateFile(file)
-```
-
-Reasoning: `build.gradle.kts` already runs `pluginVerifier()` against the full supported IDE
-matrix (`pluginVerification { ides { select { types = ... } } }`), and the verifier resolves ordinary
-method calls — including calls onto non-interface impl classes — against every listed IDE. A
-reflective call is invisible to that check: a renamed or removed method would only surface as a
-silent runtime no-op on whichever IDE version broke it. A direct call is visible to the verifier
-and fails the build the moment a target platform stops shipping the method, which is strictly
-earlier and louder than reflection would ever catch it. The `as?` (rather than a hard cast) means
-that on any IDE where `FileEditorManagerEx.getInstanceEx` returns something other than
-`FileEditorManagerImpl` — headless test fixtures, or a future platform that slips past the
-verifier matrix — the repaint request degrades to a silent no-op instead of a `ClassCastException`.
-
-Verified by `javap` on 2024.2: both `queueUpdateFile(VirtualFile)` and `updateFileColor
-(VirtualFile)` are `public` (not `internal`/package-private) on `FileEditorManagerImpl`, so this is
-a normal (if fragile) impl-class dependency, not a hack around access control. Neither *method*
-carries an annotation of its own — but `FileEditorManagerImpl` itself is `@ApiStatus.Internal` on
-every IDE from 242 to 263, which is enough for the Plugin Verifier to report the call and for
-Marketplace to refuse an upload over it. That is the accepted cost of this decision, and
-[Internal API](#internal-api-what-the-marketplace-asked-for) sets out what was checked in place of
-it and what happens next.
 
 ---
 
@@ -504,8 +460,8 @@ sense from a live IDE, and `TabGroupService` stays plain-JUnit testable. `hide()
 `FileEditorManager.getOpenFiles()`, keeps only the files belonging to the target group, closes each
 one (`FileEditorManager.closeFile`), then records that list on the group via
 `TabGroupService.rememberOpenTabs`. `show()` reads the recorded list back and reopens each via
-`openFile(file, focusEditor = false)`, in the same order. Unlike
-`TabRepaint`'s `queueUpdateFile` finding from Phase 0, both `closeFile(VirtualFile)` and
+`openFile(file, focusEditor = false)`, in the same order. Like the
+repaint call, both `closeFile(VirtualFile)` and
 `openFile(VirtualFile, boolean)` are declared on the public `FileEditorManager` interface itself
 (verified via `javap` on 2024.2) — no impl-class cast needed here.
 
@@ -747,178 +703,88 @@ triggering an unload through the IDE's own Plugins page goes through the asynchr
 `unloadPluginWithProgress` path this test bypassed for determinism, so this artefact is specific to
 how the check was driven, not evidence of a problem in the plugin being checked.
 
-## Marketplace publishing prep
+## Licensing and pricing
 
-**Decision:** PrismTabs will be sold under JetBrains Marketplace's **Freemium** model, priced as a
-**Yearly Subscription without a Fallback License** at **$14/year personal, $29/year per user
-commercial**, with a **14-day trial** of the paid features. This supersedes an earlier Perpetual License decision (see git
-history) — reasoning below.
+PrismTabs is sold on JetBrains Marketplace under the **Freemium** model as a **Yearly/Monthly
+Subscription without a Fallback License**, product code `PPRISMTABS`:
 
-**Why not Perpetual:** the original reasoning was "the plugin has no backend/hosting cost and the
-Plugin Verifier CI matrix (see [Compatibility policy](#compatibility-policy)) keeps compatibility
-cost low, so there's no recurring cost to fund." That framing missed that Andrzej's own maintenance
-time — tracking new IDE versions, triaging bug reports — is a recurring cost even without a hosting
-bill. Perpetual decouples that recurring cost from recurring revenue: for a plugin this niche,
-new-user acquisition tapers off long before the obligation to keep it compatible does, so revenue
-trends toward zero while the maintenance burden doesn't.
+| | Yearly | Monthly |
+|---|---|---|
+| Personal | $14 | $1.5 |
+| Commercial, per user | $29 | $3.1 |
 
-**Why not Subscription with a Fallback License:** JetBrains' fallback scheme (modelled on their own
-IDE licensing) freezes a lapsed subscriber onto the last version they were entitled to, forever,
-rather than cutting them off. Rejected because `untilBuild` is deliberately left unset (see
-[Compatibility policy](#compatibility-policy)) — a frozen fallback build doesn't naturally decay via
-IDE incompatibility the way it would for a plugin with a hard version ceiling. Once feature velocity
-slows, the frozen fallback and the live paid version would converge, undermining the subscription.
-The Freemium free tier already answers the question a fallback licence exists for — "don't leave a
-lapsed payer with nothing" — without that convergence risk: a lapsed subscriber drops to the free
-tier (below), not a frozen paid snapshot.
+- **Trial:** 14 days of the paid features, then a silent drop to the free tier, never a lockout.
+  The Marketplace offers only 7, 10, 14 or 30 days.
+- **Monthly price** is the yearly price divided by 9.6 and rounded to one decimal place, which is
+  all the Marketplace's monthly price field accepts (confirmed with Marketplace support
+  2026-09-28). The Marketplace's pricing box always reads "save 20% with a yearly subscription" and
+  cannot be changed per plugin; the rounding means the real saving is ~19-22%, not exactly 20%, so
+  don't take that label literally.
+- **Open-source licence:** Pro is free through the Marketplace community programme. JetBrains
+  verifies eligibility; the EULA's §1.2 grants the paid features under a community licence.
+- **No fallback licence:** `untilBuild` is unset (see [Compatibility policy](#compatibility-policy)),
+  so a frozen fallback build would never age out and would converge with the paid tier. The free
+  tier already covers a lapsed subscriber.
 
-**Free/paid split**, feature-based rather than quantity-based — capping the *number* of groups would
-punish a mid-task user who needs one more, which is exactly the "too limited" outcome to avoid:
+**Free/paid split.** Feature-based, not quantity-based: capping the number of groups would punish a
+user mid-task.
 
-- **Free forever:** assigning tabs to the 8 preset colours, unlimited groups, create/rename/recolour
-  (Phase 1–3 core), persistence across restarts, rename/move remapping, and listing a group's files
-  ("Files…", see [Group membership](#group-membership)) — the last two are correctness features
-  (your assignments survive a rename; what is in a group is knowable at all), not premium ones, so
-  they stay free.
-- **Paid** (active subscription, or during the 14-day trial): the PrismTabs tool window,
-  hide/show, active/sticky-group auto-join on newly opened files (Phase 4's tool window +
-  Phase 3's inheritance rule), and custom palette editing (Phase 5's settings page). These are the
-  workflow-multiplier features a daily user builds a habit around, not ones a casual tab-colourer
-  misses.
-- **Trial:** users get the full paid feature set for 14 days (JetBrains' "reverse trial"
-  pattern), then silently downgrade to the free tier above if not subscribed — never a hard
-  lockout. Decided 2026-09-15, down from the 30-day default: 15 days was the intent, but the
-  Marketplace only offers 7, 10, 14 or 30.
-- **Trial resets and release cadence** (decided 2026-09-15): the Marketplace resets every user's
-  trial whenever `<product-descriptor>`'s `release-version` changes, lapsed subscribers and
-  never-paid users included. With features landing every few months, resetting on each one would
-  give a user who never pays the paid tier for a trial's length every release. So PrismTabs follows
-  the Marketplace's own model instead: the first two components of `pluginVersion` (and with them
-  `release-version` and `release-date`) move only on a deliberately cut **major release**, about
-  once a year, and features in between ship as third-component updates (1.4.14 → 1.4.15). This
-  departs from semantic versioning's "patch = fixes only" on purpose: the Marketplace's model has
-  every update within a major release share one `release-version`, and a version number that
-  followed semantic versioning would have to break that on every feature. The procedure is in
-  `docs/release-readiness-gaps.md` item 3.
+- **Free forever:** assigning tabs to the 8 preset colours, unlimited groups, create, rename,
+  recolour, delete, persistence across restarts, rename/move remapping, and listing a group's files
+  ("Files…", see [Group membership](#group-membership)). The last two are correctness features,
+  so they stay free.
+- **Paid:** the PrismTabs tool window, hide/show, active-group auto-join, and custom palette
+  editing.
 
-Done so far, none of it published anywhere:
+**Trial resets and release cadence.** The Marketplace resets every user's trial whenever
+`<product-descriptor>`'s `release-version` changes. `release-version` therefore moves only on a
+deliberately cut major release, about once a year, and features ship as third-component updates.
+The procedure is in [docs/releasing.md](docs/releasing.md).
 
-- **Vendor metadata.** `plugin.xml`'s `<vendor>` now carries a real email
-  (`contact@prismtabs.com`, the same address the EULA and the website route to) and URL
-  (`https://prismtabs.com/`, the plugin's own public docs site)
-  instead of the bare placeholder name — required for the vendor's site/email to show on the
-  Marketplace plugin page. It originally pointed at the GitHub repo instead, but that repo is
-  private (see [docs/release-readiness-gaps.md](docs/release-readiness-gaps.md)), and JetBrains'
-  listing guidelines require every external link on a plugin page to be reachable from the
-  internet — `prismtabs.com` is the reachable public replacement.
-- **Plugin icon.** `pluginIcon.svg` / `pluginIcon_dark.svg`, 40×40, reusing the plugin's own
-  established colour language rather than inventing a new one: three of the preset swatch colours
-  (blue/red/green) from `TabGroupPalette`, light and dark pairs, in the same filled-circle-with-a
-  -subtle-border style `ColorSwatchIcon` already uses for exactly the same legibility reason (pale
-  presets need a border to stay visible on a light background).
-- **Licence verification module**, `io.prismtabs.license.PrismTabsLicense` /
-  `LicenseSignatureVerification` — a faithful Kotlin port of JetBrains' own reference
-  implementation ([`marketplace-makemecoffee-plugin`'s
-  `CheckLicense.java`](https://github.com/JetBrains/marketplace-makemecoffee-plugin)), not a
-  reinvented version: `LicensingFacade.getConfirmationStamp(PRODUCT_CODE)` plus full
-  JetBrains-root-certificate signature verification for both licence-key and licence-server-ticket
-  stamps. `LicenseSignatureVerification` has no `LicensingFacade` dependency at all, so its
-  malformed-input reject paths are covered by plain JUnit 5
-  (`LicenseSignatureVerificationTest`) — same split as the plan's §7 testing policy, and
-  `PrismTabsLicense.decide` (the freemium truth table, with the `PluginManager`/`LicensingFacade`
-  reads lifted out as parameters) is unit-tested the same way in `PrismTabsLicenseTest`. All
-  `[VERIFY]`-worthy platform calls it uses (`LicensingFacade`, `AnActionEvent.createFromDataContext`,
-  `ModalityState.nonModal()`) were checked against the 2024.2 jars the same way as everything else
-  in this codebase, not guessed.
+### How the licence check works
 
-- **Free/paid gating, wired at each paid feature.** The feature-based split changed the shape of
-  this from what the plan originally described: it is no longer a single gate.
-  `AssignTabGroupAction` (the [Phase 2 result](#phase-2-result) entry point) stays *ungated* — it is
-  the free-tier action — and instead `PrismTabsLicense.paidFeaturesEnabled()` /
-  `requirePaidFeature()` are called from four places: the PrismTabs tool window (`TabGroupsPanel`
-  shows an upsell empty-state instead of the list), `toggleVisibility` (the one choke point all three
-  hide/show entry points funnel through), `toggleActiveGroup` (which both the popup's "Mark
-  as Active Group" item and the tool window's `Active Group` toggle call), and
-  `TabGroupPaletteConfigurable`. A `false` there means "fall back to the free tier", never "block
-  the plugin". Two consequences worth knowing:
-  - **Both sides are covered by `PaywallUiTest`, and the whole suite now has to say which side it
-    is on.** Since the `<product-descriptor>` landed, the sandbox IDE boots as a paid build holding
-    no licence (measured: `productCode=PPRISMTABS licenseOptional=true isLicensed=false
-    paid=false`), so *every* uiTest of a paid feature would otherwise run against the free tier and
-    fail on an upsell panel. `RemoteRobotExtension` therefore entitles the plugin before each test,
-    and `PaywallUiTest` is the class that deliberately un-entitles it again. Both states are real
-    platform state installed from the test side, with no test-only seam in production code:
-    "lapsed" is a stamp-less `LicensingFacade`, "entitled" is `LicensingFacade.setInstance(null)`,
-    which drives the gate down `decide(isPaidBuild = true, isLicensed = null)` — the "facade hasn't
-    answered yet" row, open by design. A genuine subscription cannot be simulated at all (a
-    confirmation stamp only verifies if JetBrains signed it), so *"a real key unlocks the plugin"*
-    stays a manual step; everything downstream of `paidFeaturesEnabled()` is covered here.
-    `PaywallUiTest` covers each paid feature being withheld, the purchase direction that reopens it,
-    a full subscribe → lapse → subscribe cycle that asserts groups, hidden state and a saved palette
-    all survive, *and* that the free tier still works — the last guards against over-gating, which
-    every locked-side assertion in the class would otherwise pass right through. All but that
-    free-tier case are script-driven rather than mouse-driven, so they run on Wayland too (see
-    "These tests need an X11 display").
-  - **Nothing is ever held hostage.** *Clearing* an active group stays free even though setting one
-    is paid, and the locked tool window still offers a one-click "reopen the tabs of N hidden
-    groups" — otherwise a lapsed subscription would leave tabs closed behind the very window needed
-    to reopen them. `TabGroupFileListener` re-checks per file open, so auto-join stops the moment a
-    subscription lapses rather than at the next restart.
-  - **The gates were inert until the plugin was actually for sale, and are now live.**
-    `paidFeaturesEnabled()` returns `true` outright when our own `PluginDescriptor.getProductCode()`
-    is `null`, i.e. while `plugin.xml` carried no `<product-descriptor>`; the clause is what let the
-    call sites be written and merged early without every locally built plugin locking its own paid
-    features. The tag landed on 2026-09-05, so that branch no longer fires in this repo's own
-    builds — `runIde` and `runIdeForUiTests` are unlicensed paid builds like any user's would be,
-    which is why the uiTest suite has to entitle itself (see the bullet above).
-  - **That tag must be `<product-descriptor … optional="true"/>`, not a bare one.** `optional="true"`
-    sets `IdeaPluginDescriptorImpl.isLicenseOptional` (verified in the 2024.2 bytecode), which is
-    what permits the plugin to load and run unlicensed so these gates can do their free-tier
-    fallback. A bare `<product-descriptor>` marks PrismTabs as fully paid: the platform disables the
-    whole plugin for an unlicensed user the moment they dismiss the register dialog, and none of the
-    gating above ever executes. Confirmed live under `runIde` on 2026-09-01 (the plugin dropped into
-    `config/disabled_plugins.txt`).
+`io.prismtabs.license.PrismTabsLicense` / `LicenseSignatureVerification` are a Kotlin port of
+JetBrains' reference implementation
+([`marketplace-makemecoffee-plugin`'s `CheckLicense.java`](https://github.com/JetBrains/marketplace-makemecoffee-plugin)):
+`LicensingFacade.getConfirmationStamp(PRODUCT_CODE)` plus JetBrains-root-certificate signature
+verification of licence-key and licence-server stamps. It checks only the signed stamp, whatever
+billing period or licence type is behind it. `PrismTabsLicense.decide` (the freemium truth table) and
+`LicenseSignatureVerification`'s reject paths are unit-tested in plain JUnit 5. The plugin makes no
+network calls, so no privacy policy is required.
 
-**Done since, and what it changed:** `plugin.xml` gained
-`<product-descriptor code="PPRISMTABS" release-date="20260905" release-version="14" optional="true"/>`
-on 2026-09-05, which armed every gate above. `release-date` is a placeholder until the real publish
-day, and `release-version` must stay in step with `pluginVersion` — it is the first two components
-with the dot dropped, it moves only on a major release (see "Trial resets and release cadence"
-above), and fewer than two digits makes the built zip an invalid plugin that `verifyPlugin` refuses
-to check at all. Both are covered by `docs/release-readiness-gaps.md` item 1. It also means `runIde` and `runIdeForUiTests` now
-behave as an unlicensed paid build, so anything exercising a paid feature by hand needs the trial or
-a licence first, and the uiTest suite entitles itself before each test.
+`PrismTabsLicense.paidFeaturesEnabled()` / `requirePaidFeature()` gate each paid feature
+separately: the PrismTabs tool window (`TabGroupsPanel` shows an upsell panel instead of the list),
+`toggleVisibility` (every hide/show entry point), `toggleActiveGroup`, and
+`TabGroupPaletteConfigurable`. `AssignTabGroupAction` stays ungated: it is the free tier. A
+`false` means "fall back to the free tier", never "block the plugin".
 
-**What's left, roughly in order:**
+- **`<product-descriptor … optional="true"/>` is mandatory.** `optional="true"` sets
+  `IdeaPluginDescriptorImpl.isLicenseOptional`, which lets the plugin load unlicensed. A bare
+  `<product-descriptor>` marks PrismTabs as fully paid, and the platform disables the whole plugin
+  once an unlicensed user dismisses the register dialog.
+- **`<depends>com.intellij.marketplace</depends>` is mandatory too.** `LicensingFacade` is
+  provided by the JetBrains Marketplace Licensing plugin, and `isLicensed` reads a missing facade
+  as "not answered yet", which `decide` lets through — right for the first moment of IDE startup,
+  but permanent if the licensing plugin is absent. IntelliJ IDEA bundles it; Android Studio does
+  not. Reproduced 2026-09-28: PrismTabs installed from disk into Android Studio, with no licensing
+  plugin, had every paid feature unlocked. The dependency makes the IDE install the licensing
+  plugin with a Marketplace install and refuse to load PrismTabs without it, instead of failing
+  open. Treating a null facade as unlicensed would not do instead: it would lock paying users out
+  for that first moment of every startup.
+- **Nothing is held hostage.** Clearing an active group stays free, and the locked tool window
+  still offers "reopen the tabs of N hidden groups". `TabGroupFileListener` re-checks on every file
+  open, so auto-join stops the moment a subscription lapses.
+- **Every local build is an unlicensed paid build.** `runIde` and `runIdeForUiTests` start without
+  a licence, so exercising a paid feature by hand needs a trial first.
+  `RemoteRobotExtension` entitles the plugin before each uiTest, and `PaywallUiTest` un-entitles it
+  deliberately. "Entitled" is `LicensingFacade.setInstance(null)`, the "facade hasn't answered yet"
+  row of `decide`; "lapsed" is a stamp-less facade. `PaywallUiTest` covers each paid feature being
+  withheld, the purchase direction, a subscribe → lapse → subscribe cycle that keeps groups, hidden
+  state and palette, and that the free tier still works. A real JetBrains-signed stamp cannot be
+  simulated, so "a real key unlocks the plugin" stays a manual check.
 
-1. ~~Add the `<product-descriptor>`~~ — **done 2026-09-05**, except for bumping `release-date` to
-   the real publish day when the release is cut. Kept here for the reasoning, which still applies to
-   that bump: **`optional="true"` is mandatory for the freemium model** (it sets
-   `IdeaPluginDescriptorImpl.isLicenseOptional`, verified in the 2024.2 bytecode): without it the
-   platform treats PrismTabs as fully paid and disables the entire plugin for an unlicensed user
-   once they dismiss the register dialog, so the free tier never loads and
-   `PrismTabsLicense.decide()`'s free-tier branch is dead code in production. Reproduced live under
-   `runIde` on 2026-09-01, and the correct tag confirmed live on 2026-09-05: the plugin stays
-   loaded, the tool window shows the upsell panel, and paid actions raise the register dialog.
-2. Create the JetBrains Marketplace vendor profile, set it to **trader** status, and submit banking
-   details (Sales Info tab) — external, account-level, only Andrzej can do this.
-3. Upload the plugin (first release, not an update), then in **Sales Info → Add to Marketplace**:
-   confirm/register product code `PPRISMTABS`, choose **Freemium**, then the **Yearly Subscription
-   without a Fallback License** scheme, set the personal price to $14/year and the commercial
-   price to $29/year per user, and set the trial to 14 days (not the 30-day default).
-4. Write the actual listing content — tagline, full description, ≥1200×760 screenshots, tags. Not
-   started; `plugin.xml`'s `<description>` is a reasonable first draft of the prose but the
-   screenshots and tags still need doing.
-5. Submit for review (JetBrains' stated turnaround is about two business days).
-
-For a detailed breakdown of each gap and additional ones discovered during release readiness audit,
-see [docs/release-readiness-gaps.md](docs/release-readiness-gaps.md) — each item is written to be
-tackled standalone in its own session.
-
-Not applicable here: the "inform your users in advance" notice
-([`inform-your-users-in-advance.html`](https://plugins.jetbrains.com/docs/marketplace/inform-your-users-in-advance.html))
-only applies when an *already-published free plugin* switches to paid. PrismTabs has never been
-published, so there are no existing free users to warn.
+**Plugin icon.** `pluginIcon.svg` / `pluginIcon_dark.svg`, 40×40: three preset swatch colours in
+`ColorSwatchIcon`'s bordered-circle style, which keeps pale colours visible on a light background.
 
 ## Group membership
 
@@ -1077,7 +943,7 @@ which is what the one empty-group dialog needs — a loop would report a group o
 of its members happened to go last.
 
 **On the free/paid line:** removal is not gated and must not be. Unassigning is a by-hand assignment
-change, which the [free/paid split](#marketplace-publishing-prep) keeps free forever; it is reachable
+change, which the [free/paid split](#licensing-and-pricing) keeps free forever; it is reachable
 only by subscribers and trial users in practice because the *window* is paid, and free users keep the
 same operation on a tab's own right-click menu.
 
@@ -1212,7 +1078,7 @@ deterministically: open, unassigned, a group active, and no route back into it b
 
 `TabGroupPopup`, the PrismTabs tool window, the VFS deletion path (`EmptyGroupOnDiskDeleteUiTest`,
 see "Empty groups" above) and the free/paid paywall (`PaywallUiTest`, see
-"Marketplace publishing prep" above) are covered end-to-end by
+"Licensing and pricing" above) are covered end-to-end by
 [`remote-robot`](https://github.com/JetBrains/intellij-ui-test-robot) tests (`src/uiTest/`), not
 just eyeballed in `runIde`. They live in their own Gradle source set — slow, need a live IDE — kept
 out of the fast `./gradlew test` path entirely.
@@ -1235,7 +1101,7 @@ own doc comment, and `docs/cross-platform-manual-verification.md` for how to run
 
 ### The newest platform: `runIdeForUiTestsLatest`
 
-`runIdeForUiTests` runs the 2024.2 compile baseline. `runIdeForUiTestsLatest` is the same sandbox on
+`runIdeForUiTests` runs the 2025.1 compile baseline. `runIdeForUiTestsLatest` is the same sandbox on
 an *installed* IDE of 2026.2 or later, started the same way and driven by the same `./gradlew
 uiTest`. Only one of the two can run at a time, because both listen on :8082. It exists because the
 platform changes underneath the plugin: `PluginUnloadUiTest`'s Hide Group scenario only reproduces
@@ -1506,20 +1372,22 @@ Read these before designing anything. They are platform limits, not TODOs.
    render tints at roughly half strength** — the platform blends them against
    `EditorTabs.inactiveColoredFileBackground`. Measured in Phase 0; see
    [that section](#measured-constraint-unselected-tabs-render-tints-at-50-strength).
-5. ~~**There is no stable API to repaint a tab after a colour change.**~~ **Not a constraint —
-   this one was a mistake.** `FileEditorManager.updateFilePresentation(VirtualFile)` is public,
-   unannotated, present since well before the 2024.2 floor, and reaches the same
-   `fileUpdateChannel` as the internal `queueUpdateFile`. It was missed by reading a truncated
-   `javap` dump as a complete API listing. Phase 0 finding 3, the Phase 1 "repaint decision" and
-   `IJPL-256289` all rest on that error and are superseded by this entry; see
-   [Internal API](#internal-api-what-the-marketplace-asked-for).
 
 ## Compatibility policy
 
-Compile against the **oldest** supported platform and run forward. `sinceBuild = 242`,
+Compile against the **oldest** supported platform and run forward. `sinceBuild = 251`,
 `untilBuild` deliberately unset, correctness guarded by the Plugin Verifier rather than a
 hard ceiling. Raising `platformVersion` in `gradle.properties` drops older IDEs — don't do it
 casually.
+
+The floor was 242 (2024.2) until 1.4.15 and moved to 251 (2025.1) before any user had installed
+PrismTabs, for licensing rather than for API: the `com.intellij.marketplace` dependency described
+under [How the licence check works](#how-the-licence-check-works) cannot resolve on the paid
+2024.2-2024.3 IDEs, which build licensing into their core. The move also raised the Kotlin pin to
+2.1 and moved `PrismTabsLicense` to the `ActionUtil.invokeAction(action, event, onDone)` overload.
+That overload is itself deprecated from 252, and its replacement, `performAction`, does not exist
+on 251, so one deprecation note on 252 and later remains until the floor moves again. The
+2024.2 measurements recorded elsewhere in this file are left as they were taken.
 
 ### Never omit a default argument on a platform Kotlin API
 
@@ -1601,15 +1469,13 @@ truncated output.** The reimplementation is gone; it is recorded here only becau
 produced it is easy to repeat.
 
 With this in, the plugin uses **no internal platform API at all** — `verifyPlugin` writes no
-`internal-api-usages.txt` on either end of the matrix, and `INTERNAL_API_USAGES` is back in
-`failureLevel` where the Verifier puts it by default.
-[IJPL-256289](https://youtrack.jetbrains.com/issue/IJPL-256289/editorTabColorProvider-has-no-public-my-answer-has-changed-call)
-was filed before the method was found and should be closed as invalid: the call it asks for exists.
+`internal-api-usages.txt` on either end of the matrix, and `INTERNAL_API_USAGES` is in
+`failureLevel`, where the Verifier puts it by default.
 
 ### `verifyInternalApiAllowlist`
 
-`failureLevel` is one switch over the whole `INTERNAL_API_USAGES` category, so accepting
-`queueUpdateFile` — which has to be accepted — silenced every other internal call too. Both calls
+`failureLevel` is one switch over the whole `INTERNAL_API_USAGES` category, so accepting any one
+internal call by dropping it silences every other internal call too. Both calls
 that got 1.4.14 refused were reported on every single run, into a file that failed nothing and so
 was never read. Neither was even internal when it was written: JetBrains annotated
 `FileEditorManagerEx.openFile` at 261 and `PluginManager.getPluginByClass` at 262, so no compiler
@@ -1634,7 +1500,7 @@ Three behaviours are deliberate and were each tested by hand:
 - **No report directories at all fails the build**, naming a failed `verifyPlugin` as the likely
   cause, rather than reporting a clean plugin it never checked.
 - **An accepted entry that stops being reported only logs a note.** A platform that de-internalises
-  `queueUpdateFile` is good news, and going red for it on one EAP build of the matrix would be the
+  an accepted call is good news, and going red for it on one EAP build of the matrix would be the
   wrong way to hear it.
 
 Adding an entry is a decision to ship an API the Marketplace may refuse. It belongs in a review,
@@ -1643,26 +1509,5 @@ with the reasoning written down, not in a red build someone wants green.
 ## Renaming
 
 The name lives in `gradle.properties` (`pluginName`, `pluginGroup`) plus the `<id>`/`<name>` in
-`src/main/resources/META-INF/plugin.xml` and the `io.prismtabs` package path. Note that
-"Tab Organizer" is already taken on the JetBrains Marketplace.
-
-## What Phase 1 deleted
-
-`io.prismtabs.phase0` is gone — it was scaffolding for the Phase 0 gate above, nothing more.
-Two things survived the deletion, carried into `io.prismtabs.provider.TabGroupColorProvider`,
-because they are findings rather than scaffolding:
-
-- `order="first"` on the `editorTabColorProvider` registration in `plugin.xml`;
-- `DumbAware` on the provider class.
-
-## What Phase 2 deleted
-
-Phase 1's hard-coded Red/Blue/Clear actions (`AssignRedTabGroupAction`, `AssignBlueTabGroupAction`,
-`ClearTabGroupAction`) are gone, replaced by the single `io.prismtabs.action.AssignTabGroupAction`
-that opens `TabGroupPopup`. `TabGroup.colorRgb` is also gone — see
-[the light/dark colour-model change](#the-lightdark-colour-model-change) for why it became
-`lightRgb`/`darkRgb`, which is a breaking change to `.idea/tabGroups.xml`'s schema; any
-Phase-1-era sandbox state won't load and must be re-assigned.
-
-Drop `order="first"` or `DumbAware` from Phase 1 and the plugin fails quietly — no error, just
-files that never get their colour.
+`src/main/resources/META-INF/plugin.xml` and the `io.prismtabs` package path. Never change `<id>`
+of the published plugin: the Marketplace keys the listing and every licence to it.

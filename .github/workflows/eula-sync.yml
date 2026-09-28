@@ -73,7 +73,41 @@ jobs:
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
+      # A change to the Agreement is pushed to both repositories one after the
+      # other, and a push can start this job before the other push has landed.
+      # So on a push a first mismatch is not final: the steps below wait, fetch
+      # the page again, and compare once more. Every other trigger fails on the
+      # first mismatch. The retry only delays a genuine failure; it never hides
+      # one.
       - name: Compare the mirror with the canonical Agreement
+        id: compare
+        continue-on-error: ${{ github.event_name == 'push' }}
+        run: |
+          python3 website/tools/check-eula-sync.py \
+            --mirror docs/EULA.md \
+            --page website/eula.html
+
+      - name: Wait for the canonical page to be pushed
+        if: steps.compare.outcome == 'failure'
+        run: |
+          echo "::notice::The canonical page may not have been pushed yet; checking again in five minutes."
+          sleep 300
+
+      - name: Check out the published page and the checker again
+        if: steps.compare.outcome == 'failure'
+        uses: actions/checkout@v7
+        with:
+          repository: prismtabs/prismtabs-website
+          ssh-key: ${{ secrets.WEBSITE_DEPLOY_KEY }}
+          path: website
+          sparse-checkout: |
+            eula.html
+            tools
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Compare the mirror with the canonical Agreement again
+        if: steps.compare.outcome == 'failure'
         run: |
           python3 website/tools/check-eula-sync.py \
             --mirror docs/EULA.md \

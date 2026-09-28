@@ -3,7 +3,7 @@
     <name>PrismTabs</name>
     <vendor email="contact@prismtabs.com" url="https://prismtabs.com/">Andrzej Piontek</vendor>
 
-    <!-- Item 1 of docs/release-readiness-gaps.md: arms PrismTabsLicense's paid-feature gate.
+    <!-- Arms PrismTabsLicense's paid-feature gate; see docs/releasing.md for when to change it.
          optional="true" is load-bearing, not cosmetic — it sets isLicenseOptional, which is what
          lets the plugin load and fall back to the free tier for an unlicensed user. A bare
          product-descriptor makes the platform disable the whole plugin instead once the register
@@ -16,7 +16,9 @@
          release deliberately — roughly once a year — and ships features in between as x.y.Z
          updates; resetting on every feature release would hand a non-paying user the paid tier
          for a trial's length every few months. release-date is the day that major release is
-         published; the value here is a placeholder until the first one (see gap doc item 1).
+         published. The Marketplace has 14 registered against 20260921 and refuses any other date for
+         that release-version ("You cannot release updates with the same release version (14) but
+         different release dates"), so do not change it without also changing release-version.
 
          release-version is NOT free-form: the Plugin Verifier rejects fewer than two digits
          outright ("The <release-version> parameter (1) format is invalid"), and the Marketplace
@@ -68,6 +70,17 @@
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
+
+    <!-- JetBrains Marketplace Licensing, which backs LicensingFacade. Required, not optional:
+         PrismTabsLicense reads a null facade as "not answered yet" and lets the paid features run,
+         so without this plugin the gate fails open for good. IntelliJ IDEA bundles it; Android
+         Studio does not, and a PrismTabs installed there without it (from disk, or with the
+         licensing plugin removed) had every paid feature unlocked — reproduced 2026-09-28. With
+         the dependency the IDE installs it alongside a Marketplace install and refuses to load
+         PrismTabs without it. It is also why pluginSinceBuild is 251: the paid 2024.2-2024.3 IDEs
+         build licensing into their core and have no plugin by this id, so the Plugin Verifier
+         reported the dependency unavailable there and PrismTabs would not have loaded. -->
+    <depends>com.intellij.marketplace</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <!-- Confirmed EP: com.intellij.editorTabColorProvider
