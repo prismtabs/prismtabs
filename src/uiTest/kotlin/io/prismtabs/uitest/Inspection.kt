@@ -35,6 +35,31 @@ private val SERVICE_PRELUDE = """
     var service = project.getService(serviceClass)
 """
 
+/**
+ * JS function `findGroupTree()`: the tool window's `PrismTabs.GroupTree`, or null while it is not
+ * showing. Searched across every showing window, not just the frame, because the user may float
+ * or undock the tool window into a window of its own — the same reach [toolWindowGroupTree]'s
+ * XPath lookup has.
+ */
+internal const val GROUP_TREE_JS = """
+    function findGroupTree() {
+        function inside(c) {
+            if (c instanceof javax.swing.JTree && c.getName() == 'PrismTabs.GroupTree') return c
+            if (!(c instanceof java.awt.Container)) return null
+            var n = c.getComponentCount()
+            for (var i = 0; i < n; i++) { var found = inside(c.getComponent(i)); if (found != null) return found }
+            return null
+        }
+        var windows = java.awt.Window.getWindows()
+        for (var w = 0; w < windows.length; w++) {
+            if (!windows[w].isShowing()) continue
+            var tree = inside(windows[w])
+            if (tree != null) return tree
+        }
+        return null
+    }
+"""
+
 /** JS function `swatchRgb(icon)`: the 24-bit colour a `ColorSwatchIcon` paints, or -1 for any other icon. */
 private const val SWATCH_JS = """
     function swatchRgb(icon) {
@@ -372,14 +397,8 @@ fun IdeaFrame.toolWindowRowRendering(): List<String> = callJs<String>(
     $SWATCH_JS
     $FRAGMENTS_JS
     importClass(com.intellij.openapi.fileTypes.FileTypeManager)
-    function findTree(c) {
-        if (c instanceof javax.swing.JTree && c.getName() == 'PrismTabs.GroupTree') return c
-        if (!c.getComponentCount) return null
-        var n = c.getComponentCount()
-        for (var i = 0; i < n; i++) { var found = findTree(c.getComponent(i)); if (found != null) return found }
-        return null
-    }
-    var tree = findTree(component)
+    $GROUP_TREE_JS
+    var tree = findGroupTree()
     if (tree == null) throw new java.lang.IllegalStateException('the PrismTabs tool window is not open')
     var rows = []
     for (var r = 0; r < tree.getRowCount(); r++) {
@@ -409,14 +428,9 @@ fun IdeaFrame.toolWindowRowRendering(): List<String> = callJs<String>(
  */
 fun IdeaFrame.isToolWindowGroupExpanded(groupName: String): Boolean = callJs<String>(
     """
-    function findTree(c) {
-        if (c instanceof javax.swing.JTree && c.getName() == 'PrismTabs.GroupTree') return c
-        if (!c.getComponentCount) return null
-        var n = c.getComponentCount()
-        for (var i = 0; i < n; i++) { var found = findTree(c.getComponent(i)); if (found != null) return found }
-        return null
-    }
-    var tree = findTree(component)
+    $GROUP_TREE_JS
+    var tree = findGroupTree()
+    if (tree == null) throw new java.lang.IllegalStateException('the PrismTabs tool window is not open')
     var expanded = false
     for (var r = 0; r < tree.getRowCount(); r++) {
         var path = tree.getPathForRow(r)
@@ -440,14 +454,9 @@ fun IdeaFrame.invokeActionOnToolWindowTree(actionId: String) {
         importClass(com.intellij.openapi.actionSystem.ActionManager)
         importClass(com.intellij.openapi.actionSystem.ActionPlaces)
         importClass(com.intellij.openapi.actionSystem.ex.ActionUtil)
-        function findTree(c) {
-            if (c instanceof javax.swing.JTree && c.getName() == 'PrismTabs.GroupTree') return c
-            if (!c.getComponentCount) return null
-            var n = c.getComponentCount()
-            for (var i = 0; i < n; i++) { var found = findTree(c.getComponent(i)); if (found != null) return found }
-            return null
-        }
-        var tree = findTree(component)
+        $GROUP_TREE_JS
+        var tree = findGroupTree()
+        if (tree == null) throw new java.lang.IllegalStateException('the PrismTabs tool window is not open')
         var action = ActionManager.getInstance().getAction('$actionId')
         if (action == null) throw new java.lang.IllegalStateException('no action $actionId')
         var context = DataManager.getInstance().getDataContext(tree)
