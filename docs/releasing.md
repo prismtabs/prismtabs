@@ -49,21 +49,16 @@ The unfiltered `verifyPlugin` downloads every IDE at once and needs roughly 45â€
 
    `patchChangelog` moves `[Unreleased]` into a section for the version. Nothing but
    `verifyPlugin` catches an invalid `release-version`.
-4. Commit on `dev`, fast-forward `master` to it and push `master`. Build runs on that push;
-   wait for it to pass before tagging.
+4. Commit on `dev` and run the release script:
 
    ```bash
-   git switch master
-   git merge --ff-only dev
-   git push origin master
+   scripts/release.sh
    ```
 
-5. Tag it with an annotated tag that matches `pluginVersion`, and push the tag:
-
-   ```bash
-   git tag -a v1.4.16 -m "Release 1.4.16"
-   git push origin v1.4.16
-   ```
+   It asks for confirmation, fast-forwards `master` to `dev` and pushes it, waits for Build to
+   pass on that commit, then pushes an annotated `v<pluginVersion>` tag, which starts Publish. It
+   stops before pushing anything if the working tree is dirty or the tag exists, and stops before
+   tagging if Build fails.
 
 To withdraw a tag pushed by mistake, run `git push origin :refs/tags/v1.4.16` and
 `git tag -d v1.4.16`. The workflow may already be running by then; cancel it in GitHub Actions.
