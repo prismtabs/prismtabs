@@ -4,6 +4,35 @@ Pushing a `v*` tag publishes a release to JetBrains Marketplace through
 `.github/workflows/publish.yml`: it re-runs `verifyPlugin` and `build`, then `signPlugin` and
 `publishPlugin`. There is no approval step, so the tag push is the gate.
 
+## Branches and CI
+
+Work on `dev`. `master` receives commits only when a release is cut. GitHub-hosted minutes on
+Windows and macOS cost 2× and 10× Linux minutes, and the free allowance is 2,000 a month, so CI
+runs where a release needs it and not on every commit.
+
+| Workflow | Runs on | Cost |
+|---|---|---|
+| `build.yml` (Build) | Push to `master`, every pull request, manual run | About 126 allowance minutes: `./gradlew build` on Linux, macOS and Windows, plus `verifyPlugin` for each IDE |
+| `publish.yml` (Publish) | Push of a `v*` tag | About 67 Linux minutes: `verifyPlugin` for each IDE, `build`, `signPlugin`, `publishPlugin` |
+| `eula-sync.yml` (EULA sync) | Push or pull request that changes `docs/EULA.md`, manual run | Seconds |
+| `ui-tests.yml` (UI Tests) | Manual run only | Windows minutes at 2× |
+
+- A push to `dev` runs nothing. Do not open a pull request from `dev` to `master`: it runs Build,
+  and the merge runs it again.
+- Run Build by hand with `gh workflow run Build` or from the Actions tab.
+- Build does not run `uiTest`. Run it locally, as the [cross-platform pass](cross-platform-manual-verification.md) describes.
+
+Each CI job has a local equivalent, so run these on `dev` before merging:
+
+| CI job | Local command |
+|---|---|
+| Build | `./gradlew build` on each of Linux, macOS and Windows |
+| Verify plugin, all IDEs | `./gradlew verifyPlugin` |
+| Verify plugin, one IDE | `./gradlew verifyPlugin -PverifyIde=<version>` |
+| List the IDEs | `./gradlew printProductsReleases` |
+
+The unfiltered `verifyPlugin` downloads every IDE at once and needs roughly 45–50 GB of disk.
+
 ## Cut a release
 
 1. Run the [cross-platform pass](cross-platform-manual-verification.md) on Windows and macOS
@@ -20,7 +49,15 @@ Pushing a `v*` tag publishes a release to JetBrains Marketplace through
 
    `patchChangelog` moves `[Unreleased]` into a section for the version. Nothing but
    `verifyPlugin` catches an invalid `release-version`.
-4. Commit on `master` and push the commit.
+4. Commit on `dev`, fast-forward `master` to it and push `master`. Build runs on that push;
+   wait for it to pass before tagging.
+
+   ```bash
+   git switch master
+   git merge --ff-only dev
+   git push origin master
+   ```
+
 5. Tag it with an annotated tag that matches `pluginVersion`, and push the tag:
 
    ```bash
