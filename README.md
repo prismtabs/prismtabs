@@ -17,6 +17,9 @@ the plugin. [Licensing and pricing](#licensing-and-pricing) covers the paid tier
 hand before each one. Everything is covered end-to-end by real UI tests (`./gradlew uiTest`, see
 [UI testing](#ui-testing)) driving an actual sandbox IDE.
 
+New to Kotlin or the IntelliJ Platform? The [learning manual](docs/learning/README.md) teaches both
+using this codebase and traces each feature through the code.
+
 ---
 
 ## Opening the project
