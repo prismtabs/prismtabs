@@ -28,7 +28,7 @@
     <product-descriptor code="PPRISMTABS" release-date="20260921" release-version="14" optional="true"/>
 
     <description><![CDATA[
-        Colour-coded tab groups for IntelliJ editor tabs.
+        Colour-coded tab groups for editor tabs in JetBrains IDEs.
         <br/><br/>
         Right-click a tab for the colour swatch popup: pick one of 8 preset colours to start a new
         group and name it, or "Add to Group…" to put the tab in a group you already have. "Manage
