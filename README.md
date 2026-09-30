@@ -1,6 +1,6 @@
 # PrismTabs
 
-Colour-coded tab groups for IntelliJ editor tabs.
+Colour-coded tab groups for editor tabs in JetBrains IDEs.
 
 **Status: published on JetBrains Marketplace** as a freemium plugin. Features: a swatch popup on
 the tab context menu to colour tabs into named groups, and a **PrismTabs tool window** (right-hand
