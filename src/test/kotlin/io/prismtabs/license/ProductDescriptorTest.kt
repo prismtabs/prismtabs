@@ -54,9 +54,9 @@ class ProductDescriptorTest {
     /**
      * And the rule that makes the corrected value *right* rather than merely accepted:
      * release-version is `pluginVersion`'s first two components with the dot dropped (1.4.14 -> 14).
-     * Those two components are the *major release* in the Marketplace's sense — cut deliberately,
-     * about once a year, with features in between shipped as third-component updates — and moving
-     * release-version resets every user's trial. A major release that forgot to move it would
+     * Those two components are the *major release* in the Marketplace's sense, which PrismTabs cuts
+     * as a minor version — deliberately, about once a year, with features in between shipped as
+     * patches — and moving release-version resets every user's trial. A minor release that forgot to move it would
      * silently skip the reset it was cut for; moving it without one would hand every lapsed user a
      * fresh trial.
      *
@@ -76,7 +76,7 @@ class ProductDescriptorTest {
         assertTrue(
             minor.matches(Regex("\\d")),
             "pluginVersion's minor must be a single digit, or release-version cannot encode it; " +
-                "cut the next major release instead (got $pluginVersion)",
+                "cut the next minor release instead (got $pluginVersion)",
         )
         assertEquals(
             major + minor,

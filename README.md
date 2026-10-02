@@ -742,7 +742,7 @@ user mid-task.
 
 **Trial resets and release cadence.** The Marketplace resets every user's trial whenever
 `<product-descriptor>`'s `release-version` changes. `release-version` therefore moves only on a
-deliberately cut major release, about once a year, and features ship as third-component updates.
+deliberately cut minor release, about once a year, and features ship as patch releases.
 The procedure is in [docs/releasing.md](docs/releasing.md).
 
 ### How the licence check works

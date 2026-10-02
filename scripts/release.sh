@@ -3,21 +3,21 @@
 # pushes dev, fast-forwards master to it, waits for Build to pass, then pushes the v<version> tag,
 # which starts Publish. See docs/releasing.md.
 #
-# Usage: scripts/release.sh [update|major|X.Y.Z] [--dry-run]
-#   update   third component +1 (default); release-version and release-date stay as they are
-#   major    second component +1, third reset; sets release-version and release-date, which resets
+# Usage: scripts/release.sh [patch|minor|X.Y.Z] [--dry-run]
+#   patch    third component +1 (default); release-version and release-date stay as they are
+#   minor    second component +1, third reset; sets release-version and release-date, which resets
 #            every user's trial
-#   X.Y.Z    an explicit update version, for example 1.4.20
+#   X.Y.Z    an explicit patch version, for example 1.4.20
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-kind=update
+kind=patch
 dry_run=false
 for arg in "$@"; do
   case "$arg" in
     --dry-run) dry_run=true ;;
-    update | major) kind=$arg ;;
+    patch | minor) kind=$arg ;;
     [0-9]*.[0-9]*.[0-9]*) kind=explicit; explicit=$arg ;;
     *) echo "release: unknown argument '$arg'" >&2; exit 1 ;;
   esac
@@ -30,8 +30,8 @@ current=$(sed -n 's/^pluginVersion *= *//p' gradle.properties | tr -d '[:space:]
 IFS=. read -r major minor patch <<<"$current"
 
 case "$kind" in
-  update) version="$major.$minor.$((patch + 1))" ;;
-  major)
+  patch) version="$major.$minor.$((patch + 1))" ;;
+  minor)
     if [ "$minor" -ge 9 ]; then major=$((major + 1)); minor=0; else minor=$((minor + 1)); fi
     version="$major.$minor.0"
     ;;
@@ -45,7 +45,7 @@ release_date=$(date +%Y%m%d)
 
 echo "Current version: $current"
 echo "Release:         $version ($kind)"
-if [ "$kind" = major ]; then
+if [ "$kind" = minor ]; then
   echo "release-version: $release_version, release-date: $release_date (resets every user's trial)"
 fi
 $dry_run && exit 0
@@ -65,7 +65,7 @@ read -r -p "Release $tag from $(git rev-parse --short dev)? [y/N] " answer
 [ "$answer" = y ] || fail "cancelled"
 
 sed -i "s/^pluginVersion *=.*/pluginVersion = $version/" gradle.properties
-if [ "$kind" = major ]; then
+if [ "$kind" = minor ]; then
   sed -i -E "s/(<product-descriptor [^>]*)release-date=\"[0-9]+\"/\1release-date=\"$release_date\"/; \
              s/(<product-descriptor [^>]*)release-version=\"[0-9]+\"/\1release-version=\"$release_version\"/" \
     src/main/resources/META-INF/plugin.xml
