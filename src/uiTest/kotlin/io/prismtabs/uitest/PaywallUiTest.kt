@@ -570,6 +570,42 @@ class PaywallUiTest {
     }
 
     /**
+     * The trial is started, and a key entered, in a modal dialog over the locked window; closing it
+     * hands focus back to the IDE frame, and that alone must unlock the window, with no reopening.
+     * Settings stands in for the registration dialog, which the sandbox cannot drive end to end.
+     */
+    @Test
+    fun `a subscription started from a dialog over the locked tool window shows once the dialog closes`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                assignFileToNewGroup("Sample.kt", "Unlocks")
+                simulateUnlicensed()
+                hideTabGroupsToolWindow()
+                showTabGroupsToolWindow()
+                waitFor(ofSeconds(10)) { toolWindowEmptyText().contains("paid feature") }
+
+                openPrismTabsSettings()
+                settingsDialog(ofSeconds(30))
+                simulateEntitled()
+                assertTrue(
+                    toolWindowEmptyText().contains("paid feature"),
+                    "with the dialog still open, the window must still show what it last read, got: ${toolWindowEmptyText()}",
+                )
+
+                Keyboard(remoteRobot).escape()
+                waitFor(ofSeconds(10)) { !hasSettingsDialog() }
+                waitFor(ofSeconds(10), errorMessage = "closing the dialog did not unlock the window") { toolWindowEmptyText() == "" }
+                assertTrue(remoteRobot.toolWindowGroupRows().any { it.contains("Unlocks") }, "the group list must be back")
+            } finally {
+                if (hasSettingsDialog()) Keyboard(remoteRobot).escape()
+                simulateEntitled()
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
      * Both directions on one gate, in one test on purpose: the page reads its licence state **once
      * per panel** (see `TabGroupPaletteConfigurable.createPanel`), so "editable again after
      * subscribing" is a property of a *freshly built* panel and is worth nothing asserted against

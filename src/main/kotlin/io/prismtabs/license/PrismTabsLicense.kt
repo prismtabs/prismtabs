@@ -151,7 +151,8 @@ object PrismTabsLicense {
      * behind a subscription just paid for — worse than not offering one.
      *
      * Callers therefore pick their licence state up at their own next natural refresh; for the
-     * tool window that's the next time it is shown, or the next group change.
+     * tool window that's the moment this dialog (or any window) closes, the next time it is shown,
+     * or the next group change.
      */
     fun requestLicense(message: String?) {
         ApplicationManager.getApplication().invokeLater(
