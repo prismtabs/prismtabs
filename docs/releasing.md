@@ -37,28 +37,24 @@ The unfiltered `verifyPlugin` downloads every IDE at once and needs roughly 45�
 
 1. Run the [cross-platform pass](cross-platform-manual-verification.md) on Windows and macOS
    against the commit you will tag.
-2. Choose the version (see [Version numbers](#version-numbers)) and set `pluginVersion` in
-   `gradle.properties`. For a major release, also set `release-version` and `release-date` on
-   `<product-descriptor>` in `plugin.xml`.
-3. Stamp the changelog and check the descriptor:
+2. Check that `[Unreleased]` in `CHANGELOG.md` lists the changes, and that `dev` is committed and
+   pushed.
+3. Run the release script on `dev`:
 
    ```bash
-   ./gradlew patchChangelog
-   ./gradlew verifyPlugin
+   scripts/release.sh            # update: 1.4.16 → 1.4.17
+   scripts/release.sh major      # major: 1.4.x → 1.5.0
+   scripts/release.sh 1.4.20     # an explicit update version
+   scripts/release.sh --dry-run  # print the version and stop
    ```
 
-   `patchChangelog` moves `[Unreleased]` into a section for the version. Nothing but
-   `verifyPlugin` catches an invalid `release-version`.
-4. Commit on `dev` and run the release script:
-
-   ```bash
-   scripts/release.sh
-   ```
-
-   It asks for confirmation, fast-forwards `master` to `dev` and pushes it, waits for Build to
-   pass on that commit, then pushes an annotated `v<pluginVersion>` tag, which starts Publish. It
-   stops before pushing anything if the working tree is dirty or the tag exists, and stops before
-   tagging if Build fails.
+   It prints the version and asks for confirmation. It then sets `pluginVersion` (and, for a
+   major release, `release-version` and `release-date`; see [Version numbers](#version-numbers)),
+   runs `patchChangelog` and `verifyPlugin`, commits and pushes `dev`, fast-forwards `master` to
+   it and pushes it, waits for Build to pass on that commit, and pushes an annotated
+   `v<pluginVersion>` tag, which starts Publish. It stops before changing anything if it is not on
+   `dev`, the working tree is dirty, `dev` differs from `origin/dev`, the tag exists or
+   `[Unreleased]` is empty, and stops before tagging if Build fails.
 
 To withdraw a tag pushed by mistake, run `git push origin :refs/tags/v1.4.16` and
 `git tag -d v1.4.16`. The workflow may already be running by then; cancel it in GitHub Actions.
