@@ -42,14 +42,14 @@ The unfiltered `verifyPlugin` downloads every IDE at once and needs roughly 45�
 3. Run the release script on `dev`:
 
    ```bash
-   scripts/release.sh            # update: 1.4.16 → 1.4.17
-   scripts/release.sh major      # major: 1.4.x → 1.5.0
-   scripts/release.sh 1.4.20     # an explicit update version
+   scripts/release.sh            # patch: 1.4.16 → 1.4.17
+   scripts/release.sh minor      # minor: 1.4.x → 1.5.0
+   scripts/release.sh 1.4.20     # an explicit patch version
    scripts/release.sh --dry-run  # print the version and stop
    ```
 
    It prints the version and asks for confirmation. It then sets `pluginVersion` (and, for a
-   major release, `release-version` and `release-date`; see [Version numbers](#version-numbers)),
+   minor release, `release-version` and `release-date`; see [Version numbers](#version-numbers)),
    runs `patchChangelog` and `verifyPlugin`, commits and pushes `dev`, fast-forwards `master` to
    it and pushes it, waits for Build to pass on that commit, and pushes an annotated
    `v<pluginVersion>` tag, which starts Publish. It stops before changing anything if it is not on
@@ -61,14 +61,15 @@ To withdraw a tag pushed by mistake, run `git push origin :refs/tags/v1.4.16` an
 
 ## Version numbers
 
-The Marketplace resets every user's trial whenever `release-version` changes. PrismTabs therefore
-cuts a major release deliberately, about once a year, and ships everything else, features
-included, as updates.
+The Marketplace resets every user's trial whenever `release-version` changes, so a minor release
+(1.4.x → 1.5.0) is a decision to reset trials. It is not tied to the size of a change. Ship
+features and fixes as patches. Cut a minor release only when a trial reset is wanted, roughly once
+a year at most.
 
 | Release | `pluginVersion` | `release-version` | `release-date` |
 |---|---|---|---|
-| Update (default) | Bump the third component: 1.4.15 → 1.4.16 | Unchanged | Unchanged |
-| Major | Bump the second component, zero the third: 1.4.x → 1.5.0; after 1.9 comes 2.0.0 | First two components without the dot: `15`, `20` | The publish day, `YYYYMMDD` |
+| Patch (default) | Bump the third component: 1.4.15 → 1.4.16 | Unchanged | Unchanged |
+| Minor | Bump the second component, zero the third: 1.4.x → 1.5.0; after 1.9 comes 2.0.0 | First two components without the dot: `15`, `20` | The publish day, `YYYYMMDD` |
 
 - The minor component stays a single digit. `release-version` needs at least two digits, and the
   Marketplace reads its last digit as a separate number. `ProductDescriptorTest` enforces both.

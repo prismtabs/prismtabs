@@ -16,22 +16,22 @@ admin UI. Copy follows [`naming-and-terminology.md`](naming-and-terminology.md).
 
 Keep prices out of `<description>`: each version's archive is frozen, and prices can change.
 
-## Major releases and trials
+## Minor releases and trials
 
 The Marketplace treats a build as a major release when its `<product-descriptor>` carries a new
 `release-version` and `release-date` in `plugin.xml`. Every active trial resets when that happens.
-Builds that keep both values are updates: they ship to all users and leave trials alone.
+PrismTabs ships such a build as a minor version. Builds that keep both values are updates: they ship to all users and leave trials alone.
 
 | Release | `pluginVersion` | `release-version` and `release-date` |
 |---|---|---|
-| Update (default), features included | Bump the third component: 1.4.16 → 1.4.17 | Unchanged |
-| Major, about once a year | Bump the second component, zero the third: 1.4.x → 1.5.0 | Change both together |
+| Patch (default), features included | Bump the third component: 1.4.16 → 1.4.17 | Unchanged |
+| Minor, about once a year | Bump the second component, zero the third: 1.4.x → 1.5.0 | Change both together |
 
 - `release-version` is `pluginVersion`'s first two components without the dot: 1.4.x gives `14`.
   The minor component therefore stays a single digit, and 1.9 is followed by 2.0.0.
 - `release-date` is the publish day as `YYYYMMDD`. The Marketplace refuses a different date for a
   `release-version` it has already seen, including one from a refused upload.
-- A feature commit does not call for a major release.
+- A feature commit does not call for a minor release.
 
 Procedure: [`releasing.md`](releasing.md#version-numbers). Marketplace reference:
 [Add required parameters](https://plugins.jetbrains.com/docs/marketplace/add-required-parameters.html).
