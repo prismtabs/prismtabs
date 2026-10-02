@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Starting the free trial, or activating a subscription, now unlocks the PrismTabs tool window as
+  soon as the registration dialog closes. An already open tool window used to stay locked until it
+  was closed and reopened.
+
 ## [1.4.16] - 2026-09-28
 
 ### Changed
