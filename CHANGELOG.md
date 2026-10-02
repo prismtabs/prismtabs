@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.4.17] - 2026-10-02
+
 ### Fixed
 
 - Starting the free trial, or activating a subscription, now unlocks the PrismTabs tool window as
@@ -51,7 +53,8 @@
 - PrismTabs can be disabled or uninstalled without restarting the IDE, and tab colours clear the
   moment it is.
 
-[Unreleased]: https://github.com/prismtabs/prismtabs/compare/v1.4.16...HEAD
+[Unreleased]: https://github.com/prismtabs/prismtabs/compare/v1.4.17...HEAD
+[1.4.17]: https://github.com/prismtabs/prismtabs/compare/v1.4.16...v1.4.17
 [1.4.16]: https://github.com/prismtabs/prismtabs/compare/v1.4.15...v1.4.16
 [1.4.15]: https://github.com/prismtabs/prismtabs/compare/v1.4.14...v1.4.15
 [1.4.14]: https://github.com/prismtabs/prismtabs/commits/v1.4.14
