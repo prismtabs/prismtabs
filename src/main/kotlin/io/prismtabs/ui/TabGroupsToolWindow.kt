@@ -39,7 +39,11 @@ import io.prismtabs.model.TabGroup
 import io.prismtabs.service.TabGroupService
 import io.prismtabs.service.TabGroupVisibility
 import io.prismtabs.service.TabGroupsChangedListener
+import java.awt.AWTEvent
 import java.awt.Component
+import java.awt.Toolkit
+import java.awt.event.AWTEventListener
+import java.awt.event.WindowEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.Icon
@@ -407,7 +411,7 @@ private class TabGroupsPanel(
      * tabs back, but no ongoing hide/show.
      */
     private fun upsellPanel(): JComponent {
-        val panel = JBPanelWithEmptyText()
+        val panel = UnlockWatchingPanel { if (PrismTabsLicense.paidFeaturesEnabled()) refresh() }
         // Named so the paywall uiTest can find this exact panel: the tool window hierarchy contains
         // other JBPanelWithEmptyText instances belonging to the platform (their empty text reads
         // "Nothing to show"), and a by-type search picks one of those up instead.
@@ -529,6 +533,37 @@ private const val POPUP_PLACE = "PrismTabs.TabGroupsToolWindow.Popup"
 
 /** Must match `plugin.xml`'s `<toolWindow id="">`. */
 private const val TOOL_WINDOW_ID = "PrismTabs"
+
+/**
+ * The locked panel, re-checking the licence whenever a window closes or its own window regains focus.
+ *
+ * Starting the trial or entering a key happens in the IDE's registration dialog, and nothing
+ * broadcasts the licence change (see [PrismTabsLicense.requestLicense]). That dialog closing is the
+ * moment to unlock, without the user having to close and reopen the tool window. It is caught as
+ * the dialog's own `WINDOW_CLOSED` rather than as focus returning to the frame, because handing
+ * focus back is up to the window manager, and some (or none, under Xvfb) leave it nowhere. Focus
+ * regained still counts, for a subscription bought in the browser on the user's return to the IDE.
+ *
+ * The listener is application-wide, so it is installed only while this panel is on screen.
+ */
+private class UnlockWatchingPanel(private val onLicenceMayHaveChanged: () -> Unit) : JBPanelWithEmptyText() {
+
+    private val windowListener = AWTEventListener { event ->
+        val closed = event.id == WindowEvent.WINDOW_CLOSED
+        val refocused = event.id == WindowEvent.WINDOW_GAINED_FOCUS && event.source === SwingUtilities.getWindowAncestor(this)
+        if (closed || refocused) onLicenceMayHaveChanged()
+    }
+
+    override fun addNotify() {
+        super.addNotify()
+        Toolkit.getDefaultToolkit().addAWTEventListener(windowListener, AWTEvent.WINDOW_EVENT_MASK or AWTEvent.WINDOW_FOCUS_EVENT_MASK)
+    }
+
+    override fun removeNotify() {
+        Toolkit.getDefaultToolkit().removeAWTEventListener(windowListener)
+        super.removeNotify()
+    }
+}
 
 /**
  * `Component.name` of the locked (unsubscribed) tool window panel. The paywall uiTest looks the
