@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- The message in the PrismTabs tool window for a user without a licence was cut off at both edges at
+  the default tool window width. It now wraps onto two lines.
+
 ## [1.4.17] - 2026-10-02
 
 ### Fixed
