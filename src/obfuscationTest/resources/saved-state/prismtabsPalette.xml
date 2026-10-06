@@ -1,0 +1,12 @@
+<application>
+  <component name="TabGroupPaletteState">
+    <option name="overrides">
+      <PresetEntry>
+        <option name="darkRgb" value="6816832" />
+        <option name="id" value="pink" />
+        <option name="label" value="Rose" />
+        <option name="lightRgb" value="14681466" />
+      </PresetEntry>
+    </option>
+  </component>
+</application>

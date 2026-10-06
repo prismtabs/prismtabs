@@ -72,3 +72,7 @@ compiler) is off-limits whatever the Verifier says.
 
 `./gradlew test` (fast, no IDE) · `./gradlew runIde` (sandbox IDE). Toolchain is JDK 21; the shell's
 default `java` is 25, which is fine — Gradle picks 21 from `~/.jdks` itself.
+
+The shipped jar and `runIde` are obfuscated by ProGuard. A class newly named in `plugin.xml`, or newly
+persisted, needs a keep rule in `proguard-rules.pro` (README §"Obfuscation");
+`./gradlew obfuscationTest` fails until it has one.
