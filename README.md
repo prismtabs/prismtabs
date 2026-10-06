@@ -1102,6 +1102,8 @@ skipped rather than failing or being silently left out. `MacSettingsShortcutUiTe
 `os.name` starting with `Mac`; `WindowsManualVerificationUiTest` gates on an explicit
 `-Dprismtabs.manualVerification=true` that neither local dev nor `ui-tests.yml` ever passes (see its
 own doc comment, and `docs/cross-platform-manual-verification.md` for how to run it deliberately).
+The sandbox decides the rest: `runIdeForUiTestsObfuscated` runs only `ObfuscatedBuildUiTest`, and
+every other sandbox runs everything but it (see [Obfuscation](#obfuscation)).
 
 ### The newest platform: `runIdeForUiTestsLatest`
 
@@ -1510,8 +1512,65 @@ Three behaviours are deliberate and were each tested by hand:
 Adding an entry is a decision to ship an API the Marketplace may refuse. It belongs in a review,
 with the reasoning written down, not in a red build someone wants green.
 
+## Obfuscation
+
+The plugin jar Marketplace ships is obfuscated with ProGuard: classes and members are renamed, and
+nothing is shrunk or optimised. The rules are in `proguard-rules.pro`. The `proguard` task runs them
+on `composedJar`'s output and writes `build/proguard/prismtabs-<version>.jar` and
+`build/proguard/mapping.txt`.
+
+| Task | Plugin classes it runs |
+|---|---|
+| `buildPlugin`, and so `signPlugin`, `publishPlugin` and `verifyPlugin` | Obfuscated |
+| `runIde` | Obfuscated |
+| `obfuscationTest` | Obfuscated |
+| `runIdeForUiTestsObfuscated` | Obfuscated |
+| `test` | Plain |
+| `runIdeForUiTests`, `runIdeForUiTestsLatest` | Plain, because most uiTest scripts call plugin classes by name |
+
+Breakpoints in plugin code do not bind under `runIde`. Debug in `runIdeForUiTests` instead.
+
+### Run the UI tests against the obfuscated build
+
+```bash
+./gradlew runIdeForUiTestsObfuscated &   # instead of runIdeForUiTests; both use port 8082
+./gradlew uiTest
+```
+
+Against this sandbox `uiTest` runs only `ObfuscatedBuildUiTest`, which drives the plugin through the
+UI and platform APIs, and skips every other class. Against the other sandboxes it skips
+`ObfuscatedBuildUiTest` instead. `RemoteRobotExtension` matches the classes to the running sandbox:
+mark a class `@RunsOnObfuscatedBuild` to write another one for this sandbox.
+
+### Keep rules
+
+The platform finds some classes by name, so those keep their names:
+
+- **Every class `plugin.xml` names.** A class newly registered in `plugin.xml` needs a `-keep` rule.
+  `PluginEntryPointsTest` fails until it has one.
+- **The persisted state classes**, `TabGroupState` and `TabGroupPaletteState` with their nested
+  classes, keep every member name. XmlSerializer writes class and property names into the user's
+  `tabGroups.xml` and `prismtabsPalette.xml`, so a rename loses the user's groups or palette on
+  update. A new persisted class needs the same rule. `SavedStateTest` loads fixtures in the saved
+  format into the obfuscated jar and saves them back unchanged.
+
+`obfuscationTest` is part of `check`, so `./gradlew build`, CI and the publish workflow all run it.
+
+### Decode a stack trace
+
+Stack traces, `idea.log` categories and Plugin Verifier reports name obfuscated classes such as
+`io.prismtabs.ui.b`. Decode them with the mapping of the build that produced them:
+
+```bash
+./gradlew retrace -PstackTrace=trace.txt -Pmapping=mapping.txt
+```
+
+Without `-Pmapping`, `retrace` uses the current build's mapping. For a released version, download
+the `proguard-mapping-v<version>` artifact from the publish workflow run for that tag.
+
 ## Renaming
 
 The name lives in `gradle.properties` (`pluginName`, `pluginGroup`) plus the `<id>`/`<name>` in
-`src/main/resources/META-INF/plugin.xml` and the `io.prismtabs` package path. Never change `<id>`
+`src/main/resources/META-INF/plugin.xml`, the `io.prismtabs` package path, and the class names in
+`proguard-rules.pro`. Never change `<id>`
 of the published plugin: the Marketplace keys the listing and every licence to it.
