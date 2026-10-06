@@ -418,11 +418,10 @@ private class TabGroupsPanel(
         panel.name = LOCKED_PANEL_NAME
         val statusText = panel.emptyText
         statusText.setText("The PrismTabs tool window is a paid feature.")
-        statusText.appendLine(
-            "Colouring tabs and managing groups from a tab's right-click menu stays free.",
-            SimpleTextAttributes.GRAYED_ATTRIBUTES,
-            null,
-        )
+        // Two lines, because StatusText never wraps: as one line this sentence is wider than a
+        // default-width tool window and is clipped at both ends.
+        statusText.appendLine("Colouring tabs and managing groups from", SimpleTextAttributes.GRAYED_ATTRIBUTES, null)
+        statusText.appendLine("a tab's right-click menu stays free.", SimpleTextAttributes.GRAYED_ATTRIBUTES, null)
         statusText.appendLine(
             "Start the free trial or activate a subscription",
             SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES,
