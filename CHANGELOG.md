@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.4.18] - 2026-10-07
+
 ### Fixed
 
 - The message in the PrismTabs tool window for a user without a licence was cut off at both edges at
@@ -58,7 +60,8 @@
 - PrismTabs can be disabled or uninstalled without restarting the IDE, and tab colours clear the
   moment it is.
 
-[Unreleased]: https://github.com/prismtabs/prismtabs/compare/v1.4.17...HEAD
+[Unreleased]: https://github.com/prismtabs/prismtabs/compare/v1.4.18...HEAD
+[1.4.18]: https://github.com/prismtabs/prismtabs/compare/v1.4.17...v1.4.18
 [1.4.17]: https://github.com/prismtabs/prismtabs/compare/v1.4.16...v1.4.17
 [1.4.16]: https://github.com/prismtabs/prismtabs/compare/v1.4.15...v1.4.16
 [1.4.15]: https://github.com/prismtabs/prismtabs/compare/v1.4.14...v1.4.15
