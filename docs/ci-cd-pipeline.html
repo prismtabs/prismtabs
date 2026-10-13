@@ -1,0 +1,164 @@
+<title>PrismTabs CI/CD</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+/* Layout: one swimlane per workflow, read top to bottom in release order. */
+:root{--bg:#f4f6f8;--fg:#1a2330;--muted:#556372;--line:#7b8999;--surface:#fff;--band:#e8edf2;--accent:#0b7a6b;--accent-bg:#d9f0ec;--rule:#cfd7df;
+--sans:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e151d;--fg:#e3e9ef;--muted:#9aa8b7;--line:#6a7889;--surface:#182230;--band:#131c27;--accent:#3ec9b0;--accent-bg:#14403a;--rule:#2a3644;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e151d;--fg:#e3e9ef;--muted:#9aa8b7;--line:#6a7889;--surface:#182230;--band:#131c27;--accent:#3ec9b0;--accent-bg:#14403a;--rule:#2a3644;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);padding-inline:16px;padding-block:28px}
+main{max-width:1040px;margin-inline:auto;display:flex;flex-direction:column;gap:24px}
+h1{font-size:1.6rem;font-weight:600;margin:0;text-wrap:balance}
+p.sub{margin:6px 0 0;color:var(--muted);font-size:.95rem;max-width:65ch;line-height:1.5}
+.scroll{overflow-x:auto;border:1px solid var(--rule);border-radius:8px;background:var(--bg)}
+svg{display:block;min-width:820px;width:100%;height:auto;font-family:var(--sans)}
+figcaption{color:var(--muted);font-size:.85rem;line-height:1.5;margin-top:8px;max-width:75ch}
+.band{fill:var(--band)} .lane{fill:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em}
+.box{fill:var(--surface);stroke:var(--line);stroke-width:1.2}
+.box.reuse{stroke-dasharray:5 3}.box.stack{fill:var(--band)}
+.box.tag{stroke:var(--accent);stroke-width:1.8}.box.end{fill:var(--accent-bg);stroke:var(--accent);stroke-width:2}
+.t1{fill:var(--fg);font-size:12.5px;font-weight:600}.t2{fill:var(--muted);font-size:11.5px}
+.arr{fill:none;stroke:var(--line);stroke-width:1.5}.arr.dash{stroke-dasharray:4 3}.head{fill:var(--line)}
+.lbl{fill:var(--muted);font-size:11.5px;font-style:italic}.note{fill:var(--muted);font-size:12px}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+code{font-family:var(--mono);font-size:.85em}
+.tw{overflow-x:auto}
+</style>
+<main>
+<header><h1>PrismTabs CI/CD</h1>
+<p class="sub">Work lands on <code>dev</code> with no CI. A release fast-forwards <code>master</code>, waits for Build, then tags the commit, and the tag publishes to JetBrains Marketplace.</p></header>
+<figure style="margin:0"><div class="scroll"><svg viewBox="0 0 1000 835" role="img" aria-label="PrismTabs pipeline: release.sh merges dev into master, Build verifies it, the version tag triggers Publish, which verifies, builds, signs and uploads to JetBrains Marketplace.">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="head" d="M0 0 L10 5 L0 10 z"/></marker></defs>
+<rect class="band" x="0" y="10" width="1000" height="112" rx="6"/>
+<text class="lane" x="14" y="29">Release · scripts/release.sh, run locally on dev</text>
+<rect class="box " x="20" y="44" width="110" height="64" rx="5"/>
+<text class="t1 " x="75.0" y="72.0" text-anchor="middle">dev</text>
+<text class="t2 " x="75.0" y="88.0" text-anchor="middle">no CI runs here</text>
+<rect class="box " x="135" y="44" width="270" height="64" rx="5"/>
+<text class="t1 " x="270.0" y="64.0" text-anchor="middle">scripts/release.sh</text>
+<text class="t2 " x="270.0" y="80.0" text-anchor="middle">version · changelog · verifyPlugin</text>
+<text class="t2 " x="270.0" y="96.0" text-anchor="middle">commit and push dev</text>
+<rect class="box " x="440" y="44" width="170" height="64" rx="5"/>
+<text class="t1 " x="525.0" y="72.0" text-anchor="middle">Fast-forward master</text>
+<text class="t2 " x="525.0" y="88.0" text-anchor="middle">push master</text>
+<rect class="box " x="645" y="44" width="150" height="64" rx="5"/>
+<text class="t1 " x="720.0" y="72.0" text-anchor="middle">Wait for Build</text>
+<text class="t2 " x="720.0" y="88.0" text-anchor="middle">to pass on that commit</text>
+<rect class="box tag" x="830" y="44" width="140" height="64" rx="5"/>
+<text class="t1 tag" x="900.0" y="72.0" text-anchor="middle">Push tag v&lt;version&gt;</text>
+<text class="t2 tag" x="900.0" y="88.0" text-anchor="middle">annotated tag</text>
+<path class="arr " d="M130 76 H135" marker-end="url(#ah)"/>
+<path class="arr " d="M405 76 H440" marker-end="url(#ah)"/>
+<path class="arr " d="M610 76 H645" marker-end="url(#ah)"/>
+<path class="arr " d="M795 76 H830" marker-end="url(#ah)"/>
+<rect class="band" x="0" y="140" width="1000" height="165" rx="6"/>
+<text class="lane" x="14" y="159">Build · build.yml</text>
+<rect class="box " x="20" y="190" width="215" height="64" rx="5"/>
+<text class="t1 " x="127.5" y="210.0" text-anchor="middle">Triggers</text>
+<text class="t2 " x="127.5" y="226.0" text-anchor="middle">push to master · every pull request</text>
+<text class="t2 " x="127.5" y="242.0" text-anchor="middle">manual run</text>
+<rect class="box " x="290" y="165" width="290" height="62" rx="5"/>
+<text class="t1 " x="435.0" y="184.0" text-anchor="middle">build × 3 operating systems</text>
+<text class="t2 " x="435.0" y="200.0" text-anchor="middle">ubuntu · macOS · windows</text>
+<text class="t2 " x="435.0" y="216.0" text-anchor="middle">./gradlew build</text>
+<rect class="box reuse" x="290" y="240" width="290" height="50" rx="5"/>
+<text class="t1 reuse" x="435.0" y="261.0" text-anchor="middle">verify-plugin</text>
+<text class="t2 reuse" x="435.0" y="277.0" text-anchor="middle">reusable workflow, see below</text>
+<path class="arr " d="M235 222 H262 V196 H290" marker-end="url(#ah)"/>
+<path class="arr " d="M235 222 H262 V265 H290" marker-end="url(#ah)"/>
+<rect class="box " x="620" y="197" width="200" height="50" rx="5"/>
+<text class="t1 " x="720.0" y="218.0" text-anchor="middle">Commit status</text>
+<text class="t2 " x="720.0" y="234.0" text-anchor="middle">green or red check</text>
+<path class="arr " d="M580 196 H600 V222 H620" marker-end="url(#ah)"/>
+<path class="arr " d="M580 265 H600 V222" marker-end="url(#ah)"/>
+<path class="arr " d="M720 197 V108" marker-end="url(#ah)"/>
+<text class="lbl" x="728" y="134" text-anchor="start">release.sh waits</text>
+<rect class="band" x="0" y="325" width="1000" height="130" rx="6"/>
+<text class="lane" x="14" y="344">Verify plugin · verify-plugin.yml, reusable, Linux only</text>
+<rect class="box " x="260" y="365" width="250" height="64" rx="5"/>
+<text class="t1 " x="385.0" y="385.0" text-anchor="middle">list IDEs</text>
+<text class="t2 " x="385.0" y="401.0" text-anchor="middle">printProductsReleases → IU releases</text>
+<text class="t2 " x="385.0" y="417.0" text-anchor="middle">fails on an empty list</text>
+<rect class="box stack" x="578" y="373" width="300" height="64" rx="5"/>
+<rect class="box stack" x="574" y="369" width="300" height="64" rx="5"/>
+<rect class="box " x="570" y="365" width="300" height="64" rx="5"/>
+<text class="t1 " x="720.0" y="385.0" text-anchor="middle">verify · one job per IDE</text>
+<text class="t2 " x="720.0" y="401.0" text-anchor="middle">free disk space · read-only Gradle cache</text>
+<text class="t2 " x="720.0" y="417.0" text-anchor="middle">./gradlew verifyPlugin -PverifyIde=…</text>
+<path class="arr " d="M510 397 H570" marker-end="url(#ah)"/>
+<text class="lbl" x="540" y="389" text-anchor="middle">matrix</text>
+<path class="arr dash" d="M385 290 V365" marker-end="url(#ah)"/>
+<text class="lbl" x="393" y="330" text-anchor="start">calls</text>
+<rect class="band" x="0" y="475" width="1000" height="225" rx="6"/>
+<text class="lane" x="14" y="494">Publish · publish.yml</text>
+<rect class="box tag" x="800" y="522" width="170" height="56" rx="5"/>
+<text class="t1 tag" x="885.0" y="546.0" text-anchor="middle">Trigger</text>
+<text class="t2 tag" x="885.0" y="562.0" text-anchor="middle">push of a v* tag</text>
+<rect class="box reuse" x="585" y="522" width="175" height="56" rx="5"/>
+<text class="t1 reuse" x="672.5" y="546.0" text-anchor="middle">verify-plugin</text>
+<text class="t2 reuse" x="672.5" y="562.0" text-anchor="middle">reusable, one job per IDE</text>
+<rect class="box " x="395" y="522" width="150" height="56" rx="5"/>
+<text class="t1 " x="470.0" y="546.0" text-anchor="middle">build job</text>
+<text class="t2 " x="470.0" y="562.0" text-anchor="middle">./gradlew build</text>
+<rect class="box " x="190" y="522" width="165" height="56" rx="5"/>
+<text class="t1 " x="272.5" y="546.0" text-anchor="middle">Check release secrets</text>
+<text class="t2 " x="272.5" y="562.0" text-anchor="middle">all 4 must be set</text>
+<path class="arr " d="M800 550 H760" marker-end="url(#ah)"/>
+<path class="arr " d="M585 550 H545" marker-end="url(#ah)"/>
+<path class="arr " d="M395 550 H355" marker-end="url(#ah)"/>
+<path class="arr " d="M900 108 V522" marker-end="url(#ah)"/>
+<text class="lbl" x="908" y="300" text-anchor="start">tag push</text>
+<path class="arr dash" d="M672 522 V440" marker-end="url(#ah)"/>
+<text class="lbl" x="680" y="490" text-anchor="start">calls</text>
+<rect class="box " x="190" y="610" width="165" height="56" rx="5"/>
+<text class="t1 " x="272.5" y="634.0" text-anchor="middle">signPlugin</text>
+<text class="t2 " x="272.5" y="650.0" text-anchor="middle">certificate and key</text>
+<rect class="box " x="395" y="610" width="215" height="56" rx="5"/>
+<text class="t1 " x="502.5" y="634.0" text-anchor="middle">Keep ProGuard mapping</text>
+<text class="t2 " x="502.5" y="650.0" text-anchor="middle">artifact proguard-mapping-&lt;tag&gt;</text>
+<rect class="box " x="650" y="610" width="130" height="56" rx="5"/>
+<text class="t1 " x="715.0" y="634.0" text-anchor="middle">publishPlugin</text>
+<text class="t2 " x="715.0" y="650.0" text-anchor="middle">upload signed zip</text>
+<rect class="box end" x="820" y="610" width="150" height="56" rx="5"/>
+<text class="t1 end" x="895.0" y="634.0" text-anchor="middle">JetBrains</text>
+<text class="t2 end" x="895.0" y="650.0" text-anchor="middle">Marketplace</text>
+<path class="arr " d="M272 578 V610" marker-end="url(#ah)"/>
+<path class="arr " d="M355 638 H395" marker-end="url(#ah)"/>
+<path class="arr " d="M610 638 H650" marker-end="url(#ah)"/>
+<path class="arr " d="M780 638 H820" marker-end="url(#ah)"/>
+<text class="note" x="20" y="690">No approval step: pushing the tag is the release decision.</text>
+<rect class="band" x="0" y="715" width="520" height="110" rx="6"/>
+<text class="lane" x="14" y="734">EULA sync · eula-sync.yml</text>
+<rect class="box " x="20" y="750" width="220" height="64" rx="5"/>
+<text class="t1 " x="130.0" y="770.0" text-anchor="middle">Triggers</text>
+<text class="t2 " x="130.0" y="786.0" text-anchor="middle">push or PR touching docs/EULA.md</text>
+<text class="t2 " x="130.0" y="802.0" text-anchor="middle">manual run</text>
+<rect class="box " x="280" y="750" width="225" height="64" rx="5"/>
+<text class="t1 " x="392.5" y="770.0" text-anchor="middle">Compare with website repo</text>
+<text class="t2 " x="392.5" y="786.0" text-anchor="middle">eula.html via read-only deploy key</text>
+<text class="t2 " x="392.5" y="802.0" text-anchor="middle">on push: re-check once after 5 min</text>
+<path class="arr " d="M240 782 H280" marker-end="url(#ah)"/>
+<rect class="band" x="530" y="715" width="470" height="110" rx="6"/>
+<text class="lane" x="544" y="734">UI Tests · ui-tests.yml, debugging aid, not a gate</text>
+<rect class="box " x="545" y="750" width="180" height="64" rx="5"/>
+<text class="t1 " x="635.0" y="770.0" text-anchor="middle">Trigger</text>
+<text class="t2 " x="635.0" y="786.0" text-anchor="middle">manual run only</text>
+<text class="t2 " x="635.0" y="802.0" text-anchor="middle">windows-latest</text>
+<rect class="box " x="765" y="750" width="220" height="64" rx="5"/>
+<text class="t1 " x="875.0" y="770.0" text-anchor="middle">runIdeForUiTests, port 8082</text>
+<text class="t2 " x="875.0" y="786.0" text-anchor="middle">./gradlew uiTest</text>
+<text class="t2 " x="875.0" y="802.0" text-anchor="middle">upload test reports</text>
+<path class="arr " d="M725 782 H765" marker-end="url(#ah)"/>
+</svg></div>
+<figcaption>Solid arrows are sequence, dashed boxes and arrows are the shared Plugin Verifier workflow called by both Build and Publish. Teal marks the tag that starts a release and the final upload.</figcaption></figure>
+<div class="tw"><table>
+<thead><tr><th>Workflow</th><th>Runs on</th><th>Cost</th></tr></thead>
+<tbody>
+<tr><td><code>build.yml</code></td><td>Push to <code>master</code>, every pull request, manual</td><td>About 126 allowance minutes</td></tr>
+<tr><td><code>publish.yml</code></td><td>Push of a <code>v*</code> tag</td><td>About 67 Linux minutes</td></tr>
+<tr><td><code>eula-sync.yml</code></td><td>Changes to <code>docs/EULA.md</code>, manual</td><td>Seconds</td></tr>
+<tr><td><code>ui-tests.yml</code></td><td>Manual only</td><td>Windows minutes at 2×</td></tr>
+</tbody></table></div>
+</main>
