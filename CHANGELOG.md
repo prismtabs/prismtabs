@@ -5,8 +5,9 @@
 ### Fixed
 
 - Switching theme while the PrismTabs tool window was locked left its group tree and toolbar in the
-  previous theme once a subscription unlocked it. It also stopped a theme plugin from unloading
-  fully, so uninstalling that plugin warned that it "didn't unload fully".
+  previous theme once the window unlocked. They now follow the theme. The tree also no longer keeps
+  a theme plugin's classes loaded, which reduces the "didn't unload fully" warning on uninstalling
+  that plugin; IntelliJ can still show the warning.
 
 ## [1.4.18] - 2026-10-07
 
