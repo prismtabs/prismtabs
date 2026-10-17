@@ -1897,6 +1897,13 @@ fun RemoteRobot.expandToolWindowGroup(groupName: String): List<String> {
 fun RemoteRobot.selectedToolWindowRows(): List<String> = toolWindowGroupTree().collectSelectedPaths().flatten()
 
 /**
+ * The identity hash of the tool window tree's UI delegate. A theme switch installs a new delegate
+ * through `updateUI`, so this changes exactly when the tree has picked up a new theme.
+ */
+fun RemoteRobot.groupTreeUiIdentity(): Int =
+    toolWindowGroupTree().callJs<String>("'' + java.lang.System.identityHashCode(component.getUI())", true).toInt()
+
+/**
  * How many rows the tool window's tree currently has selected, read off the component itself.
  *
  * Not counted out of [selectedToolWindowRows]: with more than one path selected, the fixture's

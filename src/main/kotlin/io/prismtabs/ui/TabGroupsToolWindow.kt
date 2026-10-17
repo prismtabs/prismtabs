@@ -26,6 +26,7 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.wm.ex.ToolWindowManagerListener
+import com.intellij.ui.ClientProperty
 import com.intellij.ui.ColoredTreeCellRenderer
 import com.intellij.ui.PopupHandler
 import com.intellij.ui.ScrollPaneFactory
@@ -34,6 +35,7 @@ import com.intellij.ui.TreeSpeedSearch
 import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.treeStructure.Tree
+import com.intellij.util.ui.UIUtil
 import io.prismtabs.license.PrismTabsLicense
 import io.prismtabs.model.TabGroup
 import io.prismtabs.service.TabGroupService
@@ -129,6 +131,16 @@ private class TabGroupsPanel(
             .createActionToolbar("PrismTabs.TabGroupsToolWindow", DefaultActionGroup(groupActions), true)
         toolbar.setTargetComponent(tree)
         toolbarComponent = toolbar.component
+
+        // While the locked panel shows, the tree and the toolbar are out of the window, where a theme
+        // switch's `updateUI` pass cannot reach them. Listed here, the platform updates them anyway.
+        // Otherwise they come back in the old theme, and the tree's icons keep a theme plugin's class
+        // loader alive, so uninstalling that plugin fails with "didn't unload fully".
+        ClientProperty.put(
+            this,
+            UIUtil.NOT_IN_HIERARCHY_COMPONENTS,
+            Iterable { listOf(groupTree, toolbarComponent).filter { it.parent == null }.iterator() },
+        )
 
         // The context menu is the toolbar's actions *plus* the one thing that acts on a file rather
         // than on a group. It is deliberately not in the toolbar: the toolbar has no row under the

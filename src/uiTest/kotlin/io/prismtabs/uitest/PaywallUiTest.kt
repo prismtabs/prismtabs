@@ -8,6 +8,7 @@ import com.intellij.remoterobot.utils.waitFor
 import io.prismtabs.model.TabGroupPalette
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -61,7 +62,7 @@ class PaywallUiTest {
      * class. Skipped instead, the mirror image of [PluginUnloadUiTest]'s own gate.
      *
      * A `@BeforeEach` rather than a line in each test because answering it means asking the running
-     * IDE, and all eleven need the same answer.
+     * IDE, and every test here needs the same answer.
      */
     @BeforeEach
     fun requirePaidBuild(remoteRobot: RemoteRobot) {
@@ -125,6 +126,51 @@ class PaywallUiTest {
                 )
             } finally {
                 simulateEntitled()
+                hideTabGroupsToolWindow()
+            }
+        }
+    }
+
+    /**
+     * While the locked panel shows, the group tree and its toolbar are out of the window, where a
+     * theme switch's `updateUI` pass cannot reach them. A tree that kept its old UI delegate would
+     * come back drawn in the previous theme, and its chevron icons would keep a plugin theme's class
+     * loader alive, so that uninstalling the theme fails with "didn't unload fully".
+     */
+    @Test
+    fun `a theme switched while the tool window is locked reaches the group tree`(remoteRobot: RemoteRobot) {
+        val original = remoteRobot.currentThemeId()
+        remoteRobot.idea {
+            try {
+                resetTabGroups()
+                openFile("Sample.kt")
+                assignFileToNewGroup("Sample.kt", "Rethemed")
+                showTabGroupsToolWindow()
+                waitFor(ofSeconds(10)) { remoteRobot.toolWindowGroupRows().any { it.contains("Rethemed") } }
+                val uiBefore = remoteRobot.groupTreeUiIdentity()
+
+                simulateUnlicensed()
+                assertFalse(paidFeaturesEnabled(), "the simulated lapse should read as unlicensed")
+                hideTabGroupsToolWindow()
+                showTabGroupsToolWindow()
+                waitFor(ofSeconds(10)) { toolWindowEmptyText().contains("paid feature") }
+
+                val startedDark = isDarkTheme()
+                remoteRobot.switchTheme(if (startedDark) "ExperimentalLight" else "ExperimentalDark")
+                waitFor(ofSeconds(30)) { isDarkTheme() != startedDark }
+
+                simulateEntitled()
+                hideTabGroupsToolWindow()
+                showTabGroupsToolWindow()
+                waitFor(ofSeconds(10)) { toolWindowEmptyText() == "" }
+                assertNotEquals(
+                    uiBefore,
+                    remoteRobot.groupTreeUiIdentity(),
+                    "the group tree must have a new UI delegate for the theme switched to while it was locked",
+                )
+            } finally {
+                simulateEntitled()
+                if (remoteRobot.currentThemeId() != original) remoteRobot.switchTheme(original)
                 hideTabGroupsToolWindow()
             }
         }
