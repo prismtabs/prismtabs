@@ -22,7 +22,7 @@ import java.time.Duration.ofSeconds
  * part of the regular suite and not meant to run unattended: it exists to produce screenshots and a
  * written log for a human to review and sign off, matching the doc's own stance that this pass runs
  * on real hardware, not in CI, and its pixel assertions need a real desktop's screen-capture
- * pipeline (see README "These tests need an X11 display" for why that pipeline lies on this
+ * pipeline (see engineering notes "These tests need an X11 display" for why that pipeline lies on this
  * project's own Linux dev box).
  *
  * Both `@Test`s skip unless launched with `-Dprismtabs.manualVerification=true` — matching
@@ -217,7 +217,7 @@ class WindowsManualVerificationUiTest {
 
                 // --- 5. Remove from Group ----------------------------------------------------
                 // Sample.kt is "Blue"'s only member, so this removal empties the group and raises
-                // the "delete the group?" prompt (README "Empty groups"). Answering it is not
+                // the "delete the group?" prompt (engineering notes "Empty groups"). Answering it is not
                 // optional housekeeping: the prompt is **modal**, and leaving it up wedges every
                 // later step — item 6's tool-window click was the first casualty when this
                 // walkthrough was first re-run against that feature.
@@ -239,7 +239,7 @@ class WindowsManualVerificationUiTest {
                     "expected TeamWindows listed with 2 members, got ${remoteRobot.toolWindowGroupRows()}",
                 )
                 // The other half of "Keep": a declined group stays, and the tool window is where a
-                // user is told it is now empty rather than gone. README "Empty groups" promises
+                // user is told it is now empty rather than gone. engineering notes "Empty groups" promises
                 // exactly this row, and nothing else in the suite reads it.
                 assertTrue(
                     remoteRobot.toolWindowGroupRows().any { it.contains("Blue") && it.contains("0 files") },

@@ -58,7 +58,7 @@
         <editorTabColorProvider implementation="io.prismtabs.provider.TabGroupColorProvider" order="first"/>
 
         <!-- Phase 4b: the stable home for everything the tab strip can't show (no in-strip group
-             chip — see README §"Constraints that are not going away"). Also where collapse/expand
+             chip — see engineering notes §"Constraints that are not going away"). Also where collapse/expand
              ("close and remember", Phase 4a) is driven from. -->
         <!-- id doubles as the stripe button's label and its "View | Tool Windows" entry (ToolWindowEP
              has no separate display-name attribute), so it carries the plugin's brand name rather than

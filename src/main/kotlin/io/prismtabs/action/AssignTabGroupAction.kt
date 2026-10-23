@@ -11,7 +11,7 @@ import io.prismtabs.ui.TabGroupPopup
  * The single entry point on `EditorTabPopupMenu`: opens [TabGroupPopup]. Replaces Phase 1's
  * hard-coded Red/Blue/Clear actions now that the real swatch popup exists.
  *
- * [DumbAware] for the same reason `TabGroupColorProvider` is (see README §"The provider must
+ * [DumbAware] for the same reason `TabGroupColorProvider` is (see engineering notes §"The provider must
  * implement `DumbAware`"): a group assignment is an in-memory map keyed by file URL and needs no
  * index, so there is nothing for this to wait on while the IDE reindexes — and a tab that cannot be
  * coloured for the first minute of every project open would be a puzzling thing to ship.

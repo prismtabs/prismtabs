@@ -48,7 +48,7 @@ import javax.swing.tree.TreePath
 import javax.swing.tree.TreeSelectionModel
 
 /**
- * Phase 4b: the stable, public-API substitute for Chrome's in-strip group chip (see README
+ * Phase 4b: the stable, public-API substitute for Chrome's in-strip group chip (see engineering notes
  * "Constraints that are not going away" §3) — every group, live-synced to [TabGroupService] via
  * [TabGroupsChangedListener] rather than only refreshing on its own actions, so a group created
  * from [TabGroupPopup] while this panel is already visible still shows up. `DumbAware`: nothing

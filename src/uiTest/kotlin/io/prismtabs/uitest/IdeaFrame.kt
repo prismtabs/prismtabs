@@ -467,7 +467,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
      * `Robot.getPixelColor` — ground truth for "what does a real user's eye see," with no platform
      * code between the check and the display. Deliberately not a `TabGroupService`/colour-provider
      * lookup: those only prove the *model* and *computation* are correct, not that a repaint ever
-     * actually reached the screen — the exact "convincing false negative" shape README Phase 0
+     * actually reached the screen — the exact "convincing false negative" shape the engineering notes' Phase 0
      * already documented for `updateFileColor` looking like it worked when it hadn't. A screenshot
      * comparison isn't enough either, confirmed live: the deep, saturated preset colours (chosen to
      * survive the unselected-tab blend) are subtle enough that a rendered screenshot thumbnail can
@@ -570,7 +570,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
 
     /** Clicks (selects) the tab for [path], as opposed to [io.prismtabs.uitest.openTabGroupPopupOn]'s
      * right-click — used by the manual verification pass to compare a preset's selected-vs-unselected
-     * tint, matching README's Phase 0 "unselected tabs render tints at ~50% strength" finding. */
+     * tint, matching engineering notes' Phase 0 "unselected tabs render tints at ~50% strength" finding. */
     fun selectTab(path: String) {
         find<ComponentFixture>(
             byXpath("//div[@class='EditorTabLabel' and @accessiblename='$path']"),
@@ -609,7 +609,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
      * real flow for tests whose subject *is* the popup.
      *
      * Deliberate, and not only for speed: the popup path needs `java.awt.Robot` mouse input, which
-     * does not reach the IDE under Wayland (see README "These tests need an X11 display"), so a
+     * does not reach the IDE under Wayland (see engineering notes "These tests need an X11 display"), so a
      * test built on it can't run at all on a Wayland desktop even when nothing about its subject
      * requires a mouse. The popup's own behaviour is [TabGroupPopupUiTest]'s subject; what
      * the tests here need is simply *a group that exists*.
@@ -1136,7 +1136,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
      * Opens Settings straight to [io.prismtabs.ui.TabGroupPaletteConfigurable] via
      * `ShowSettingsUtil`, the same entry point the Settings/Preferences menu item resolves to —
      * bypassing manual tree navigation, which `remote-robot`'s UI-component layer handles poorly
-     * (see README "Why remote-robot, not IDE Starter + Driver"). Fired via `invokeLater`, not
+     * (see engineering notes "Why remote-robot, not IDE Starter + Driver"). Fired via `invokeLater`, not
      * `invokeAndWait`: `showSettingsDialog` is itself modal, and blocking robot-server's single
      * worker thread on a call that only returns once the dialog closes would wedge the whole server
      * (see [RemoteRobotExtension]'s doc comment on exactly this failure mode).

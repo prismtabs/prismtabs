@@ -15,7 +15,7 @@ import java.time.Duration.ofSeconds
 
 /**
  * End-to-end coverage of [io.prismtabs.ui.TabGroupPaletteConfigurable] against a real, running
- * sandbox IDE — see README "UI testing" for how to launch `runIdeForUiTests` first, and
+ * sandbox IDE — see engineering notes "UI testing" for how to launch `runIdeForUiTests` first, and
  * [IdeaFrame.exercisePaletteConfigurable] for why this drives the Configurable through direct
  * Swing/reflection calls rather than mouse-clicking the Settings tree and a native colour chooser.
  */

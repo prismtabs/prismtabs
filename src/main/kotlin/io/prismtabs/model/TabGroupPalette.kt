@@ -7,7 +7,7 @@ import java.awt.Color
  * plain-JUnit testable; [io.prismtabs.provider.TabGroupColorProvider] is where a light/dark pair
  * becomes a theme-aware colour, and [io.prismtabs.ui.ColorSwatchIcon] is where a pair becomes a
  * theme-aware icon. Both [light] and [dark] are chosen to stay visible after `EditorTabs` blends
- * unselected-tab colours to ~50% strength (see README's Phase 0 finding) — a plain pastel would
+ * unselected-tab colours to ~50% strength (see engineering notes' Phase 0 finding) — a plain pastel would
  * vanish under that blend, which is why these read as saturated rather than muted.
  */
 data class PresetColor(val id: String, val label: String, val light: Color, val dark: Color)

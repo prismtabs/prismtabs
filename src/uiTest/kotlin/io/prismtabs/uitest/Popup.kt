@@ -59,7 +59,7 @@ fun RemoteRobot.popupItemTexts(timeout: Duration = Duration.ofSeconds(10)): List
  * the whole gesture if the context menu doesn't appear.
  *
  * The retry is not superstition: `remote-robot` drives a real `java.awt.Robot` at real screen
- * coordinates (see README "UI testing"), so a right-click issued while the tab strip is still
+ * coordinates (see engineering notes "UI testing"), so a right-click issued while the tab strip is still
  * settling — right after `closeAllEditors()` + `openFile()`, say — lands before the tab occupies
  * its final position and no menu ever opens. That surfaces as a timeout on `actionMenuItem`, which
  * reads like a broken locator but isn't; re-issuing the gesture against a re-resolved tab fixes it.

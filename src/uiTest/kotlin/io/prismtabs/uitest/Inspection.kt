@@ -15,7 +15,7 @@ import java.time.Duration
  *
  * Everything here reads the live component or paints it offscreen; nothing samples the desktop.
  * `java.awt.Robot.getPixelColor` would route through the xdg-desktop-portal on this machine and
- * answer for the host's Wayland session instead of the X display the sandbox is on (see README
+ * answer for the host's Wayland session instead of the X display the sandbox is on (see engineering notes
  * "These tests need an X11 display"), whereas painting a component into a `BufferedImage` on the
  * EDT is exactly what Swing does for the screen, minus the screen.
  */
