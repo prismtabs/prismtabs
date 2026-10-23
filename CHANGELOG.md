@@ -6,6 +6,7 @@
 
 - PrismTabs is now free. The tool window, hiding and showing groups, active groups and palette
   editing work for everyone, with no trial or subscription.
+- PrismTabs now supports IntelliJ Platform 2024.2 or newer (previously 2025.1).
 - PrismTabs no longer depends on the JetBrains Marketplace Licensing plugin.
 - Installing, updating, disabling and uninstalling PrismTabs no longer need an IDE restart.
 
