@@ -20,6 +20,27 @@ hand before each one. Everything is covered end-to-end by real UI tests (`./grad
 New to Kotlin or the IntelliJ Platform? The [learning manual](docs/learning/README.md) teaches both
 using this codebase and traces each feature through the code.
 
+## Reporting a bug or suggesting a feature
+
+[Open an issue](https://github.com/prismtabs/prismtabs/issues/new/choose) after checking the
+[manual](https://prismtabs.com/docs) and searching existing issues, closed ones included. A 👍 on
+an existing issue is how requests are prioritised. Issues are public, so keep personal data out of
+them. Anything private goes to contact@prismtabs.com, and suspected security problems follow
+[SECURITY.md](SECURITY.md).
+
+Maintainers apply these labels when triaging:
+
+| Label | Meaning |
+| --- | --- |
+| `bug` | A defect report |
+| `enhancement` | A feature request |
+| `question` | A usage question |
+| `docs` | The manual is missing or wrong about something |
+| `needs-info` | Waiting on the reporter; closed if it goes quiet |
+| `confirmed` | Reproduced locally; the report is a real defect |
+| `planned` | Accepted and intended for a future release |
+| `duplicate` / `wontfix` | Closed, with the reason |
+
 ---
 
 ## Opening the project

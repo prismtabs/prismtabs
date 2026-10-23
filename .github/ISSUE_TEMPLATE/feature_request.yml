@@ -1,0 +1,47 @@
+name: Feature request
+description: Suggest something PrismTabs should do
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Good ideas are genuinely welcome — a lot of what ships starts here.
+
+        Worth knowing up front, so nothing comes as a surprise: PrismTabs deliberately stays a
+        small plugin, so most requests are declined on scope rather than on merit.
+
+        Some things are not possible at all — the JetBrains platform does not expose the APIs
+        they would need. Colour chips drawn inside the tab strip itself are the most-requested
+        example.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Before requesting
+      options:
+        - label: I searched [existing issues](https://github.com/prismtabs/prismtabs/issues?q=is%3Aissue) and would have added a 👍 to a match instead.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe what you are trying to do and where PrismTabs gets in the way today. This matters more than the proposed solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should it do?
+      description: How you picture it working — the interaction, where it lives in the UI.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What do you do instead today?
+      description: Any workaround you currently use, in PrismTabs or elsewhere.
+    validations:
+      required: false

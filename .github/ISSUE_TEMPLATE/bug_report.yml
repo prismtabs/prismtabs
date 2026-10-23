@@ -1,0 +1,89 @@
+name: Bug report
+description: Something in PrismTabs behaves incorrectly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        **This tracker is public.** Please do not include anything you would not want indexed by
+        a search engine. For anything private, email contact@prismtabs.com instead.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Before reporting
+      options:
+        - label: I searched [existing issues](https://github.com/prismtabs/prismtabs/issues?q=is%3Aissue), including closed ones.
+          required: true
+        - label: This report contains no personal data.
+          required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did PrismTabs actually do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps, starting from a freshly opened project if you can.
+      placeholder: |
+        1. Right-click a tab and choose "Tab Group…"
+        2. Pick the blue swatch and name the group "api"
+        3. …
+    validations:
+      required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: PrismTabs version
+      description: Settings | Plugins | Installed | PrismTabs.
+      placeholder: "1.4.8"
+    validations:
+      required: true
+
+  - type: input
+    id: ide
+    attributes:
+      label: IDE and build number
+      description: "Help | About, then use the copy icon and paste the first line here."
+      placeholder: "IntelliJ IDEA 2026.2 (Community Edition), Build #IC-262.1234.56"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS
+        - Windows
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Stack trace or IDE log
+      description: |
+        If the IDE showed an error notification, expand it and paste the stack trace. Otherwise
+        leave this blank — Help | Collect Logs and Diagnostic Data produces a zip if one is
+        needed later. Check it for anything private before pasting.
+      render: text
+    validations:
+      required: false

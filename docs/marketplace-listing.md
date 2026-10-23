@@ -18,7 +18,7 @@ admin UI. Copy follows [`naming-and-terminology.md`](naming-and-terminology.md).
 
 | Field | Value |
 |---|---|
-| Issue tracker | `https://github.com/prismtabs/prismtabs-feedback` |
+| Issue tracker | `https://github.com/prismtabs/prismtabs/issues` |
 | Documentation | `https://prismtabs.com/docs` |
 | Website | `https://prismtabs.com` |
 | Source code | The repository URL, once the repository is public. Every listing link must be reachable. |
