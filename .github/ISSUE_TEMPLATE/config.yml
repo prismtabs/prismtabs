@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Read the manual
+    url: https://prismtabs.com/docs
+    about: Setup, groups, the tool window, the palette, persistence and the FAQ.
+  - name: Report a security vulnerability
+    url: https://github.com/prismtabs/prismtabs/blob/master/SECURITY.md
+    about: Please report these privately by email, not as a public issue.
