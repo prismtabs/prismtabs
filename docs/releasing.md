@@ -14,7 +14,6 @@ runs where a release needs it and not on every commit.
 |---|---|---|
 | `build.yml` (Build) | Push to `master`, every pull request, manual run | About 126 allowance minutes: `./gradlew build` on Linux, macOS and Windows, plus `verifyPlugin` for each IDE |
 | `publish.yml` (Publish) | Push of a `v*` tag | About 67 Linux minutes: `verifyPlugin` for each IDE, `build`, `signPlugin`, `publishPlugin` |
-| `eula-sync.yml` (EULA sync) | Push or pull request that changes `docs/EULA.md`, manual run | Seconds |
 | `ui-tests.yml` (UI Tests) | Manual run only | Windows minutes at 2× |
 
 - A push to `dev` runs nothing. Do not open a pull request from `dev` to `master`: it runs Build,

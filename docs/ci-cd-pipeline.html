@@ -125,28 +125,17 @@ code{font-family:var(--mono);font-size:.85em}
 <path class="arr " d="M355 638 H395" marker-end="url(#ah)"/>
 <path class="arr " d="M525 638 H565" marker-end="url(#ah)"/>
 <text class="note" x="20" y="690">No approval step: pushing the tag is the release decision.</text>
-<rect class="band" x="0" y="715" width="520" height="110" rx="6"/>
-<text class="lane" x="14" y="734">EULA sync · eula-sync.yml</text>
-<rect class="box " x="20" y="750" width="220" height="64" rx="5"/>
-<text class="t1 " x="130.0" y="770.0" text-anchor="middle">Triggers</text>
-<text class="t2 " x="130.0" y="786.0" text-anchor="middle">push or PR touching docs/EULA.md</text>
-<text class="t2 " x="130.0" y="802.0" text-anchor="middle">manual run</text>
-<rect class="box " x="280" y="750" width="225" height="64" rx="5"/>
-<text class="t1 " x="392.5" y="770.0" text-anchor="middle">Compare with website repo</text>
-<text class="t2 " x="392.5" y="786.0" text-anchor="middle">eula.html via read-only deploy key</text>
-<text class="t2 " x="392.5" y="802.0" text-anchor="middle">on push: re-check once after 5 min</text>
-<path class="arr " d="M240 782 H280" marker-end="url(#ah)"/>
-<rect class="band" x="530" y="715" width="470" height="110" rx="6"/>
-<text class="lane" x="544" y="734">UI Tests · ui-tests.yml, debugging aid, not a gate</text>
-<rect class="box " x="545" y="750" width="180" height="64" rx="5"/>
-<text class="t1 " x="635.0" y="770.0" text-anchor="middle">Trigger</text>
-<text class="t2 " x="635.0" y="786.0" text-anchor="middle">manual run only</text>
-<text class="t2 " x="635.0" y="802.0" text-anchor="middle">windows-latest</text>
-<rect class="box " x="765" y="750" width="220" height="64" rx="5"/>
-<text class="t1 " x="875.0" y="770.0" text-anchor="middle">runIdeForUiTests, port 8082</text>
-<text class="t2 " x="875.0" y="786.0" text-anchor="middle">./gradlew uiTest</text>
-<text class="t2 " x="875.0" y="802.0" text-anchor="middle">upload test reports</text>
-<path class="arr " d="M725 782 H765" marker-end="url(#ah)"/>
+<rect class="band" x="0" y="715" width="470" height="110" rx="6"/>
+<text class="lane" x="14" y="734">UI Tests · ui-tests.yml, debugging aid, not a gate</text>
+<rect class="box " x="15" y="750" width="180" height="64" rx="5"/>
+<text class="t1 " x="105" y="770.0" text-anchor="middle">Trigger</text>
+<text class="t2 " x="105" y="786.0" text-anchor="middle">manual run only</text>
+<text class="t2 " x="105" y="802.0" text-anchor="middle">windows-latest</text>
+<rect class="box " x="235" y="750" width="220" height="64" rx="5"/>
+<text class="t1 " x="345" y="770.0" text-anchor="middle">runIdeForUiTests, port 8082</text>
+<text class="t2 " x="345" y="786.0" text-anchor="middle">./gradlew uiTest</text>
+<text class="t2 " x="345" y="802.0" text-anchor="middle">upload test reports</text>
+<path class="arr " d="M195 782 H235" marker-end="url(#ah)"/>
 </svg></div>
 <figcaption>Solid arrows are sequence, dashed boxes and arrows are the shared Plugin Verifier workflow called by both Build and Publish. Teal marks the tag that starts a release and the final upload.</figcaption></figure>
 <div class="tw"><table>
@@ -154,7 +143,6 @@ code{font-family:var(--mono);font-size:.85em}
 <tbody>
 <tr><td><code>build.yml</code></td><td>Push to <code>master</code>, every pull request, manual</td><td>About 126 allowance minutes</td></tr>
 <tr><td><code>publish.yml</code></td><td>Push of a <code>v*</code> tag</td><td>About 67 Linux minutes</td></tr>
-<tr><td><code>eula-sync.yml</code></td><td>Changes to <code>docs/EULA.md</code>, manual</td><td>Seconds</td></tr>
 <tr><td><code>ui-tests.yml</code></td><td>Manual only</td><td>Windows minutes at 2×</td></tr>
 </tbody></table></div>
 </main>

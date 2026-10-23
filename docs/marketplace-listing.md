@@ -12,7 +12,7 @@ admin UI. Copy follows [`naming-and-terminology.md`](naming-and-terminology.md).
 | Description | `plugin.xml` `<description>`. Edit it there, never in the admin UI, which would detach it from the archive. |
 | Change notes | `CHANGELOG.md`, rendered into `<change-notes>` at build time. |
 | Pricing | Free. Sales Info in the admin UI is unset. |
-| Licence | `https://prismtabs.com/eula`. |
+| Licence | `https://prismtabs.com/licence`. |
 
 ## Technical Information links
 
