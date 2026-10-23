@@ -22,12 +22,11 @@ bullets are fully automated and need no manual pass.** Three verdicts:
   (legibility, crispness) or needs a real IDE restart.
 
 History: a first pass on 2026-09-14 over-credited several bullets (bold member rows, Rename and
-Recolour from the tool window, the free tier's rename/recolour/delete, the registration dialog
-being raised); on 2026-09-15 every bullet was re-audited, tests were written for every gap that
+Recolour from the tool window, rename/recolour/delete from the popup); on 2026-09-15 every bullet was re-audited, tests were written for every gap that
 could be automated, and each new test was mutation-checked — the product broken on purpose to
 confirm the test then fails. Where the checklist described behaviour the product does not have
 (Enter on a group row, the member-row context menu, palette edits recolouring existing groups,
-F2 as the rename key, dynamic disable of the paid build), the bullet was corrected to what the
+F2 as the rename key), the bullet was corrected to what the
 product does. Sections that ended up fully automated (swatch add/remove, Manage Groups, group
 deletion, empty-group prompts, palette settings, persistence, rename/move remapping, and the
 colour-provider interplay) were removed outright, and every remaining section had its own
