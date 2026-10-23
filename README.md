@@ -618,8 +618,8 @@ checklist item directly. This section closes the one piece that hadn't been chec
 **A gap the matrix itself had, closed 2026-08-19:** the `verify-plugin` job was *failing* on every
 push from at least 2026-08-08, and stayed unnoticed because the three-OS `build` matrix beside it
 was green the whole time. One `OVERRIDE_ONLY_API_USAGES` problem caused it: a direct call to
-`AnAction.actionPerformed`, which is `@ApiStatus.OverrideOnly`, in a licence check the plugin has
-since dropped. That level is in `verifyPlugin`'s `failureLevel`, so a recurrence fails the build. A
+`AnAction.actionPerformed`, which is `@ApiStatus.OverrideOnly`, in code the plugin no longer
+has. That level is in `verifyPlugin`'s `failureLevel`, so a recurrence fails the build. A
 short account is in the 2026-08-19 macOS entry of [cross-platform manual
 verification](docs/cross-platform-manual-verification.md)'s sign-off log.
 
@@ -708,10 +708,9 @@ proprietary, distributed under the [End-User Licence Agreement](docs/EULA.md). T
 <https://prismtabs.com/eula>, the canonical copy in `prismtabs-website`; the `EULA sync` workflow
 fails when the two differ.
 
-`plugin.xml` has no `<product-descriptor>` and the plugin has no licence check. Keep it that way
-unless the plugin is sold: with a product code, the platform refuses to load, unload or update the
-plugin without an IDE restart, which `PluginUnloadUiTest` asserts against. The plugin makes no
-network calls, so no privacy policy is required.
+`plugin.xml` has no `<product-descriptor>`. With one, the platform treats the plugin as paid and
+refuses to load, unload or update it without an IDE restart, which `PluginUnloadUiTest` asserts
+against. The plugin makes no network calls, so no privacy policy is required.
 
 **Plugin icon.** `pluginIcon.svg` / `pluginIcon_dark.svg`, 40×40: three preset swatch colours in
 `ColorSwatchIcon`'s bordered-circle style, which keeps pale colours visible on a light background.
@@ -1009,8 +1008,6 @@ skipped rather than failing or being silently left out. `MacSettingsShortcutUiTe
 `os.name` starting with `Mac`; `WindowsManualVerificationUiTest` gates on an explicit
 `-Dprismtabs.manualVerification=true` that neither local dev nor `ui-tests.yml` ever passes (see its
 own doc comment, and `docs/cross-platform-manual-verification.md` for how to run it deliberately).
-The sandbox decides the rest: `runIdeForUiTestsObfuscated` runs only `ObfuscatedBuildUiTest`, and
-every other sandbox runs everything but it (see [Obfuscation](#obfuscation)).
 
 ### The newest platform: `runIdeForUiTestsLatest`
 
@@ -1046,25 +1043,15 @@ Xvfb on Linux the suite has been seen to wedge at `EmptyGroupOnDiskDeleteUiTest`
 on the empty-group dialog did not land, with every test after it timing out against the blocked IDE;
 that has not been re-checked since.
 
-### Expected sandbox noise — an error balloon and a warning, neither a PrismTabs bug
+### Expected sandbox noise — an error balloon that is not a PrismTabs bug
 
 A fully green run still leaves the sandbox IDE showing the red **"IDE error occurred"** notification,
 so a failure screenshot taken afterwards shows one too. Measured on the 2026-09-06 Windows pass, no
-`io.prismtabs` frame appears anywhere in that day's log. Two separate things, worth telling apart:
-
-- **What actually raises the balloon** is the single error-level entry in the run:
-  `SEVERE … Cannot init component state (componentName=GradleJvmSupportMatrix) … Caused by:
-  java.lang.IllegalArgumentException: 25` — the same JDK-25 version-parser bug already listed under
-  "Noisy but harmless log output" above. It fires once per IDE start under `runIdeForUiTests` too,
-  not only under `buildPlugin`/`runIde`.
-- **A warning that does not raise it**, but shows up when reading the log for the cause:
-  `WARN - #c.i.o.a.AnAction - ShortcutSet of global AnActions should not be changed outside of
-  KeymapManager … Action: Register Plugins… [Plugin: com.intellij.marketplace]`. It is logged as a
-  `PluginException`, which makes it look like the culprit, but `WARN` never opens a notification —
-  it comes from [`IdeaFrame.restoreRegisterDialog`](src/uiTest/kotlin/io/prismtabs/uitest/IdeaFrame.kt)
-  putting back the stock action `suppressRegisterDialog` removed, and is unavoidable through any
-  supported API. That method's doc comment has the bytecode-level reasoning and why every way of
-  silencing it is worse.
+`io.prismtabs` frame appears anywhere in that day's log. What raises it is the single error-level
+entry in the run: `SEVERE … Cannot init component state (componentName=GradleJvmSupportMatrix) …
+Caused by: java.lang.IllegalArgumentException: 25` — the same JDK-25 version-parser bug already
+listed under "Noisy but harmless log output" above. It fires once per IDE start under
+`runIdeForUiTests` too, not only under `buildPlugin`/`runIde`.
 
 So the balloon proves nothing on its own. To tell a real plugin failure from this, grep `idea.log`
 for an `io.prismtabs` frame rather than trusting the notification or the screenshot.
@@ -1073,8 +1060,8 @@ for an `io.prismtabs` frame rather than trusting the notification or the screens
 none: `runIdeForUiTests` boots the sandbox IDE and `remote-robot`'s mouse/keyboard automation works
 directly against the real desktop, so the same two commands above are all it takes — no manual
 click-through — though it does take over the mouse and keyboard for the run's duration. Re-verified
-locally on Windows on 2026-09-06 (multi-select toggle-click fix, `a402462`, and the licensing gate,
-`267202a`/`4a5a7fe`/`2663ca6`, all landed since the previous 2026-08-24 pass): `./gradlew uiTest` is
+locally on Windows on 2026-09-06 (the multi-select toggle-click fix, `a402462`, among other changes
+since the previous 2026-08-24 pass): `./gradlew uiTest` is
 38 of 38, 35 run and green, 3 skipped as designed (`MacSettingsShortcutUiTest` on non-Mac, and
 `WindowsManualVerificationUiTest`'s two cases without `-Dprismtabs.manualVerification=true`). Those
 two were then run deliberately with that flag, across a real forced kill and relaunch of
@@ -1087,7 +1074,7 @@ colour and membership (plus a kept empty group) all surviving the restart.
 every push — Windows runner minutes carry a 2x plan-minute multiplier) boots `runIdeForUiTests` on a
 GitHub-hosted `windows-latest` runner and drives it as above, but the suite fails there. Tried end
 to end on 2026-09-08: two back-to-back runs failed identically, 12 of 43, with the tool-window-tree
-assertions in `TabGroupsToolWindowUiTest` and the since-removed `PaywallUiTest` timing out. The
+assertions in `TabGroupsToolWindowUiTest` among others timing out. The
 likely cause is that the hosted runner's session is not the real interactive desktop
 `remote-robot`'s `java.awt.Robot` needs (`RemoteRobotExtension`'s frame de-iconify/raise workaround
 is calibrated to a real local session and does not carry over) — not yet confirmed from the sandbox
@@ -1320,11 +1307,11 @@ solved that for closing. `PlatformTabOpen` applies the same bound-method-referen
 open, which both removes the internal API and makes the two directions one shape. `PlatformOpenOptions`
 is gone with it.
 
-**The licence check — removed with the paid tier.** It read its own `productCode` through
-`PluginManager.getPluginByClass`, which is `@ApiStatus.Internal` from 2026.2. There is no public
-call that hands a plugin its own descriptor — on 2026.3 `PluginManagerCore.getPlugin`,
-`PluginManager.getPlugin` and `PluginManager.findEnabledPlugin` are all internal too. Nothing in the
-plugin needs its own descriptor any more.
+**Reading the plugin's own descriptor — no longer needed.** One call site read the plugin's own
+descriptor through `PluginManager.getPluginByClass`, which is `@ApiStatus.Internal` from 2026.2.
+There is no public call that hands a plugin its own descriptor — on 2026.3
+`PluginManagerCore.getPlugin`, `PluginManager.getPlugin` and `PluginManager.findEnabledPlugin` are
+all internal too — and nothing in the plugin needs it.
 
 **The repaint — replaced by a public call that was there all along.** `TabRepaint` used
 `FileEditorManagerImpl.queueUpdateFile`. The public equivalent is
@@ -1385,65 +1372,16 @@ Three behaviours are deliberate and were each tested by hand:
 Adding an entry is a decision to ship an API the Marketplace may refuse. It belongs in a review,
 with the reasoning written down, not in a red build someone wants green.
 
-## Obfuscation
+## Saved state format
 
-The plugin jar Marketplace ships is obfuscated with ProGuard: classes and members are renamed, and
-nothing is shrunk or optimised. The rules are in `proguard-rules.pro`. The `proguard` task runs them
-on `composedJar`'s output and writes `build/proguard/prismtabs-<version>.jar` and
-`build/proguard/mapping.txt`.
-
-| Task | Plugin classes it runs |
-|---|---|
-| `buildPlugin`, and so `signPlugin`, `publishPlugin` and `verifyPlugin` | Obfuscated |
-| `runIde` | Obfuscated |
-| `obfuscationTest` | Obfuscated |
-| `runIdeForUiTestsObfuscated` | Obfuscated |
-| `test` | Plain |
-| `runIdeForUiTests`, `runIdeForUiTestsLatest` | Plain, because most uiTest scripts call plugin classes by name |
-
-Breakpoints in plugin code do not bind under `runIde`. Debug in `runIdeForUiTests` instead.
-
-### Run the UI tests against the obfuscated build
-
-```bash
-./gradlew runIdeForUiTestsObfuscated &   # instead of runIdeForUiTests; both use port 8082
-./gradlew uiTest
-```
-
-Against this sandbox `uiTest` runs only `ObfuscatedBuildUiTest`, which drives the plugin through the
-UI and platform APIs, and skips every other class. Against the other sandboxes it skips
-`ObfuscatedBuildUiTest` instead. `RemoteRobotExtension` matches the classes to the running sandbox:
-mark a class `@RunsOnObfuscatedBuild` to write another one for this sandbox.
-
-### Keep rules
-
-The platform finds some classes by name, so those keep their names:
-
-- **Every class `plugin.xml` names.** A class newly registered in `plugin.xml` needs a `-keep` rule.
-  `PluginEntryPointsTest` fails until it has one.
-- **The persisted state classes**, `TabGroupState` and `TabGroupPaletteState` with their nested
-  classes, keep every member name. XmlSerializer writes class and property names into the user's
-  `tabGroups.xml` and `prismtabsPalette.xml`, so a rename loses the user's groups or palette on
-  update. A new persisted class needs the same rule. `SavedStateTest` loads fixtures in the saved
-  format into the obfuscated jar and saves them back unchanged.
-
-`obfuscationTest` is part of `check`, so `./gradlew build`, CI and the publish workflow all run it.
-
-### Decode a stack trace
-
-Stack traces, `idea.log` categories and Plugin Verifier reports name obfuscated classes such as
-`io.prismtabs.ui.b`. Decode them with the mapping of the build that produced them:
-
-```bash
-./gradlew retrace -PstackTrace=trace.txt -Pmapping=mapping.txt
-```
-
-Without `-Pmapping`, `retrace` uses the current build's mapping. For a released version, download
-the `proguard-mapping-v<version>` artifact from the publish workflow run for that tag.
+`TabGroupState` and `TabGroupPaletteState`, with their nested classes, are written to each user's
+`tabGroups.xml` and `prismtabsPalette.xml` by XmlSerializer, which names the saved elements and
+options after the classes and their properties. Renaming one loses that part of every user's groups
+or palette on update, without an error. `SavedStateTest` loads fixtures in the released format and
+saves them back unchanged; a new persisted field needs a fixture value there.
 
 ## Renaming
 
 The name lives in `gradle.properties` (`pluginName`, `pluginGroup`) plus the `<id>`/`<name>` in
-`src/main/resources/META-INF/plugin.xml`, the `io.prismtabs` package path, and the class names in
-`proguard-rules.pro`. Never change `<id>`
-of the published plugin: the Marketplace keys the listing, and every installed copy's updates, to it.
+`src/main/resources/META-INF/plugin.xml` and the `io.prismtabs` package path. Never change `<id>` of
+the published plugin: the Marketplace keys the listing, and every installed copy's updates, to it.

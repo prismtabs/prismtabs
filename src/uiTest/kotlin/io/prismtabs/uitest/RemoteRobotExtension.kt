@@ -4,8 +4,6 @@ import com.intellij.remoterobot.RemoteRobot
 import com.intellij.remoterobot.utils.Keyboard
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback
-import org.junit.jupiter.api.extension.ConditionEvaluationResult
-import org.junit.jupiter.api.extension.ExecutionCondition
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.api.extension.ParameterContext
 import org.junit.jupiter.api.extension.ParameterResolver
@@ -29,31 +27,10 @@ import java.io.File
  * same `WaitForConditionTimeoutException` as a genuine locator bug — confirmed live by finding
  * `iconified="1"` on `IdeFrameImpl` in a `curl :8082` dump at the moment of a failure. Fixed once
  * here rather than per-test.
- *
- * [evaluateExecutionCondition] matches each class to the sandbox it was written for: a
- * [RunsOnObfuscatedBuild] class runs only against `runIdeForUiTestsObfuscated`, and every other
- * class only against the sandboxes running the plain jar. That keeps a bare `./gradlew uiTest`
- * correct against whichever sandbox is up.
  */
-class RemoteRobotExtension : ExecutionCondition, BeforeTestExecutionCallback, AfterTestExecutionCallback, ParameterResolver {
+class RemoteRobotExtension : BeforeTestExecutionCallback, AfterTestExecutionCallback, ParameterResolver {
 
     private val remoteRobot = RemoteRobot(REMOTE_ROBOT_URL)
-
-    override fun evaluateExecutionCondition(context: ExtensionContext): ConditionEvaluationResult {
-        val testClass = context.testClass.orElse(null)
-            ?: return ConditionEvaluationResult.enabled("no test class to match to a sandbox")
-        val writtenForObfuscatedBuild = testClass.isAnnotationPresent(RunsOnObfuscatedBuild::class.java)
-        return when {
-            writtenForObfuscatedBuild == sandboxRunsObfuscatedBuild ->
-                ConditionEvaluationResult.enabled("written for the sandbox that is running")
-            writtenForObfuscatedBuild ->
-                ConditionEvaluationResult.disabled("runs only against runIdeForUiTestsObfuscated")
-            else ->
-                ConditionEvaluationResult.disabled(
-                    "runIdeForUiTestsObfuscated is running, and this class reaches the plugin's classes by names the obfuscator changes",
-                )
-        }
-    }
 
     override fun supportsParameter(parameterContext: ParameterContext, extensionContext: ExtensionContext) =
         parameterContext.parameter.type == RemoteRobot::class.java
@@ -211,14 +188,5 @@ class RemoteRobotExtension : ExecutionCondition, BeforeTestExecutionCallback, Af
         val NAMESPACE: ExtensionContext.Namespace = ExtensionContext.Namespace.create(RemoteRobotExtension::class.java)
         const val LOG_OFFSET = "ideaLogOffset"
         val REMOTE_ROBOT_URL: String = System.getProperty("remote-robot-url") ?: "http://127.0.0.1:8082"
-
-        /**
-         * Whether the sandbox IDE is `runIdeForUiTestsObfuscated`, which build.gradle.kts marks with
-         * a system property. Asked once per test run: the sandbox cannot change under a run, since
-         * only one listens on the robot-server port at a time.
-         */
-        val sandboxRunsObfuscatedBuild: Boolean by lazy {
-            RemoteRobot(REMOTE_ROBOT_URL).callJs<Boolean>("java.lang.Boolean.getBoolean('prismtabs.uiTest.obfuscatedBuild')", false)
-        }
     }
 }

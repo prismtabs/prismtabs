@@ -1,4 +1,4 @@
-package io.prismtabs.obfuscation
+package io.prismtabs.model
 
 import com.intellij.configurationStore.ComponentSerializationUtil
 import com.intellij.configurationStore.deserializeState
@@ -6,16 +6,16 @@ import com.intellij.configurationStore.jdomSerializer
 import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.components.State
 import com.intellij.openapi.util.JDOMUtil
-import io.prismtabs.model.TabGroupPaletteState
-import io.prismtabs.model.TabGroupState
+import io.prismtabs.service.TabGroupPaletteService
+import io.prismtabs.service.TabGroupService
 import org.jdom.Element
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 /**
- * A user's groups and palette, saved by an unobfuscated build, must load into the obfuscated one
- * and save back unchanged. XmlSerializer names the saved elements and options after the state
- * classes and their properties, so a renamed one drops that part of the file without an error.
+ * A user's groups and palette, as an earlier release saved them, must load and save back unchanged.
+ * XmlSerializer names the saved elements and options after the state classes and their properties,
+ * so renaming one drops that part of every user's file on update, without an error.
  *
  * The fixtures under `saved-state/` are in the exact format the platform writes `tabGroups.xml` and
  * `prismtabsPalette.xml`. Loading and saving take the component store's own route, which binds a
@@ -64,18 +64,12 @@ class SavedStateTest {
 
     /**
      * The platform finds a service's state class through `PersistentStateComponent<T>`'s generic
-     * signature, and its component name and file through `@State`, all on the renamed service class.
+     * signature, and its component name and file through `@State`. Changing either moves every
+     * user's saved state somewhere the plugin no longer reads.
      */
     @Test
-    fun `each service still declares its state class and storage file`() {
-        val services = ObfuscatedJar.read { jar ->
-            jar.entries().asSequence()
-                .map { it.name }
-                .filter { it.endsWith(".class") && it != "module-info.class" }
-                .map { Class.forName(it.removeSuffix(".class").replace('/', '.'), false, javaClass.classLoader) }
-                .filter { it.isAnnotationPresent(State::class.java) }
-                .toList()
-        }
+    fun `each service declares the state class and storage file users' state is saved under`() {
+        val services = listOf(TabGroupService::class.java, TabGroupPaletteService::class.java)
 
         val declared = services.associate { service ->
             val annotation = service.getAnnotation(State::class.java)
@@ -91,12 +85,10 @@ class SavedStateTest {
         )
     }
 
-    private inline fun <reified T : Any> load(file: String, componentName: String): T {
-        ObfuscatedJar.assertLoadedFromIt(T::class.java)
-        return checkNotNull(deserializeState(savedComponent(file, componentName), T::class.java)) {
+    private inline fun <reified T : Any> load(file: String, componentName: String): T =
+        checkNotNull(deserializeState(savedComponent(file, componentName), T::class.java)) {
             "$componentName in $file deserialised to null"
         }
-    }
 
     /** Saves the loaded state the way the component store does and compares it with the file. */
     private inline fun <reified T : Any> assertSavesBackUnchanged(file: String, componentName: String) {

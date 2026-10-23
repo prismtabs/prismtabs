@@ -6,18 +6,6 @@ import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
-import proguard.gradle.ProGuardTask
-
-// ProGuard publishes no Gradle plugin marker, so its task type comes in on the buildscript
-// classpath, as in the IntelliJ Platform Gradle Plugin's own ProGuard recipe.
-buildscript {
-    repositories {
-        mavenCentral()
-    }
-    dependencies {
-        classpath("com.guardsquare:proguard-gradle:${providers.gradleProperty("proguardVersion").get()}")
-    }
-}
 
 plugins {
     kotlin("jvm") version "2.4.10"
@@ -61,24 +49,12 @@ sourceSets {
         compileClasspath += sourceSets.main.get().output
         runtimeClasspath += sourceSets.main.get().output
     }
-    // Tests of the obfuscated jar Marketplace ships. They compile against the plugin's own classes
-    // but run against that jar instead (the `obfuscationTest` task sets the runtime classpath), so
-    // a name they use that the obfuscator changed fails them.
-    create("obfuscationTest") {
-        compileClasspath += sourceSets.main.get().output + sourceSets.main.get().compileClasspath
-    }
 }
 
 val uiTestImplementation by configurations.getting {
     extendsFrom(configurations.testImplementation.get())
 }
 configurations.getByName("uiTestRuntimeOnly") {
-    extendsFrom(configurations.testRuntimeOnly.get())
-}
-configurations.getByName("obfuscationTestImplementation") {
-    extendsFrom(configurations.testImplementation.get())
-}
-configurations.getByName("obfuscationTestRuntimeOnly") {
     extendsFrom(configurations.testRuntimeOnly.get())
 }
 
@@ -103,16 +79,6 @@ dependencies {
     uiTestImplementation(kotlin("stdlib"))
     uiTestImplementation("com.intellij.remoterobot:remote-robot:$remoteRobotVersion")
     uiTestImplementation("com.intellij.remoterobot:remote-fixtures:$remoteRobotVersion")
-}
-
-// ProGuard's ReTrace, which the `retrace` task runs. A separate artifact from the obfuscator on the
-// buildscript classpath, at the same version.
-val proguardRetrace: Configuration by configurations.creating {
-    isCanBeConsumed = false
-}
-
-dependencies {
-    proguardRetrace("com.guardsquare:proguard-retrace:${providers.gradleProperty("proguardVersion").get()}")
 }
 
 kotlin {
@@ -242,87 +208,9 @@ intellijPlatform {
     }
 }
 
-// The obfuscated plugin jar the `proguard` task writes. Named like composedJar's, since a sandbox,
-// and so the installed plugin, uses this file name.
-val proguardJar = layout.buildDirectory.file("proguard/${project.name}-$pluginVersion.jar")
-// Turns a user's obfuscated stack trace back into source names with ProGuard's retrace. The
-// publish workflow keeps each release's copy.
-val proguardMapping = layout.buildDirectory.file("proguard/mapping.txt")
-
 tasks {
     test {
         useJUnitPlatform()
-        // ProductDescriptorTest asserts plugin.xml's release-version against the single source
-        // intellijPlatform.pluginConfiguration.version already reads; a `-D` on the ./gradlew
-        // command line would not reach this forked JVM, and neither would the property itself.
-        systemProperty("prismtabs.pluginVersion", providers.gradleProperty("pluginVersion").get())
-    }
-
-    val jdkModules = project.javaToolchains.launcherFor(project.java.toolchain)
-        .map { launcher -> launcher.metadata.installationPath.dir("jmods") }
-    // Obfuscates the plugin jar with the rules in proguard-rules.pro (README "Obfuscation"). The
-    // main sandbox takes this jar in place of composedJar's, so everything built from that sandbox
-    // is obfuscated: buildPlugin's zip, and through it signPlugin, publishPlugin and verifyPlugin,
-    // and runIde. Of the uiTest sandboxes only runIdeForUiTestsObfuscated takes it: the others'
-    // scripts call into the plugin's classes by name.
-    val proguard by registering(ProGuardTask::class) {
-        description = "Obfuscates the plugin jar that the sandbox, and so the distribution zip, is built from."
-        group = "build"
-        configuration("proguard-rules.pro")
-        injars(composedJar.map { it.archiveFile })
-        outjars(proguardJar)
-        // Exactly what the plugin compiles against, plus the JDK it targets; ProGuard needs the
-        // class hierarchy of everything the plugin references to rename and preverify it.
-        libraryjars(sourceSets.main.get().compileClasspath)
-        libraryjars(
-            mapOf("jarfilter" to "!**.jar", "filter" to "!module-info.class"),
-            jdkModules,
-        )
-        printmapping(proguardMapping)
-    }
-
-    prepareSandbox {
-        pluginJar = proguardJar
-        dependsOn(proguard)
-    }
-
-    // ./gradlew retrace -PstackTrace=<file> [-Pmapping=<file>] prints the stack trace with source
-    // names. The mapping defaults to this build's; for a released version, pass the one the publish
-    // workflow kept for its tag.
-    register<JavaExec>("retrace") {
-        description = "Decodes an obfuscated stack trace with a ProGuard mapping file."
-        group = "help"
-        classpath = proguardRetrace
-        mainClass = "proguard.retrace.ReTrace"
-        val stackTrace = providers.gradleProperty("stackTrace").orNull?.let { file(it).absolutePath }
-        val mapping = providers.gradleProperty("mapping").orNull?.let { file(it).absolutePath }
-        if (mapping == null) dependsOn(proguard)
-        args(listOfNotNull(mapping ?: proguardMapping.get().asFile.absolutePath, stackTrace))
-        doFirst {
-            require(stackTrace != null) { "pass the file holding the stack trace: -PstackTrace=<file>" }
-        }
-    }
-
-    // Tests the obfuscated jar against the contracts the rules exist for: every class plugin.xml
-    // names is still there, and state saved by an unobfuscated build loads. Runs in `check`, so CI
-    // and the publish workflow's `build` both gate on it.
-    val obfuscationTest by registering(Test::class) {
-        description = "Runs the obfuscationTest suite against the obfuscated plugin jar."
-        group = "verification"
-        val obfuscationTestSourceSet = sourceSets["obfuscationTest"]
-        testClassesDirs = obfuscationTestSourceSet.output.classesDirs
-        // The obfuscated jar stands in for the plugin's own classes: sourceSets.main.output is
-        // deliberately absent, so nothing can fall back to an unobfuscated copy.
-        classpath = obfuscationTestSourceSet.output +
-            files(proguardJar).builtBy(proguard) +
-            sourceSets.main.get().compileClasspath +
-            configurations["obfuscationTestRuntimeClasspath"]
-        systemProperty("prismtabs.obfuscatedJar", proguardJar.get().asFile.absolutePath)
-        useJUnitPlatform()
-    }
-
-    check {
-        dependsOn(obfuscationTest)
     }
 
     // Lists the releases verifyPlugin checks against, one per line; CI turns this into its
@@ -579,28 +467,6 @@ intellijPlatformTesting {
             task {
                 args(fixtureProject)
                 jvmArgumentProviders += CommandLineArgumentProvider { uiTestIdeArgs }
-            }
-            plugins {
-                robotServerPlugin(remoteRobotVersion)
-            }
-        }
-
-        // The regular uiTest sandbox, but running the obfuscated jar Marketplace ships, run the same
-        // way (only one of the uiTest sandboxes at a time: all listen on the robot-server port).
-        // Against it `./gradlew uiTest` runs only the classes annotated @ObfuscatedBuildUiTest, which
-        // drive the plugin through the UI and platform APIs alone; every other class skips, since
-        // their scripts reach the plugin's classes by names the obfuscator changes. The system
-        // property is how RemoteRobotExtension tells this sandbox from the others.
-        register("runIdeForUiTestsObfuscated") {
-            task {
-                args(fixtureProject)
-                jvmArgumentProviders += CommandLineArgumentProvider {
-                    uiTestIdeArgs + "-Dprismtabs.uiTest.obfuscatedBuild=true"
-                }
-            }
-            prepareSandboxTask {
-                pluginJar = proguardJar
-                dependsOn(tasks.named("proguard"))
             }
             plugins {
                 robotServerPlugin(remoteRobotVersion)
