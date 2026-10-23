@@ -244,14 +244,14 @@ when (val node = path.lastPathComponent) {
 After `is GroupNode`, `node` has type `GroupNode` without a cast. The same applies after
 `if (event !is VFileDeleteEvent) continue` in `TabGroupVfsListener.before`.
 
-Ranges and loops: `for (event in events)`, `(0 until tags.length).any { … }`,
+Ranges and loops: `for (event in events)`, `(0 until childCount).map { … }`,
 `index.coerceIn(groups.indices)`.
 
 ## Strings
 
 ```kotlin
-"$feature needs an active PrismTabs subscription."
-"Reopen the tabs of $strandedCount hidden group${if (strandedCount == 1) "" else "s"}"
+"Remove $fileCount Files from Group"
+"  $count ${if (count == 1) "file" else "files"}"
 ```
 
 `$name` inserts a variable and `${expression}` inserts any expression. `buildString { append(…) }`
@@ -356,7 +356,7 @@ Two related helpers:
 
 - `takeIf { condition }` returns the value if the condition holds, else `null`.
 - `use { }` closes a `Closeable` afterwards, like Java's try-with-resources
-  (`descriptor.use { … }` in `PrismTabsLicense`).
+  (`xml.use { … }` in `PrismTabsDynamicPluginListenerTest`).
 
 ## Extension functions and properties
 
@@ -384,10 +384,10 @@ the class object, write `TabGroupsChangedListener::class.java`.
 ## Property delegates and late initialisation
 
 ```kotlin
-private val paidBuild: Boolean by lazy { declaresOwnProductDescriptor() }
+val sandboxRunsObfuscatedBuild: Boolean by lazy { … }
 ```
 
-`by lazy` computes the value on first read and caches it. `lateinit var dialogPanel: DialogPanel`
+`by lazy` computes the value on first read and caches it (`RemoteRobotExtension`, in the UI tests). `lateinit var dialogPanel: DialogPanel`
 in `TabGroupPaletteConfigurable` promises the compiler that a non-null `var` is assigned before its
 first read, which that code needs because the panel's own lambdas refer to it.
 

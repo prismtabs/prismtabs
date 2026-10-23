@@ -29,7 +29,6 @@ All production code is under `src/main`, in package `io.prismtabs`.
 | `listener/TabGroupFileListener.kt`      | On editor open: auto-join the active group, remember the group's open tabs              |
 | `listener/TabGroupVfsListener.kt`       | On file rename, move or delete: keep assignments correct                                |
 | `listener/PrismTabsDynamicPluginListener.kt` | On plugin load or unload without restart: repaint, save, release references       |
-| `license/PrismTabsLicense.kt`, `LicenseSignatureVerification.kt` | Paid-feature gate                                              |
 
 Dependencies point one way: `ui`, `listener`, `action` and `provider` call `service`, and `service`
 calls `model`. `TabGroupService` and `model` make no live platform calls, which is what lets
@@ -115,13 +114,13 @@ identically.
 ## Trace: open a file while a group is active
 
 1. The user marks a group active (popup **Manage Groups… → *group* → Mark as Active Group**, or the
-   pin button in the tool window). `toggleActiveGroup` checks the licence and calls
+   pin button in the tool window). `toggleActiveGroup` calls
    `service.setActiveGroup`.
 2. The user opens any file. The platform publishes `FileEditorManagerListener.fileOpened`.
 3. `TabGroupFileListener.fileOpened` receives it, because `plugin.xml` registers it under
    `<projectListeners>`.
-4. `autoJoinActiveGroup` returns early if there is no active group, if the file is already assigned,
-   or if paid features are off. Otherwise it runs the standard sequence.
+4. `autoJoinActiveGroup` returns early if there is no active group or the file is already assigned.
+   Otherwise it runs the standard sequence.
 5. Whether or not it joined, if the file is in a group, `TabGroupVisibility.rememberOpenTabs`
    records that group's currently open files as `rememberedTabUrls`.
 
@@ -147,7 +146,7 @@ Hiding is *close and remember*: IntelliJ has no collapsible group chip in the ta
 §"Constraints that are not going away").
 
 1. The user double-clicks a group in the tool window, or presses the eye button
-   (`ToggleVisibilityAction`). Both reach `toggleVisibility`, which checks the licence.
+   (`ToggleVisibilityAction`). Both reach `toggleVisibility`.
 2. **Hide** (`TabGroupVisibility.hide`): records the group's open files in order as
    `rememberedTabUrls`, then asks `TabStrip.close(files)`.
 3. **Show** (`TabGroupVisibility.show`): takes `rememberedTabUrls` filtered to current members (or
@@ -165,14 +164,13 @@ new code, still go through `TabStrip`.
 
 ## Trace: the tool window stays in sync
 
-`TabGroupsPanel` (in `TabGroupsToolWindow.kt`) subscribes to four events in its `init` block and
+`TabGroupsPanel` (in `TabGroupsToolWindow.kt`) subscribes to three events in its `init` block and
 calls `refresh()` on each:
 
 | Event                                   | Why                                                     |
 |-----------------------------------------|---------------------------------------------------------|
 | `TabGroupsChangedListener`              | A group or assignment changed anywhere                  |
 | `FileEditorManagerListener.fileOpened` / `fileClosed` | Open files are drawn bold; hidden state changes |
-| `ToolWindowManagerListener.toolWindowShown` | Re-check the licence when the user opens the window |
 
 `refresh()` rebuilds the whole tree from `TabGroupService`, restoring which groups were expanded and
 which rows were selected. At a few dozen rows, rebuilding is simpler than diffing. The renderer
@@ -186,8 +184,7 @@ disables the group actions.
 ## Trace: edit the palette
 
 1. **Settings | Tools | PrismTabs** creates `TabGroupPaletteConfigurable`.
-2. `createPanel` builds one row per preset with the UI DSL, bound to the `edited` list. Rows are
-   disabled without a licence.
+2. `createPanel` builds one row per preset with the UI DSL, bound to the `edited` list.
 3. On **OK** or **Apply**, `apply()` calls `TabGroupPaletteService.setPresets(edited)`, which stores
    only presets that differ from the built-in defaults.
 4. New groups take their colours from `TabGroupPaletteService.presets()`. Existing groups keep the
@@ -203,22 +200,13 @@ plugins.
   provider and repaint, clear the platform's icon caches, and release the clipboard. Each step
   removes one path by which the platform could keep a PrismTabs object alive.
 
-## Trace: a paid feature is used
-
-Paid features call `PrismTabsLicense.requirePaidFeature("…")` or `paidFeaturesEnabled()` at the
-point of use: `toggleVisibility`, `toggleActiveGroup`, `autoJoinActiveGroup`, the tool window's
-`refresh`, and the settings page. `paidFeaturesEnabled` returns `true` when the build is not sold,
-when the licence facade has not started yet, and when a valid licence or trial exists. The locked
-tool window still offers to reopen hidden groups' tabs, so a lapsed subscription never strands
-closed tabs.
-
 ## Conventions you will see everywhere
 
 - **Long KDoc on every class.** It records the reason for each non-obvious decision. Read it before
   changing the class; most "simplifications" are traps it describes.
 - **`internal` over `private` where a test needs access,** with a note saying so.
 - **Pure functions split out of UI code** for testing: `removeFromGroupText`,
-  `deleteConfirmationMessage`, `currentGroupCaption`, `memberFileRows`, `PrismTabsLicense.decide`.
+  `deleteConfirmationMessage`, `currentGroupCaption`, `memberFileRows`.
 - **Every group change ends with repaint and notify**, as in [The data model](#the-data-model).
 - **No internal platform API.** `verifyPlugin` fails the build on one.
 - **Wording follows `docs/naming-and-terminology.md`**: "Recolour…", "Remove from Group",

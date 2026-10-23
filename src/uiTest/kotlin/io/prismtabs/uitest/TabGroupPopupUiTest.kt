@@ -258,6 +258,36 @@ class TabGroupPopupUiTest {
         }
     }
 
+    /**
+     * Every one of the eight presets starts a group with its own colours and paints the tab with
+     * them. Each new group is made from the same tab, so each one after the first empties the
+     * previous group, whose prompt is answered along the way.
+     */
+    @Test
+    fun `every preset starts a group and colours the tab`(remoteRobot: RemoteRobot) {
+        remoteRobot.idea {
+            resetTabGroups()
+            resetTabGroupPalette()
+            hideTabGroupsToolWindow()
+            openFile("Sample.kt")
+
+            TabGroupPalette.PRESETS.forEachIndexed { index, preset ->
+                remoteRobot.openTabGroupPopupOn(this, "Sample.kt")
+                remoteRobot.clickPopupItem(preset.label)
+                dialog("New Tab Group") { find<JButtonFixture>(JButtonFixture.byText("OK")).click() }
+                if (index > 0) dialog("Empty Tab Group") { find<JButtonFixture>(JButtonFixture.byText("Delete Group")).click() }
+
+                waitFor(ofSeconds(10)) { groupNameFor("Sample.kt") == preset.label && groupCount() == 1 }
+                assertEquals(preset.light.rgb and 0xFFFFFF, groupLightRgbFor("Sample.kt"), "${preset.label}'s light colour")
+                assertEquals(preset.dark.rgb and 0xFFFFFF, groupDarkRgbFor("Sample.kt"), "${preset.label}'s dark colour")
+                val shown = themedPreset(preset.id)
+                waitFor(ofSeconds(10), errorMessage = "${preset.label}: expected ${shown.hex()}, painted ${paintedTabRgb("Sample.kt").hex()}") {
+                    rgbClose(shown, paintedTabRgb("Sample.kt"))
+                }
+            }
+        }
+    }
+
     /** Cancelling the prompt must abort the whole flow — no group, and no assignment either. */
     @Test
     fun `cancelling the name prompt creates nothing`(remoteRobot: RemoteRobot) {

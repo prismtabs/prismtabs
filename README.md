@@ -2,7 +2,7 @@
 
 Colour-coded tab groups for editor tabs in JetBrains IDEs.
 
-**Status: published on JetBrains Marketplace** as a freemium plugin. Features: a swatch popup on
+**Status: published on JetBrains Marketplace** as a free plugin. Features: a swatch popup on
 the tab context menu to colour tabs into named groups, and a **PrismTabs tool window** (right-hand
 stripe) that lists every group with its colour, member count and hidden state, and can rename,
 recolour, delete, mark **active**, or **hide/show** a group. Hiding is "close and remember":
@@ -11,7 +11,7 @@ open tabs and records them, and showing reopens them in order; see
 [Phase 4 result](#phase-4-result).
 
 The phase sections below record the design decisions and platform findings behind each part of
-the plugin. [Licensing and pricing](#licensing-and-pricing) covers the paid tier,
+the plugin. [Licensing](#licensing) covers the terms it ships under,
 [docs/releasing.md](docs/releasing.md) how to ship a release, and the
 [cross-platform verification pass](docs/cross-platform-manual-verification.md) what to check by
 hand before each one. Everything is covered end-to-end by real UI tests (`./gradlew uiTest`, see
@@ -506,9 +506,8 @@ latent: a restart that didn't restore editors left every group unhidden with not
 The flag is now gone. `TabGroupVisibility.isHidden` derives it — *the group has members and none of
 them is open* — and every surface reads that: the tool window's `hidden` suffix (off the tree rows
 it just built, so the group row can never contradict the bold member rows under it), the Hide/Show
-toggle's text and icon, the delete confirmation's warning line, and the locked window's escape
-hatch. Reopening one member un-hides the group on the same refresh; closing the last tab hides it;
-"Show Group" is never dead.
+toggle's text and icon, and the delete confirmation's warning line. Reopening one member un-hides
+the group on the same refresh; closing the last tab hides it; "Show Group" is never dead.
 
 What that costs is the restore memory, which a derived state cannot hold. `rememberedTabUrls` (the
 old `collapsedFileUrls`) is therefore maintained **continuously** by `TabGroupFileListener` — on
@@ -618,15 +617,11 @@ checklist item directly. This section closes the one piece that hadn't been chec
 
 **A gap the matrix itself had, closed 2026-08-19:** the `verify-plugin` job was *failing* on every
 push from at least 2026-08-08, and stayed unnoticed because the three-OS `build` matrix beside it
-was green the whole time. One `OVERRIDE_ONLY_API_USAGES` problem caused it —
-`PrismTabsLicense.showRegisterDialog` invoked `AnAction.actionPerformed` directly, which is
-`@ApiStatus.OverrideOnly`. It now goes through `ActionUtil.invokeAction`, the platform's own entry
-point on the 2024.2 floor, which also runs the action's `update` first instead of firing a possibly
-disabled action, and retires a deprecated `AnActionEvent.createFromDataContext` call along the way.
-`verifyPlugin` is green across all seven IDEs it resolves (242 → 262). A short account, including the
-one deprecation warning that is unavoidable until the compile floor moves to 243, is in the
-2026-08-19 macOS entry of [cross-platform manual verification](docs/cross-platform-manual-verification.md)'s
-sign-off log.
+was green the whole time. One `OVERRIDE_ONLY_API_USAGES` problem caused it: a direct call to
+`AnAction.actionPerformed`, which is `@ApiStatus.OverrideOnly`, in a licence check the plugin has
+since dropped. That level is in `verifyPlugin`'s `failureLevel`, so a recurrence fails the build. A
+short account is in the 2026-08-19 macOS entry of [cross-platform manual
+verification](docs/cross-platform-manual-verification.md)'s sign-off log.
 
 `plugin.xml` has no `<component>` entries — only `<projectListeners>`, `<applicationConfigurable>`
 and one action — which is what dynamic-plugin-safety requires structurally. That was true by
@@ -706,86 +701,17 @@ triggering an unload through the IDE's own Plugins page goes through the asynchr
 `unloadPluginWithProgress` path this test bypassed for determinism, so this artefact is specific to
 how the check was driven, not evidence of a problem in the plugin being checked.
 
-## Licensing and pricing
+## Licensing
 
-PrismTabs is sold on JetBrains Marketplace under the **Freemium** model as a **Yearly/Monthly
-Subscription without a Fallback License**, product code `PPRISMTABS`:
+PrismTabs is free on JetBrains Marketplace, with every feature available to every user. It is
+proprietary, distributed under the [End-User Licence Agreement](docs/EULA.md). That file mirrors
+<https://prismtabs.com/eula>, the canonical copy in `prismtabs-website`; the `EULA sync` workflow
+fails when the two differ.
 
-| | Yearly | Monthly |
-|---|---|---|
-| Personal | $14 | $1.40 |
-| Commercial, per user | $29 | $2.90 |
-
-- **Trial:** 14 days of the paid features, then a silent drop to the free tier, never a lockout.
-  The Marketplace offers only 7, 10, 14 or 30 days.
-- **Yearly price is ten times the monthly price.** The Marketplace derives the yearly price from
-  the monthly one by multiplying by 10 (confirmed with Marketplace support 2026-09-29), so the
-  monthly price is the yearly price divided by 10 and paying yearly is two months free (~17%). The
-  Marketplace's pricing box always reads "save 20% with a yearly subscription" and cannot be changed
-  per plugin, so don't take that label literally. Change a price by changing the monthly figure and
-  keeping the yearly one at exactly ten times it.
-- **Open-source licence:** Pro is free through the Marketplace community programme. JetBrains
-  verifies eligibility; the EULA's §1.2 grants the paid features under a community licence.
-- **No fallback licence:** `untilBuild` is unset (see [Compatibility policy](#compatibility-policy)),
-  so a frozen fallback build would never age out and would converge with the paid tier. The free
-  tier already covers a lapsed subscriber.
-
-**Free/paid split.** Feature-based, not quantity-based: capping the number of groups would punish a
-user mid-task.
-
-- **Free forever:** assigning tabs to the 8 preset colours, unlimited groups, create, rename,
-  recolour, delete, persistence across restarts, rename/move remapping, and listing a group's files
-  ("Files…", see [Group membership](#group-membership)). The last two are correctness features,
-  so they stay free.
-- **Paid:** the PrismTabs tool window, hide/show, active-group auto-join, and custom palette
-  editing.
-
-**Trial resets and release cadence.** The Marketplace resets every user's trial whenever
-`<product-descriptor>`'s `release-version` changes. `release-version` therefore moves only on a
-deliberately cut minor release, about once a year, and features ship as patch releases.
-The procedure is in [docs/releasing.md](docs/releasing.md).
-
-### How the licence check works
-
-`io.prismtabs.license.PrismTabsLicense` / `LicenseSignatureVerification` are a Kotlin port of
-JetBrains' reference implementation
-([`marketplace-makemecoffee-plugin`'s `CheckLicense.java`](https://github.com/JetBrains/marketplace-makemecoffee-plugin)):
-`LicensingFacade.getConfirmationStamp(PRODUCT_CODE)` plus JetBrains-root-certificate signature
-verification of licence-key and licence-server stamps. It checks only the signed stamp, whatever
-billing period or licence type is behind it. `PrismTabsLicense.decide` (the freemium truth table) and
-`LicenseSignatureVerification`'s reject paths are unit-tested in plain JUnit 5. The plugin makes no
+`plugin.xml` has no `<product-descriptor>` and the plugin has no licence check. Keep it that way
+unless the plugin is sold: with a product code, the platform refuses to load, unload or update the
+plugin without an IDE restart, which `PluginUnloadUiTest` asserts against. The plugin makes no
 network calls, so no privacy policy is required.
-
-`PrismTabsLicense.paidFeaturesEnabled()` / `requirePaidFeature()` gate each paid feature
-separately: the PrismTabs tool window (`TabGroupsPanel` shows an upsell panel instead of the list),
-`toggleVisibility` (every hide/show entry point), `toggleActiveGroup`, and
-`TabGroupPaletteConfigurable`. `AssignTabGroupAction` stays ungated: it is the free tier. A
-`false` means "fall back to the free tier", never "block the plugin".
-
-- **`<product-descriptor … optional="true"/>` is mandatory.** `optional="true"` sets
-  `IdeaPluginDescriptorImpl.isLicenseOptional`, which lets the plugin load unlicensed. A bare
-  `<product-descriptor>` marks PrismTabs as fully paid, and the platform disables the whole plugin
-  once an unlicensed user dismisses the register dialog.
-- **`<depends>com.intellij.marketplace</depends>` is mandatory too.** `LicensingFacade` is
-  provided by the JetBrains Marketplace Licensing plugin, and `isLicensed` reads a missing facade
-  as "not answered yet", which `decide` lets through — right for the first moment of IDE startup,
-  but permanent if the licensing plugin is absent. IntelliJ IDEA bundles it; Android Studio does
-  not. Reproduced 2026-09-28: PrismTabs installed from disk into Android Studio, with no licensing
-  plugin, had every paid feature unlocked. The dependency makes the IDE install the licensing
-  plugin with a Marketplace install and refuse to load PrismTabs without it, instead of failing
-  open. Treating a null facade as unlicensed would not do instead: it would lock paying users out
-  for that first moment of every startup.
-- **Nothing is held hostage.** Clearing an active group stays free, and the locked tool window
-  still offers "reopen the tabs of N hidden groups". `TabGroupFileListener` re-checks on every file
-  open, so auto-join stops the moment a subscription lapses.
-- **Every local build is an unlicensed paid build.** `runIde` and `runIdeForUiTests` start without
-  a licence, so exercising a paid feature by hand needs a trial first.
-  `RemoteRobotExtension` entitles the plugin before each uiTest, and `PaywallUiTest` un-entitles it
-  deliberately. "Entitled" is `LicensingFacade.setInstance(null)`, the "facade hasn't answered yet"
-  row of `decide`; "lapsed" is a stamp-less facade. `PaywallUiTest` covers each paid feature being
-  withheld, the purchase direction, a subscribe → lapse → subscribe cycle that keeps groups, hidden
-  state and palette, and that the free tier still works. A real JetBrains-signed stamp cannot be
-  simulated, so "a real key unlocks the plugin" stays a manual check.
 
 **Plugin icon.** `pluginIcon.svg` / `pluginIcon_dark.svg`, 40×40: three preset swatch colours in
 `ColorSwatchIcon`'s bordered-circle style, which keeps pale colours visible on a light background.
@@ -795,17 +721,11 @@ separately: the PrismTabs tool window (`TabGroupsPanel` shows an upsell panel in
 A group's members are **files**, and until Phase 6 nothing in the UI ever listed them.
 `membersOf` was called in exactly two places — to decide emptiness, and to render a count — so the
 only way to learn what was in a group was to look at which tabs happened to be tinted. Close a tab
-and its membership became unknowable. That landed hardest on the free tier, which can create and
-fill groups but has no tool window: a free user could colour a file, close it, and have no route
-back to where it went.
+and its membership became unknowable.
 
-"Manage Groups…" → a group → **`Files…`** answers it, and stays free. Membership visibility is a
-correctness feature, the same argument the free/paid split already makes for rename/move remapping:
-a free tier that can fill groups whose contents are unknowable is exactly the "too limited" outcome
-the feature-based split exists to avoid. The tool window's paid value is unaffected — it is
-hide/show, active-group auto-join, and being always-on and browsable, not the membership data
-itself. One line held deliberately: opening a *single* member from this list is free, but there is
-no "Open All Files in Group" here. That is `expand` under another name, and expand is paid.
+"Manage Groups…" → a group → **`Files…`** answers it from the tab's own menu, and the tool window
+answers it as a tree (below). One line held deliberately: this list opens a *single* member, and
+there is no "Open All Files in Group" here. That is the tool window's Show Group under another name.
 
 It opens a **fresh top-level chooser**, not a further nested `PopupStep` — the one shape the plan
 argued against at length. Nested, the file names would sit five popup windows deep from the
@@ -852,7 +772,7 @@ emptied group offering no `Files…` at all.
 
 ### The same answer in the tool window, as a tree
 
-Subscribers get it as browsable furniture rather than a popup they have to go and ask for: the
+The tool window offers it as browsable furniture rather than a popup you have to go and ask for: the
 PrismTabs tool window's flat list of groups became a **two-level tree**, each group row expanding to
 one child per member file. A container you expand to see its contents is the platform's own idiom
 for this question — Bookmarks, Changes and the Project view all answer it that way.
@@ -946,11 +866,6 @@ pass recomputes the colour cache once and reports the batch's emptied groups wit
 which is what the one empty-group dialog needs — a loop would report a group only through whichever
 of its members happened to go last.
 
-**On the free/paid line:** removal is not gated and must not be. Unassigning is a by-hand assignment
-change, which the [free/paid split](#licensing-and-pricing) keeps free forever; it is reachable
-only by subscribers and trial users in practice because the *window* is paid, and free users keep the
-same operation on a tab's own right-click menu.
-
 Driven end-to-end in `TabGroupsToolWindowUiTest`: `a member row offers Remove from Group, and a group
 row does not` (with every tab closed — the state in which nothing could have gone through the tab
 popup), `multi-selected files are removed together, and the item states the count`, and `a selection
@@ -1030,13 +945,6 @@ every other assignment path carries: it cannot move a group's last member out of
 already in a group has the same need answered a row below anyway, its group named in the
 "In group:" caption with "Add to Group…" to move it.
 
-It is not licence-gated, though auto-join itself is. Assigning a file to a group by hand is free
-forever, and this is only that, addressed at a group the user already picked; marking a group active
-stays gated in `toggleActiveGroup`. Nor is there a lapsed-subscriber state to worry about:
-`activeGroupId` is session-scoped and never persisted (see
-[Why "active group" isn't persisted](#why-active-group-isnt-persisted)), so an active group can only
-exist if it was marked in this session, through the gate.
-
 The label deliberately mirrors the "Add to Group…" row beneath it — same verb, one naming the
 destination outright and one opening the list to choose from. The quoted group name is what tells
 them apart at a glance, so it is not decoration.
@@ -1080,9 +988,8 @@ deterministically: open, unassigned, a group active, and no route back into it b
 
 ## UI testing
 
-`TabGroupPopup`, the PrismTabs tool window, the VFS deletion path (`EmptyGroupOnDiskDeleteUiTest`,
-see "Empty groups" above) and the free/paid paywall (`PaywallUiTest`, see
-"Licensing and pricing" above) are covered end-to-end by
+`TabGroupPopup`, the PrismTabs tool window and the VFS deletion path (`EmptyGroupOnDiskDeleteUiTest`,
+see "Empty groups" above) are covered end-to-end by
 [`remote-robot`](https://github.com/JetBrains/intellij-ui-test-robot) tests (`src/uiTest/`), not
 just eyeballed in `runIde`. They live in their own Gradle source set — slow, need a live IDE — kept
 out of the fast `./gradlew test` path entirely.
@@ -1131,14 +1038,13 @@ deleted by hand. No JCEF property moves that directory, and IPGP 2.19.0 lists no
 
 The whole suite passes there on macOS (96 tests, 3 skipped, on IDEA 2026.2.3, 2026-09-19), once the
 helpers stopped assuming 2024.2's component shapes. 2026.2 shows the Project view tree as
-`ProjectViewPane$MyProjectViewTree` and Settings as a non-modal window titled "Settings – <project>",
-paints a tab as a rounded pill inset in its bounds (Islands themes) and blends an unselected tinted
-one about 40% rather than 50% into the strip, and renders a single-declaration `.kt` file under its
-file name — each is handled, and documented, where the helper meets it. `PluginUnloadUiTest`'s
-unload scenario still needs `<product-descriptor>` commented out, as that class requires; on a paid
-build it skips itself. Under Xvfb on Linux the suite has been seen to wedge at
-`EmptyGroupOnDiskDeleteUiTest`, whose robot click on the empty-group dialog did not land, with every
-test after it timing out against the blocked IDE; that has not been re-checked since.
+`ProjectViewPane$MyProjectViewTree` and Settings as a non-modal window titled "Settings –
+<project>", paints a tab as a rounded pill inset in its bounds (Islands themes) and blends an
+unselected tinted one about 40% rather than 50% into the strip, and renders a single-declaration
+`.kt` file under its file name — each is handled, and documented, where the helper meets it. Under
+Xvfb on Linux the suite has been seen to wedge at `EmptyGroupOnDiskDeleteUiTest`, whose robot click
+on the empty-group dialog did not land, with every test after it timing out against the blocked IDE;
+that has not been re-checked since.
 
 ### Expected sandbox noise — an error balloon and a warning, neither a PrismTabs bug
 
@@ -1178,20 +1084,20 @@ colour and membership (plus a kept empty group) all surviving the restart.
 
 **Hosted-runner CI is not a working Windows path — do not treat it as a release gate.**
 [`.github/workflows/ui-tests.yml`](.github/workflows/ui-tests.yml) (`workflow_dispatch`, not on
-every push — Windows runner minutes carry a 2x plan-minute multiplier) boots `runIdeForUiTests` on
-a GitHub-hosted `windows-latest` runner and drives it as above, but the suite fails there. Tried end
+every push — Windows runner minutes carry a 2x plan-minute multiplier) boots `runIdeForUiTests` on a
+GitHub-hosted `windows-latest` runner and drives it as above, but the suite fails there. Tried end
 to end on 2026-09-08: two back-to-back runs failed identically, 12 of 43, with the tool-window-tree
-assertions in `TabGroupsToolWindowUiTest` and `PaywallUiTest` timing out. The likely cause is that
-the hosted runner's session is not the real interactive desktop `remote-robot`'s `java.awt.Robot`
-needs (`RemoteRobotExtension`'s frame de-iconify/raise workaround is calibrated to a real local
-session and does not carry over) — not yet confirmed from the sandbox log, which the workflow's
-upload step now captures alongside the failure screenshots. It has never passed on a hosted runner;
-every green Windows result on record is a local `./gradlew uiTest` on real hardware. The workflow is
-kept only as a debugging aid, not as proof. macOS has no CI path: `remote-robot`
-needs Screen Recording/Accessibility TCC permission that cannot be granted non-interactively on
-GitHub's hosted macOS images (SIP blocks it — see the workflow file for the specifics). The same
-automated suite still runs there, just by hand on real hardware, since that TCC permission is a
-normal one-time "Allow" click outside CI; see
+assertions in `TabGroupsToolWindowUiTest` and the since-removed `PaywallUiTest` timing out. The
+likely cause is that the hosted runner's session is not the real interactive desktop
+`remote-robot`'s `java.awt.Robot` needs (`RemoteRobotExtension`'s frame de-iconify/raise workaround
+is calibrated to a real local session and does not carry over) — not yet confirmed from the sandbox
+log, which the workflow's upload step now captures alongside the failure screenshots. It has never
+passed on a hosted runner; every green Windows result on record is a local `./gradlew uiTest` on
+real hardware. The workflow is kept only as a debugging aid, not as proof. macOS has no CI path:
+`remote-robot` needs Screen Recording/Accessibility TCC permission that cannot be granted
+non-interactively on GitHub's hosted macOS images (SIP blocks it — see the workflow file for the
+specifics). The same automated suite still runs there, just by hand on real hardware, since that TCC
+permission is a normal one-time "Allow" click outside CI; see
 [`docs/cross-platform-manual-verification.md`](docs/cross-platform-manual-verification.md) for both
 that and the fully manual checklist pass.
 
@@ -1221,29 +1127,6 @@ no matter what the tests say:
   framebuffer, so JDK 21 routes it to `sun.awt.screencast.ScreencastHelper` — the xdg-desktop-portal
   ScreenCast (PipeWire) API — which waits on a portal grant that never comes. See finding 5 below
   for why one such call used to kill an entire run.
-
-**Most of `PaywallUiTest` is the one exception** — its script-driven cases were verified 2026-08-11
-running under a live GNOME Wayland session (`$XDG_SESSION_TYPE=wayland`), all 4 tests of the day
-passing; the class has since grown to 7. Their paywall-specific interactions go through `IdeaFrame`'s
-`runJs`/`callJs` helpers (in-process method calls inside the sandbox IDE, same mechanism
-`resetTabGroups`/`setGroupHidden` already used) rather than a popup or dialog click, so none of
-*that* needs `java.awt.Robot`.
-
-**The exception's own exception is the free-tier test**, `the free tier still colours tabs and
-manages groups while the licence is lapsed`, which is mouse-driven and so needs X11 like everything
-else. That is deliberate and load-bearing rather than an oversight: every gate lives in the UI layer
-and never in `TabGroupService`, so a test that the free tier still *works* must click the real popup
-(`createGroupViaPopup`, `clickPopupSubstepItem`, and the modal name prompt). Reflecting into the
-service instead would route past the only layer a `requirePaidFeature` could be added to, and would
-keep passing while an over-gating regression broke the product for every unsubscribed user.
-
-One further caveat for the script-driven cases: assertions that read the tool window's contents go
-through `toolWindowGroupRows()`, which opens the window with a real stripe-button `.click()` if it
-isn't already showing — but each of those cases opens the window itself via the script-driven
-`showTabGroupsToolWindow()` first, so that fallback branch is never actually reached; it stays a live
-Robot dependency for whoever calls `toolWindowGroupRows()` without opening the window some other way
-first. The other three uiTest classes click through real popups and dialogs throughout and still need
-the workaround below.
 
 Check with `echo $XDG_SESSION_TYPE`. If it says `wayland`, either log in to a **GNOME on Xorg**
 session, or run the sandbox IDE on a dedicated X display (`Xvfb`) and point `runIdeForUiTests` at it:
@@ -1386,15 +1269,6 @@ Compile against the **oldest** supported platform and run forward. `sinceBuild =
 hard ceiling. Raising `platformVersion` in `gradle.properties` drops older IDEs — don't do it
 casually.
 
-The floor was 242 (2024.2) until 1.4.15 and moved to 251 (2025.1) before any user had installed
-PrismTabs, for licensing rather than for API: the `com.intellij.marketplace` dependency described
-under [How the licence check works](#how-the-licence-check-works) cannot resolve on the paid
-2024.2-2024.3 IDEs, which build licensing into their core. The move also raised the Kotlin pin to
-2.1 and moved `PrismTabsLicense` to the `ActionUtil.invokeAction(action, event, onDone)` overload.
-That overload is itself deprecated from 252, and its replacement, `performAction`, does not exist
-on 251, so one deprecation note on 252 and later remains until the floor moves again. The
-2024.2 measurements recorded elsewhere in this file are left as they were taken.
-
 ### Never omit a default argument on a platform Kotlin API
 
 Compiling forward has one trap, and it costs a working feature rather than a compile error. When
@@ -1446,12 +1320,11 @@ solved that for closing. `PlatformTabOpen` applies the same bound-method-referen
 open, which both removes the internal API and makes the two directions one shape. `PlatformOpenOptions`
 is gone with it.
 
-**The licence check — replaced.** `PrismTabsLicense.isPaidBuild` read its own `productCode` through
+**The licence check — removed with the paid tier.** It read its own `productCode` through
 `PluginManager.getPluginByClass`, which is `@ApiStatus.Internal` from 2026.2. There is no public
 call that hands a plugin its own descriptor — on 2026.3 `PluginManagerCore.getPlugin`,
-`PluginManager.getPlugin` and `PluginManager.findEnabledPlugin` are all internal too. It now parses
-`<product-descriptor code="…">` straight out of its own bundled `plugin.xml`, which is the same tag
-the platform would have parsed, so the no-drift property the original call was chosen for is intact.
+`PluginManager.getPlugin` and `PluginManager.findEnabledPlugin` are all internal too. Nothing in the
+plugin needs its own descriptor any more.
 
 **The repaint — replaced by a public call that was there all along.** `TabRepaint` used
 `FileEditorManagerImpl.queueUpdateFile`. The public equivalent is
@@ -1573,4 +1446,4 @@ the `proguard-mapping-v<version>` artifact from the publish workflow run for tha
 The name lives in `gradle.properties` (`pluginName`, `pluginGroup`) plus the `<id>`/`<name>` in
 `src/main/resources/META-INF/plugin.xml`, the `io.prismtabs` package path, and the class names in
 `proguard-rules.pro`. Never change `<id>`
-of the published plugin: the Marketplace keys the listing and every licence to it.
+of the published plugin: the Marketplace keys the listing, and every installed copy's updates, to it.

@@ -2,12 +2,12 @@
 
 ## [Unreleased]
 
-### Fixed
+### Changed
 
-- Switching theme while the PrismTabs tool window was locked left its group tree and toolbar in the
-  previous theme once the window unlocked. They now follow the theme. The tree also no longer keeps
-  a theme plugin's classes loaded, which reduces the "didn't unload fully" warning on uninstalling
-  that plugin; IntelliJ can still show the warning.
+- PrismTabs is now free. The tool window, hiding and showing groups, active groups and palette
+  editing work for everyone, with no trial or subscription.
+- PrismTabs no longer depends on the JetBrains Marketplace Licensing plugin.
+- Installing, updating, disabling and uninstalling PrismTabs no longer need an IDE restart.
 
 ## [1.4.18] - 2026-10-07
 

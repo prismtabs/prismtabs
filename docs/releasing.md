@@ -45,14 +45,14 @@ The unfiltered `verifyPlugin` downloads every IDE at once and needs roughly 45�
    ```bash
    scripts/release.sh            # patch: 1.4.16 → 1.4.17
    scripts/release.sh minor      # minor: 1.4.x → 1.5.0
-   scripts/release.sh 1.4.20     # an explicit patch version
+   scripts/release.sh major      # major: 1.x.y → 2.0.0
+   scripts/release.sh 1.4.20     # an explicit version
    scripts/release.sh --dry-run  # print the version and stop
    ```
 
-   It prints the version and asks for confirmation. It then sets `pluginVersion` (and, for a
-   minor release, `release-version` and `release-date`; see [Version numbers](#version-numbers)),
-   runs `patchChangelog` and `verifyPlugin`, commits and pushes `dev`, fast-forwards `master` to
-   it and pushes it, waits for Build to pass on that commit, and pushes an annotated
+   It prints the version and asks for confirmation. It then sets `pluginVersion` (see
+   [Version numbers](#version-numbers)), runs `patchChangelog` and `verifyPlugin`, commits and
+   pushes `dev`, fast-forwards `master` to it and pushes it, waits for Build to pass on that commit, and pushes an annotated
    `v<pluginVersion>` tag, which starts Publish. It stops before changing anything if it is not on
    `dev`, the working tree is dirty, `dev` differs from `origin/dev`, the tag exists or
    `[Unreleased]` is empty, and stops before tagging if Build fails.
@@ -62,20 +62,13 @@ To withdraw a tag pushed by mistake, run `git push origin :refs/tags/v1.4.16` an
 
 ## Version numbers
 
-The Marketplace resets every user's trial whenever `release-version` changes, so a minor release
-(1.4.x → 1.5.0) is a decision to reset trials. It is not tied to the size of a change. Ship
-features and fixes as patches. Cut a minor release only when a trial reset is wanted, roughly once
-a year at most.
+`pluginVersion` follows [Semantic Versioning](https://semver.org/):
 
-| Release | `pluginVersion` | `release-version` | `release-date` |
-|---|---|---|---|
-| Patch (default) | Bump the third component: 1.4.15 → 1.4.16 | Unchanged | Unchanged |
-| Minor | Bump the second component, zero the third: 1.4.x → 1.5.0; after 1.9 comes 2.0.0 | First two components without the dot: `15`, `20` | The publish day, `YYYYMMDD` |
-
-- The minor component stays a single digit. `release-version` needs at least two digits, and the
-  Marketplace reads its last digit as a separate number. `ProductDescriptorTest` enforces both.
-- The Marketplace refuses a different `release-date` for a `release-version` it has already seen,
-  including from a refused upload. Change the two together or not at all.
+| Release | When | Example |
+|---|---|---|
+| Patch (default) | Bug fixes only | 1.5.0 → 1.5.1 |
+| Minor | A new feature, or a change users notice | 1.5.1 → 1.6.0 |
+| Major | Dropping an IDE version from `pluginSinceBuild`, or removing a feature | 1.6.0 → 2.0.0 |
 
 ## Secrets
 

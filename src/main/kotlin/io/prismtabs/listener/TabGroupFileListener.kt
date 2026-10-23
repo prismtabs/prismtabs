@@ -5,7 +5,6 @@ import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import io.prismtabs.license.PrismTabsLicense
 import io.prismtabs.model.TabGroup
 import io.prismtabs.service.TabGroupNotifier
 import io.prismtabs.service.TabGroupService
@@ -54,11 +53,6 @@ internal class TabGroupFileListener : FileEditorManagerListener {
     private fun autoJoinActiveGroup(project: Project, service: TabGroupService, file: VirtualFile) {
         val active = service.activeGroup() ?: return
         if (service.groupFor(file.url) != null) return
-        // Auto-join is paid (see the README's free/paid split). Checked here rather than only where
-        // the group is marked active, so a subscription lapsing mid-session stops auto-joining
-        // immediately instead of when the IDE next restarts — and checked last, after the two cheap
-        // early returns, so the free tier never pays for stamp verification on an ordinary file open.
-        if (!PrismTabsLicense.paidFeaturesEnabled()) return
         service.assign(file.url, active)
         TabRepaint.request(project, file)
         // Announce the membership change, exactly as every hand-driven assignment path announces

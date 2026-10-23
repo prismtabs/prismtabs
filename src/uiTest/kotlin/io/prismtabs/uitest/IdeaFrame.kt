@@ -160,6 +160,14 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
             const ids = []
             for (let i = 0; i < groups.size(); i++) ids.push(groups.get(i).getId())
             for (let i = 0; i < ids.length; i++) service.delete(ids[i])
+
+            // Announced as every production mutation is, so the strip and an open tool window
+            // drop the deleted groups now rather than at the next unrelated event.
+            const pluginObject = function(name) {
+                return java.lang.Class.forName(name, true, pluginLoader).getField('INSTANCE').get(null)
+            }
+            pluginObject('io.prismtabs.service.TabRepaint').requestAll(project)
+            pluginObject('io.prismtabs.service.TabGroupNotifier').notifyChanged(project)
             """,
             true,
         )
@@ -602,8 +610,8 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
      *
      * Deliberate, and not only for speed: the popup path needs `java.awt.Robot` mouse input, which
      * does not reach the IDE under Wayland (see README "These tests need an X11 display"), so a
-     * paywall test built on it can't run at all on a Wayland desktop even though nothing about the
-     * paywall requires a mouse. The popup's own behaviour is [TabGroupPopupUiTest]'s subject; what
+     * test built on it can't run at all on a Wayland desktop even when nothing about its subject
+     * requires a mouse. The popup's own behaviour is [TabGroupPopupUiTest]'s subject; what
      * the tests here need is simply *a group that exists*.
      */
     fun assignFileToNewGroup(path: String, groupName: String, lightRgb: Int = 0x4285F4, darkRgb: Int = 0x8AB4F8) {
@@ -758,263 +766,9 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     }
 
     /**
-     * Makes the running sandbox behave as a **lapsed (or never-started) subscription**: a paid
-     * build the user holds no licence for, which is the only state in which the paywall paths are
-     * reachable.
-     *
-     * Simulated entirely from the test side — no test-only seam in production code — by supplying
-     * the one input the gate still has a choice about. `plugin.xml` ships the
-     * `<product-descriptor code="PPRISMTABS" … optional="true"/>` since the gate was armed, so
-     * `PluginDescriptor.getProductCode()` already answers `PPRISMTABS` in the sandbox and nothing
-     * here needs to forge it; what is installed is `LicensingFacade.INSTANCE`, via its own
-     * `public static setInstance`, holding an empty `confirmationStamps` map. That is exactly what
-     * a real IDE holds for a paid plugin the user has no licence for, so `isLicensed()` returns
-     * `false` through its genuine code path rather than a stubbed one.
-     *
-     * The reverse ([simulateEntitled]) is not optional: the facade is global to the IDE process and
-     * would otherwise leave every later test running against a locked plugin — though
-     * [RemoteRobotExtension] now re-entitles before each test as a backstop, so a test that dies
-     * before its `finally` no longer poisons the rest of the run.
-     */
-    fun simulateUnlicensed() = remoteRobot.simulateUnlicensed()
-
-    /**
-     * The inverse of [simulateUnlicensed], and the state **every test in this suite runs in by
-     * default** — see [RemoteRobotExtension.beforeTestExecution], which installs it before each
-     * test.
-     *
-     * That default is not a convenience either: since `plugin.xml` gained its `<product-descriptor>`
-     * the sandbox IDE boots as a paid build with no licence (measured: `productCode=PPRISMTABS
-     * licenseOptional=true isLicensed=false paid=false`), so without this every test of a paid
-     * feature — the whole tool window, collapse/expand, active-group auto-join, palette editing —
-     * would run against the free tier and fail on an upsell panel.
-     *
-     * **What it actually simulates, precisely.** A genuine subscription cannot be simulated: a
-     * `key:`/`stamp:` confirmation stamp only passes [io.prismtabs.license.LicenseSignatureVerification]
-     * if JetBrains signed it, and forging one is the thing that verifier exists to prevent. What is
-     * installed instead is `LicensingFacade.setInstance(null)`, which drives the gate down
-     * `decide(isPaidBuild = true, isLicensed = null)` — the "facade hasn't answered yet" row, which
-     * is open by design (see `PrismTabsLicense.isLicensed`). Every gate reads exactly the one
-     * boolean `paidFeaturesEnabled()` returns, so at the call sites this is indistinguishable from a
-     * paid subscriber, and unlike clearing `productCode` it keeps the plugin a *paid build* while it
-     * does so. What it therefore cannot prove is that a real signed stamp is accepted — nothing
-     * automated can; that is the manual "activate a real licence" step in
-     * `docs/cross-platform-manual-verification.md`.
-     */
-    fun simulateEntitled() = remoteRobot.simulateEntitled()
-
-    /** The real gate, read over the wire — asserted in each paywall test so a simulation that
-     * silently stopped working (a renamed field, say) fails loudly there instead of quietly turning
-     * every locked-path assertion into a test of the unlocked path. */
-    fun paidFeaturesEnabled(): Boolean = callJs<Boolean>(
-        """
-        importPackage(com.intellij.ide.plugins)
-        importPackage(com.intellij.openapi.extensions)
-
-        const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
-        const licenseClass = java.lang.Class.forName('io.prismtabs.license.PrismTabsLicense', true, pluginLoader)
-        const license = licenseClass.getField('INSTANCE').get(null)
-        licenseClass.getMethod('paidFeaturesEnabled').invoke(license)
-        """,
-        true,
-    )
-
-    /**
-     * Whether the running build is a **paid build** — whether its `plugin.xml` carries a
-     * `<product-descriptor>`. The same fact `PrismTabsLicense.isPaidBuild` decides on, reached the
-     * other way about: this reads the descriptor the platform parsed, that one reads the tag out of
-     * the bundled `plugin.xml` (see its doc for why it cannot use the platform's copy), so the two
-     * agreeing is worth something.
-     *
-     * Not a licence question but a *platform capability* one, which is why it is asked separately
-     * from [paidFeaturesEnabled]: `DynamicPlugins.checkCanUnloadWithoutRestart` refuses outright for
-     * a plugin with a product code that is neither bundled nor JetBrains' own — "Plugin io.prismtabs
-     * is a paid plugin" — so on a paid build neither an unload nor a dynamic load can succeed at
-     * all. [PluginUnloadUiTest] gates itself on this.
-     */
-    fun isPaidBuild(): Boolean = callJs<Boolean>(
-        """
-        importPackage(com.intellij.ide.plugins)
-        importPackage(com.intellij.openapi.extensions)
-
-        PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getProductCode() != null
-        """,
-        true,
-    )
-
-    /**
-     * Unregisters the IDE's registration actions for the duration of a test, so a gated action's
-     * `PrismTabsLicense.requestLicense` upsell finds nothing to open and returns silently.
-     *
-     * Not squeamishness about an extra window: `RegisterPlugins` is registered by the bundled
-     * marketplace plugin (confirmed present in the 2024.2 CE jars), and a modal `DialogWrapper` left
-     * open on the sandbox is the exact failure this repo has already been bitten by — see
-     * [openPrismTabsSettings] on why a modal must never be opened from a robot-server script. The
-     * upsell dialog itself is not what these tests are asserting; that the gated action *didn't
-     * happen* is.
-     */
-    fun suppressRegisterDialog() {
-        runJs(
-            """
-            importClass(com.intellij.openapi.actionSystem.ActionManager)
-            importClass(com.intellij.openapi.application.ApplicationManager)
-            importClass(com.intellij.openapi.util.Key)
-
-            const actionManager = ActionManager.getInstance()
-            // unregisterAction discards the instance, so the removed actions are stashed on the
-            // Application for [restoreRegisterDialog] to put back. Key.create every call would mint
-            // a *new* key each time (Key equality is identity), so the stash would be unreadable —
-            // findKeyByName re-finds the one this script created the first time round.
-            const keyName = 'prismtabs.uitest.suppressedRegisterActions'
-            let key = Key.findKeyByName(keyName)
-            if (key == null) key = Key.create(keyName)
-
-            const application = ApplicationManager.getApplication()
-            // Merged into any existing stash, never replacing it: on a second call every id is
-            // already unregistered, so a fresh map would come back empty and overwrite the real
-            // one — leaving restoreRegisterDialog nothing to put back and the actions gone for good.
-            let stash = application.getUserData(key)
-            if (stash == null) stash = new java.util.HashMap()
-            const ids = ['RegisterPlugins', 'Register']
-            for (var i = 0; i < ids.length; i++) {
-                // `var`, never `const`, in a loop body — see RemoteRobotExtension's doc. With `const`
-                // this stayed bound to the first id's action: "Register" was stashed as the
-                // "RegisterPlugins" instance, and restoring then registered that one instance under
-                // "Register", which the platform accepts and "RegisterPlugins" is then refused. After
-                // that, nothing was suppressed at all and the real Licenses dialog opened mid-test.
-                var action = actionManager.getAction(ids[i])
-                if (action == null) continue
-                stash.put(ids[i], action)
-                actionManager.unregisterAction(ids[i])
-            }
-            application.putUserData(key, stash)
-            """,
-            true,
-        )
-    }
-
-    /**
-     * Re-registers whatever [suppressRegisterDialog] removed. Must run in a `finally`: `ActionManager`
-     * is application-global, so a missed restore would silently strip the registration actions from
-     * every later test in the same sandbox session — and worse, from any *manual* poke at that IDE
-     * afterwards.
-     *
-     * **This logs one expected warning per run, and it is not a PrismTabs bug.** The sandbox's
-     * `idea.log` gets `WARN - #c.i.o.a.AnAction - ShortcutSet of global AnActions should not be
-     * changed outside of KeymapManager … Action: Register Plugins… [Plugin:
-     * com.intellij.marketplace]`, from the platform's own `registerAction` calling
-     * `registerCustomShortcutSet` -> `AnAction.setShortcutSet` on the way in.
-     *
-     * It is logged as a `PluginException`, so it reads like the cause of the red "IDE error
-     * occurred" balloon that the sandbox shows during a run. It is not: this is `WARN`, and only
-     * error-level logging opens that notification. The balloon comes from the unrelated
-     * `GradleJvmSupportMatrix` JDK-25 parse failure — see README "Expected sandbox noise".
-     *
-     * It cannot be avoided from here, which is why this documents it rather than working around it.
-     * `AnAction.setShortcutSet` warns (verified against 2024.2 bytecode, not guessed) when
-     * `myShortcutSet != CustomShortcutSet.EMPTY` and `ActionManager.getId(this) != null` — and by
-     * that point `registerAction` has already put the id back, so the second test is true for us.
-     * Both `ActionManager.registerAction` overloads route through the same path, so there is no
-     * quieter API to switch to. The only two ways to silence it are worse than the warning:
-     * blanking the stock action's `ShortcutSet` to `EMPTY` first would permanently strip ⌘/Ctrl
-     * bindings the sandbox's own user might rely on afterwards, and not restoring at all is the
-     * global-state leak this method exists to prevent.
-     */
-    fun restoreRegisterDialog() {
-        runJs(
-            """
-            importClass(com.intellij.openapi.actionSystem.ActionManager)
-            importClass(com.intellij.openapi.application.ApplicationManager)
-            importClass(com.intellij.openapi.util.Key)
-
-            const key = Key.findKeyByName('prismtabs.uitest.suppressedRegisterActions')
-            if (key != null) {
-                const application = ApplicationManager.getApplication()
-                const stash = application.getUserData(key)
-                if (stash != null) {
-                    const actionManager = ActionManager.getInstance()
-                    const entries = stash.entrySet().iterator()
-                    while (entries.hasNext()) {
-                        // `var`, not `const` — the loop-body scoping failure noted in suppressRegisterDialog.
-                        var entry = entries.next()
-                        // Re-registering an id that is somehow already back would throw; the guard
-                        // keeps a double restore (finally after an early failure) harmless.
-                        if (actionManager.getAction(entry.getKey()) == null) {
-                            actionManager.registerAction(entry.getKey(), entry.getValue())
-                        }
-                    }
-                    application.putUserData(key, null)
-                }
-            }
-            """,
-            true,
-        )
-    }
-
-    /**
-     * The "PrismTabs" tool window's rendered empty-state text — the locked panel's
-     * [com.intellij.ui.components.JBPanelWithEmptyText] message, its every appended line joined by
-     * `|`. Empty when the tool window is showing the real group list instead, which is what makes
-     * this a usable "is it locked?" assertion in both directions.
-     *
-     * Reads `StatusText.getText()` plus `getWrappedFragmentsIterable()`: the primary line and the
-     * appended ones are separate components, so neither alone sees the whole message.
-     */
-    fun toolWindowEmptyText(): String = callJs<String>(
-        """
-        importPackage(com.intellij.openapi.wm.impl)
-        importClass(com.intellij.openapi.wm.ToolWindowManager)
-        importClass(com.intellij.openapi.application.ApplicationManager)
-        importClass(com.intellij.ui.components.JBPanelWithEmptyText)
-
-        const frameHelper = ProjectFrameHelper.getFrameHelper(component)
-        const project = frameHelper.getProject()
-
-        const result = new java.util.concurrent.atomic.AtomicReference('')
-        const task = new Runnable({
-            run: function() {
-                const tw = ToolWindowManager.getInstance(project).getToolWindow('PrismTabs')
-                if (tw == null) return
-                const cm = tw.getContentManagerIfCreated()
-                if (cm == null || cm.getContentCount() == 0) return
-
-                // Matched on Component.name, not on type: the tool window hierarchy also holds the
-                // platform's own JBPanelWithEmptyText instances (empty text "Nothing to show"), and
-                // a by-type search returns one of those. The name is set in TabGroupsToolWindow.kt
-                // (LOCKED_PANEL_NAME) — keep the two literals in step.
-                const panels = []
-                function collect(comp) {
-                    if (comp instanceof JBPanelWithEmptyText && comp.getName() == 'PrismTabs.LockedToolWindow') {
-                        panels.push(comp)
-                    }
-                    if (comp.getComponentCount) {
-                        const n = comp.getComponentCount()
-                        for (var i = 0; i < n; i++) collect(comp.getComponent(i))
-                    }
-                }
-                collect(cm.getContent(0).getComponent())
-                if (panels.length == 0) return
-
-                const status = panels[0].getEmptyText()
-                const parts = []
-                parts.push(status.getText())
-                const wrapped = status.getWrappedFragmentsIterable().iterator()
-                while (wrapped.hasNext()) parts.push(String(wrapped.next().toString()))
-                result.set(parts.join('|'))
-            }
-        })
-        ApplicationManager.getApplication().invokeAndWait(task)
-        result.get()
-        """,
-        true,
-    )
-
-    /**
      * Shows the "PrismTabs" tool window via `ToolWindowManager`, not by clicking its stripe button
-     * as [toolWindowGroupRows] does. Two reasons: a locked tool window has no `JBList` for that
-     * helper's locator to wait for, and `ToolWindow.show()` is what fires `toolWindowShown` — the
-     * listener [io.prismtabs.ui.TabGroupsToolWindowFactory]'s panel re-reads the licence on, so this
-     * exercises the real mid-session lock/unlock path rather than sidestepping it.
+     * as [toolWindowGroupRows] does: `ToolWindow.show()` needs no stripe button on screen, so it
+     * works whatever layout the sandbox was left in.
      */
     fun showTabGroupsToolWindow() {
         runJs(
@@ -1083,99 +837,14 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
         tree.doubleClickRowWithText(label, true)
     }
 
-    /** Invokes the locked tool window's "reopen the tabs of N hidden groups" escape hatch —
-     * [io.prismtabs.ui.showAllHiddenGroups], the same function that link calls. Driven directly
-     * rather than clicked for the reason given on [setGroupHidden]. */
-    fun showAllHiddenGroups() {
-        runJs(
-            """
-            importPackage(com.intellij.openapi.wm.impl)
-            importPackage(com.intellij.ide.plugins)
-            importPackage(com.intellij.openapi.extensions)
-            importClass(com.intellij.openapi.application.ApplicationManager)
-
-            const frameHelper = ProjectFrameHelper.getFrameHelper(component)
-            const project = frameHelper.getProject()
-            const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
-            const serviceClass = java.lang.Class.forName('io.prismtabs.service.TabGroupService', true, pluginLoader)
-            const service = project.getService(serviceClass)
-
-            // Top-level Kotlin functions compile to static methods on a <FileName>Kt facade class.
-            const facade = java.lang.Class.forName('io.prismtabs.ui.TabGroupsToolWindowKt', true, pluginLoader)
-            const method = facade.getDeclaredMethod('showAllHiddenGroups', com.intellij.openapi.project.Project, serviceClass)
-            method.setAccessible(true)
-
-            const task = new Runnable({ run: function() { method.invoke(null, project, service) } })
-            ApplicationManager.getApplication().invokeAndWait(task)
-            """,
-            true,
-        )
-    }
-
-    /**
-     * Invokes the tool window's *gated* hide/show choke point — the private top-level
-     * `toggleVisibility(project, service, group)` in `TabGroupsToolWindow.kt` that its toolbar
-     * button, its context menu item and its double-click shortcut all land on, and which carries the
-     * `requirePaidFeature` check itself.
-     *
-     * Deliberately **not** [setGroupHidden]: that one calls `TabGroupVisibility` directly and so
-     * runs *past* the gate, which is right for tests about hide/show behaviour and useless for a test
-     * about the paywall. This is the only helper that exercises the gate on that call site, so
-     * without it the check at `TabGroupsToolWindow.kt`'s `toggleVisibility` could be deleted outright
-     * and the whole suite would still pass — every other path into hiding either bypasses it
-     * ([setGroupHidden]) or is the deliberately-free escape hatch ([showAllHiddenGroups]).
-     *
-     * Reached reflectively because the function is `private`; the compiled signature was confirmed
-     * with `javap -p` rather than assumed, per CLAUDE.md. Pair it with [suppressRegisterDialog]: a
-     * refused call raises the registration dialog, and a modal left open wedges robot-server.
-     */
-    fun invokeToggleVisibility(groupName: String) {
-        runJs(
-            """
-            importPackage(com.intellij.openapi.wm.impl)
-            importPackage(com.intellij.ide.plugins)
-            importPackage(com.intellij.openapi.extensions)
-            importClass(com.intellij.openapi.application.ApplicationManager)
-
-            const frameHelper = ProjectFrameHelper.getFrameHelper(component)
-            const project = frameHelper.getProject()
-            const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
-            const serviceClass = java.lang.Class.forName('io.prismtabs.service.TabGroupService', true, pluginLoader)
-            const service = project.getService(serviceClass)
-            const groupClass = java.lang.Class.forName('io.prismtabs.model.TabGroup', true, pluginLoader)
-
-            const groups = service.groups()
-            let target = null
-            for (let i = 0; i < groups.size(); i++) {
-                if (groups.get(i).getName() == '$groupName') target = groups.get(i)
-            }
-            // Named explicitly rather than left to the NPE Kotlin's own null check would raise
-            // inside the invoked function, which surfaces as an opaque IdeaSideException.
-            if (target == null) {
-                throw new java.lang.IllegalStateException('no tab group named $groupName')
-            }
-
-            const facade = java.lang.Class.forName('io.prismtabs.ui.TabGroupsToolWindowKt', true, pluginLoader)
-            const method = facade.getDeclaredMethod(
-                'toggleVisibility', com.intellij.openapi.project.Project, serviceClass, groupClass
-            )
-            method.setAccessible(true)
-
-            const task = new Runnable({ run: function() { method.invoke(null, project, service, target) } })
-            ApplicationManager.getApplication().invokeAndWait(task)
-            """,
-            true,
-        )
-    }
-
     /**
      * Whether the group named [groupName] reads as hidden — [io.prismtabs.service.TabGroupVisibility]'s
      * own derivation, asked of the live `FileEditorManager` rather than of a stored flag, because
      * there is no stored flag: see that object's doc.
      *
      * The companion assertion to [openTabNames] rather than a replacement for it: tabs staying open
-     * is what the *user* notices when a gated hide is refused, and asking the same question the tool
-     * window's own toggle asks is what pins down what the row would say about them.
+     * is what the *user* notices, and asking the same question the tool window's own toggle asks is
+     * what pins down what the row would say about them.
      */
     fun isGroupHidden(groupName: String): Boolean = callJs<Boolean>(
         """
@@ -1196,7 +865,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
         }
         // Throws rather than answering `false` for a group that isn't there: every caller asserts on
         // this in the negative ("must not have been hidden"), so a silent `false` would turn a
-        // vanished or misspelt group into a passing paywall test.
+        // vanished or misspelt group into a passing test.
         if (target == null) {
             throw new java.lang.IllegalStateException('no tab group named $groupName')
         }
@@ -1221,8 +890,7 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     /**
      * Invokes [io.prismtabs.ui.toggleActiveGroup] on the group named [groupName] — the same choke
      * point the popup's "Mark as Active Group" / "Clear Active Group" item and the tool window's
-     * "Active Group" toggle both call, so this covers the gate without mouse-driving a popup (which on a locked build would also fire the
-     * registration dialog — see [suppressRegisterDialog]).
+     * "Active Group" toggle both call, without mouse-driving a popup.
      */
     fun toggleActiveGroup(groupName: String) {
         runJs(
@@ -1465,113 +1133,6 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
     }
 
     /**
-     * Saves a renamed preset straight through [io.prismtabs.service.TabGroupPaletteService] — the
-     * state a subscriber's palette edit leaves behind, without going through the Configurable that
-     * writes it (which [exercisePaletteConfigurable] covers). Used by the tests that ask what
-     * happens to a *saved* palette when the subscription lapses: the free tier is meant to lose
-     * features, never data.
-     */
-    fun renamePalettePreset(index: Int, label: String) {
-        runJs(
-            """
-            importClass(com.intellij.openapi.application.ApplicationManager)
-            importPackage(com.intellij.ide.plugins)
-            importPackage(com.intellij.openapi.extensions)
-
-            const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
-            const paletteService = ApplicationManager.getApplication().getService(
-                java.lang.Class.forName('io.prismtabs.service.TabGroupPaletteService', true, pluginLoader)
-            )
-
-            const presets = paletteService.presets()
-            const edited = new java.util.ArrayList()
-            for (let i = 0; i < presets.size(); i++) {
-                var preset = presets.get(i)
-                // The data class's own copy(), so an unlisted field can never be dropped here the
-                // way a hand-rolled constructor call would drop it.
-                edited.add(i === $index ? preset.copy(preset.getId(), '$label', preset.getLight(), preset.getDark()) : preset)
-            }
-            paletteService.setPresets(edited)
-            """,
-            true,
-        )
-    }
-
-    /** The label [renamePalettePreset] writes, read back off the service. */
-    fun palettePresetLabel(index: Int): String = callJs<String>(
-        """
-        importClass(com.intellij.openapi.application.ApplicationManager)
-        importPackage(com.intellij.ide.plugins)
-        importPackage(com.intellij.openapi.extensions)
-
-        const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
-        const paletteService = ApplicationManager.getApplication().getService(
-            java.lang.Class.forName('io.prismtabs.service.TabGroupPaletteService', true, pluginLoader)
-        )
-        paletteService.presets().get($index).getLabel()
-        """,
-        true,
-    )
-
-    /**
-     * [exercisePaletteConfigurable]'s locked counterpart: drives the same Configurable the same way,
-     * but asserts the paywall — that the bound editing controls come up disabled, and that an
-     * `apply()` forced past them (a licence lapsing mid-dialog is the real-world route) discards the
-     * edit rather than persisting it, leaving the page settled rather than permanently modified.
-     */
-    fun exercisePaletteConfigurableLocked(): List<String> = callJs<String>(
-        """
-        importClass(com.intellij.openapi.application.ApplicationManager)
-        importPackage(com.intellij.ide.plugins)
-        importPackage(com.intellij.openapi.extensions)
-
-        const pluginLoader = PluginManagerCore.getPlugin(PluginId.getId('io.prismtabs')).getPluginClassLoader()
-        const paletteServiceClass = java.lang.Class.forName('io.prismtabs.service.TabGroupPaletteService', true, pluginLoader)
-        const paletteService = ApplicationManager.getApplication().getService(paletteServiceClass)
-        const configurableClass = java.lang.Class.forName('io.prismtabs.ui.TabGroupPaletteConfigurable', true, pluginLoader)
-        const textFieldClass = java.lang.Class.forName('com.intellij.ui.components.JBTextField', true, pluginLoader)
-
-        function collect(component, cls, out) {
-            if (cls.isInstance(component)) out.push(component)
-            if (component.getComponentCount) {
-                const n = component.getComponentCount()
-                for (let i = 0; i < n; i++) collect(component.getComponent(i), cls, out)
-            }
-        }
-
-        const results = []
-        const task = new Runnable({
-            run: function() {
-                const ctor = configurableClass.getDeclaredConstructor()
-                ctor.setAccessible(true)
-                const configurable = ctor.newInstance()
-                const root = configurable.createComponent()
-                configurable.reset()
-
-                const textFields = []
-                collect(root, textFieldClass, textFields)
-                const greyField = textFields[0]
-
-                results.push('fieldEnabled:' + greyField.isEnabled())
-
-                // Forced past the disabled control on purpose: setText works regardless of enabled
-                // state, which is exactly the "licence lapsed while this dialog was open" shape.
-                greyField.setText('PaywallBypass')
-                configurable.apply()
-                results.push('serviceLabelAfterApply:' + paletteService.presets().get(0).getLabel())
-                results.push('modifiedAfterApply:' + configurable.isModified())
-
-                configurable.disposeUIResources()
-            }
-        })
-        ApplicationManager.getApplication().invokeAndWait(task)
-
-        results.join('|')
-        """,
-        true,
-    ).split('|')
-
-    /**
      * Opens Settings straight to [io.prismtabs.ui.TabGroupPaletteConfigurable] via
      * `ShowSettingsUtil`, the same entry point the Settings/Preferences menu item resolves to —
      * bypassing manual tree navigation, which `remote-robot`'s UI-component layer handles poorly
@@ -1610,6 +1171,9 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
      * group that exists, and driving that through the service keeps it independent of every pixel
      * the popup happens to occupy — and, more to the point, off `java.awt.Robot`, which on macOS
      * needs an accessibility grant that a Gradle daemon does not necessarily carry.
+     *
+     * It repaints each tab and announces the change, as every production assignment path does, so
+     * the tab strip and an already-open tool window show the group straight away.
      */
     fun assignToNewGroup(groupName: String, fileNames: List<String>) {
         runJs(
@@ -1641,9 +1205,16 @@ class IdeaFrame(remoteRobot: RemoteRobot, remoteComponent: RemoteComponent) :
 
             const dir = ProjectUtil.guessProjectDir(project)
             const names = '${fileNames.joinToString(",")}'.split(',')
-            for (let i = 0; i < names.length; i++) {
-                service.assign(dir.findChild(names[i]).getUrl(), group)
+            const pluginObject = function(name) {
+                return java.lang.Class.forName(name, true, loader).getField('INSTANCE').get(null)
             }
+            for (let i = 0; i < names.length; i++) {
+                // `var`, not `const`: this Rhino binds a loop-body `const` once (RemoteRobotExtension).
+                var file = dir.findChild(names[i])
+                service.assign(file.getUrl(), group)
+                pluginObject('io.prismtabs.service.TabRepaint').request(project, file)
+            }
+            pluginObject('io.prismtabs.service.TabGroupNotifier').notifyChanged(project)
             """,
             true,
         )
@@ -1897,13 +1468,6 @@ fun RemoteRobot.expandToolWindowGroup(groupName: String): List<String> {
 fun RemoteRobot.selectedToolWindowRows(): List<String> = toolWindowGroupTree().collectSelectedPaths().flatten()
 
 /**
- * The identity hash of the tool window tree's UI delegate. A theme switch installs a new delegate
- * through `updateUI`, so this changes exactly when the tree has picked up a new theme.
- */
-fun RemoteRobot.groupTreeUiIdentity(): Int =
-    toolWindowGroupTree().callJs<String>("'' + java.lang.System.identityHashCode(component.getUI())", true).toInt()
-
-/**
  * How many rows the tool window's tree currently has selected, read off the component itself.
  *
  * Not counted out of [selectedToolWindowRows]: with more than one path selected, the fixture's
@@ -2033,35 +1597,3 @@ private const val GROUP_TREE_XPATH = "//div[@name='PrismTabs.GroupTree']"
  * very key the first one made.
  */
 private const val TOPIC_PROBE_KEY = "prismtabs.uitest.topicProbe"
-
-/**
- * [IdeaFrame.simulateUnlicensed]'s implementation, on [RemoteRobot] rather than the frame fixture so
- * [RemoteRobotExtension] can call it before a test has looked the frame up. See that member's doc
- * for what is installed and why.
- */
-fun RemoteRobot.simulateUnlicensed() {
-    runJs(
-        """
-        importClass(com.intellij.ui.LicensingFacade)
-
-        // A real facade object, not a mock: getConfirmationStamp(code) reads this very map, so an
-        // empty one is precisely "no licence for PPRISMTABS" as the platform would represent it.
-        const facade = new LicensingFacade()
-        facade.confirmationStamps = new java.util.HashMap()
-        LicensingFacade.setInstance(facade)
-        """,
-        true,
-    )
-}
-
-/** [IdeaFrame.simulateEntitled]'s implementation — see that member's doc, which is where the
- * "what this can and cannot stand in for" reasoning lives. */
-fun RemoteRobot.simulateEntitled() {
-    runJs(
-        """
-        importClass(com.intellij.ui.LicensingFacade)
-        LicensingFacade.setInstance(null)
-        """,
-        true,
-    )
-}

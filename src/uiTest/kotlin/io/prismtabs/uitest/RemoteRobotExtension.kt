@@ -20,15 +20,6 @@ import java.io.File
  * A test that passes its own assertions still fails if PrismTabs logged an error (`SEVERE`) to
  * `idea.log` while it ran — see [failOnPrismTabsErrors].
  *
- * [beforeTestExecution] also entitles the plugin's paid features before every test — see
- * [IdeaFrame.simulateEntitled]. Since `plugin.xml` gained its `<product-descriptor>` the sandbox
- * boots as a paid build holding no licence, so without this the whole suite would run against the
- * free tier: the tool window would render its upsell panel instead of a tree, and every
- * collapse/expand, active-group and palette-editing test would fail on a paywall rather than on
- * anything it was written to catch. Doing it here rather than per-class also makes it a backstop —
- * a paywall test that dies before its `finally` can no longer leave the plugin locked for whatever
- * runs next.
- *
  * [beforeTestExecution] de-iconifies and raises the sandbox IDE's frame before every test: this
  * machine's sandbox IDE renders on the live desktop, not an isolated virtual display (see README
  * "UI testing"), and something on it — a previous run's aborted client, the window manager, no
@@ -80,11 +71,6 @@ class RemoteRobotExtension : ExecutionCondition, BeforeTestExecutionCallback, Af
         // in fact fine. Three escapes covers TabGroupPopup's deepest nesting (root → group →
         // action).
         repeat(3) { Keyboard(remoteRobot).escape() }
-
-        // Before the frame work below, not after: a locked plugin is what makes a test fail in the
-        // most misleading way available (an empty tool window reads as a missing group, not as a
-        // paywall), so it is the first thing put right.
-        remoteRobot.simulateEntitled()
 
         remoteRobot.runJs(
             """

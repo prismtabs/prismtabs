@@ -25,31 +25,21 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
-import com.intellij.openapi.wm.ex.ToolWindowManagerListener
-import com.intellij.ui.ClientProperty
 import com.intellij.ui.ColoredTreeCellRenderer
 import com.intellij.ui.PopupHandler
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.TreeSpeedSearch
-import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.treeStructure.Tree
-import com.intellij.util.ui.UIUtil
-import io.prismtabs.license.PrismTabsLicense
 import io.prismtabs.model.TabGroup
 import io.prismtabs.service.TabGroupService
 import io.prismtabs.service.TabGroupVisibility
 import io.prismtabs.service.TabGroupsChangedListener
-import java.awt.AWTEvent
 import java.awt.Component
-import java.awt.Toolkit
-import java.awt.event.AWTEventListener
-import java.awt.event.WindowEvent
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.Icon
-import javax.swing.JComponent
 import javax.swing.JTree
 import javax.swing.SwingUtilities
 import javax.swing.tree.DefaultMutableTreeNode
@@ -68,12 +58,6 @@ import javax.swing.tree.TreeSelectionModel
  * member file. A container you expand to see its contents is the platform's own idiom for this
  * question — Bookmarks, Changes, the Project view all answer it that way — rather than an
  * invention, and it is what makes a group's membership knowable once its tabs are closed.
- *
- * This whole tool window — and with it hide/show, which is only driven from here — is a paid
- * feature (see the README's "Licensing and pricing"). It is gated inside [TabGroupsPanel]
- * rather than by declining to register the tool window at all: a subscription can be activated
- * while the IDE is running, and a stripe button that only appears after a restart would read as the
- * plugin being broken.
  */
 internal class TabGroupsToolWindowFactory : ToolWindowFactory, DumbAware {
 
@@ -114,7 +98,6 @@ private class TabGroupsPanel(
         toggleClickCount = 0
     }
     private val groupTree = ScrollPaneFactory.createScrollPane(tree, true)
-    private val toolbarComponent: JComponent
 
     init {
         // A list, so the two surfaces below can each wrap the *same* action instances: an
@@ -130,17 +113,8 @@ private class TabGroupsPanel(
         val toolbar = ActionManager.getInstance()
             .createActionToolbar("PrismTabs.TabGroupsToolWindow", DefaultActionGroup(groupActions), true)
         toolbar.setTargetComponent(tree)
-        toolbarComponent = toolbar.component
-
-        // While the locked panel shows, the tree and the toolbar are out of the window, where a theme
-        // switch's `updateUI` pass cannot reach them. Listed here, the platform updates them anyway.
-        // Otherwise they come back in the old theme, and the tree's icons keep a theme plugin's class
-        // loader alive, so uninstalling that plugin fails with "didn't unload fully".
-        ClientProperty.put(
-            this,
-            UIUtil.NOT_IN_HIERARCHY_COMPONENTS,
-            Iterable { listOf(groupTree, toolbarComponent).filter { it.parent == null }.iterator() },
-        )
+        setToolbar(toolbar.component)
+        setContent(groupTree)
 
         // The context menu is the toolbar's actions *plus* the one thing that acts on a file rather
         // than on a group. It is deliberately not in the toolbar: the toolbar has no row under the
@@ -190,17 +164,6 @@ private class TabGroupsPanel(
                 override fun fileClosed(source: FileEditorManager, file: VirtualFile) = refresh()
             },
         )
-        // A subscription activated mid-session doesn't notify anyone, so re-read the licence each
-        // time the tool window is shown: that's the moment the user would look for the unlock, and
-        // it's rare enough that re-verifying the signed stamp costs nothing.
-        connection.subscribe(
-            ToolWindowManagerListener.TOPIC,
-            object : ToolWindowManagerListener {
-                override fun toolWindowShown(toolWindow: ToolWindow) {
-                    if (toolWindow.id == TOOL_WINDOW_ID) refresh()
-                }
-            },
-        )
         refresh()
     }
 
@@ -215,23 +178,6 @@ private class TabGroupsPanel(
      * expanding a group and then recolouring it would collapse the very thing you were looking at.
      */
     private fun refresh() {
-        if (!PrismTabsLicense.paidFeaturesEnabled()) {
-            setToolbar(null)
-            setContent(upsellPanel())
-            // Not just hidden — emptied. A lapsed subscriber's tree must not keep answering
-            // `uiDataSnapshot` (or hold group data) from behind the paywall panel.
-            root.removeAllChildren()
-            treeModel.reload()
-            return
-        }
-        // Only when it isn't already showing: `setContent` removes and re-adds the component, and
-        // since this now runs on every editor open and close, doing that unconditionally would put
-        // a remove/add of the focused tree in the middle of an ordinary "open a file".
-        if (content !== groupTree) {
-            setToolbar(toolbarComponent)
-            setContent(groupTree)
-        }
-
         val expandedIds = groupNodes().filter { tree.isExpanded(it.treePath) }.mapTo(mutableSetOf()) { it.group.id }
         val selection = selectionKeys()
 
@@ -411,46 +357,6 @@ private class TabGroupsPanel(
         sink[CommonDataKeys.NAVIGATABLE] = OpenFileDescriptor(project, files.first())
     }
 
-    /**
-     * What an unsubscribed user sees here instead of the tree: what this window is, what stays free,
-     * and a way to subscribe — the platform's own empty-state idiom, so it reads as a locked feature
-     * rather than a failure.
-     *
-     * The "reopen the tabs" line is not an upsell, it's the escape hatch: hiding a group closes its
-     * tabs and only this window can reopen them, so a subscription lapsing while a group is hidden
-     * would otherwise hold those tabs hostage behind the paywall. Offered only when there is
-     * something to reopen, and it shows the groups rather than re-locking — a lapsed user gets their
-     * tabs back, but no ongoing hide/show.
-     */
-    private fun upsellPanel(): JComponent {
-        val panel = UnlockWatchingPanel { if (PrismTabsLicense.paidFeaturesEnabled()) refresh() }
-        // Named so the paywall uiTest can find this exact panel: the tool window hierarchy contains
-        // other JBPanelWithEmptyText instances belonging to the platform (their empty text reads
-        // "Nothing to show"), and a by-type search picks one of those up instead.
-        panel.name = LOCKED_PANEL_NAME
-        val statusText = panel.emptyText
-        statusText.setText("The PrismTabs tool window is a paid feature.")
-        // Two lines, because StatusText never wraps: as one line this sentence is wider than a
-        // default-width tool window and is clipped at both ends.
-        statusText.appendLine("Colouring tabs and managing groups from", SimpleTextAttributes.GRAYED_ATTRIBUTES, null)
-        statusText.appendLine("a tab's right-click menu stays free.", SimpleTextAttributes.GRAYED_ATTRIBUTES, null)
-        statusText.appendLine(
-            "Start the free trial or activate a subscription",
-            SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES,
-        ) {
-            PrismTabsLicense.requestLicense("The PrismTabs tool window needs an active PrismTabs subscription.")
-        }
-        val strandedCount = strandedGroups(project, service).size
-        if (strandedCount > 0) {
-            statusText.appendLine(
-                "Reopen the tabs of $strandedCount hidden group${if (strandedCount == 1) "" else "s"}",
-                SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES,
-            ) {
-                showAllHiddenGroups(project, service)
-            }
-        }
-        return panel
-    }
 }
 
 /**
@@ -542,81 +448,14 @@ private fun installRowSelectingPopupMenu(tree: JTree, actions: ActionGroup) {
 /** `place` for the context menu built in [installRowSelectingPopupMenu]. */
 private const val POPUP_PLACE = "PrismTabs.TabGroupsToolWindow.Popup"
 
-/** Must match `plugin.xml`'s `<toolWindow id="">`. */
-private const val TOOL_WINDOW_ID = "PrismTabs"
 
 /**
- * The locked panel, re-checking the licence whenever a window closes or its own window regains focus.
- *
- * Starting the trial or entering a key happens in the IDE's registration dialog, and nothing
- * broadcasts the licence change (see [PrismTabsLicense.requestLicense]). That dialog closing is the
- * moment to unlock, without the user having to close and reopen the tool window. It is caught as
- * the dialog's own `WINDOW_CLOSED` rather than as focus returning to the frame, because handing
- * focus back is up to the window manager, and some (or none, under Xvfb) leave it nowhere. Focus
- * regained still counts, for a subscription bought in the browser on the user's return to the IDE.
- *
- * The listener is application-wide, so it is installed only while this panel is on screen.
- */
-private class UnlockWatchingPanel(private val onLicenceMayHaveChanged: () -> Unit) : JBPanelWithEmptyText() {
-
-    private val windowListener = AWTEventListener { event ->
-        val closed = event.id == WindowEvent.WINDOW_CLOSED
-        val refocused = event.id == WindowEvent.WINDOW_GAINED_FOCUS && event.source === SwingUtilities.getWindowAncestor(this)
-        if (closed || refocused) onLicenceMayHaveChanged()
-    }
-
-    override fun addNotify() {
-        super.addNotify()
-        Toolkit.getDefaultToolkit().addAWTEventListener(windowListener, AWTEvent.WINDOW_EVENT_MASK or AWTEvent.WINDOW_FOCUS_EVENT_MASK)
-    }
-
-    override fun removeNotify() {
-        Toolkit.getDefaultToolkit().removeAWTEventListener(windowListener)
-        super.removeNotify()
-    }
-}
-
-/**
- * `Component.name` of the locked (unsubscribed) tool window panel. The paywall uiTest looks the
- * panel up by this exact name — searching by type finds the platform's own `JBPanelWithEmptyText`
- * instances in the same hierarchy instead. Kept in step with the literal in
- * `IdeaFrame.toolWindowEmptyText`.
- */
-internal const val LOCKED_PANEL_NAME = "PrismTabs.LockedToolWindow"
-
-/**
- * `Component.name` of the tool window's group tree. The uiTests locate it by this exact name for the
- * same reason they do the locked panel — kept in step with the literal in `IdeaFrame`'s
- * `GROUP_TREE_XPATH`.
+ * `Component.name` of the tool window's group tree. The uiTests locate it by this exact name, because
+ * the IDE frame holds other trees a by-type search would find instead — kept in step with the
+ * literal in `IdeaFrame`'s `GROUP_TREE_XPATH`.
  */
 internal const val GROUP_TREE_NAME = "PrismTabs.GroupTree"
 
-/**
- * The groups the paywall would strand: hidden, with tabs recorded that only this window can reopen.
- *
- * Both halves are needed. Hidden alone would count a group whose files the user has simply never
- * opened, offering to "reopen" tabs that were never there; a recorded set alone would count every
- * group in the project, since the memory is kept current for all of them and outlives a show.
- */
-private fun strandedGroups(project: Project, service: TabGroupService): List<TabGroup> =
-    service.groups().filter { it.rememberedTabUrls.isNotEmpty() && TabGroupVisibility.isHidden(project, service, it) }
-
-/**
- * The locked tool window's escape hatch: reopen the tabs of every hidden group. Deliberately *not*
- * gated — see [TabGroupsPanel.upsellPanel] for why a lapsed subscription must never leave tabs
- * closed behind the paywall that closed them.
- *
- * `internal`, not `private`: the paywall uiTest drives this directly rather than clicking a
- * `StatusText` link at computed coordinates, the same trade-off (and for the same reason)
- * `IdeaFrame.setGroupHidden` already makes for hide/show.
- *
- * The list is resolved once before iterating rather than re-tested per iteration: showing one group
- * reopens tabs, which changes nothing about whether the *others* are hidden, but it does republish a
- * change — and re-reading mid-loop would make the result depend on notification timing for no gain.
- */
-internal fun showAllHiddenGroups(project: Project, service: TabGroupService) {
-    strandedGroups(project, service).forEach { TabGroupVisibility.show(project, service, it) }
-}
 
 /**
  * Group rows — swatch dot, name, member count, "hidden" and "active" suffixes — and file rows,
@@ -703,14 +542,13 @@ private abstract class SelectionAction(
 
 /**
  * Marking the selected group active — the same toggle the tab popup's "Mark as Active Group" item
- * drives, brought here because the tool window is where a subscriber manages groups and having to
+ * drives, brought here because the tool window is where groups are managed and having to
  * go back to a tab's right-click menu for this one operation was the gap.
  *
- * A [ToggleAction] rather than a text-swapping [AnAction] like [ToggleCollapseAction]: "active" is
+ * A [ToggleAction] rather than a text-swapping [AnAction] like [ToggleVisibilityAction]: "active" is
  * a state one group is in at a time, and the platform renders a toggle as a checked item in the
  * context menu and a pressed button in the toolbar — both of which say "this group is the active
- * one" while the menu is open, which a Mark/Clear label pair cannot. The gate lives in
- * [toggleActiveGroup], so clearing stays free for a lapsed subscriber here too.
+ * one" while the menu is open, which a Mark/Clear label pair cannot.
  */
 private class ToggleActiveAction(
     private val project: Project,
@@ -734,7 +572,7 @@ private class ToggleActiveAction(
 
     // `state` is ignored on purpose: it is always the negation of [isSelected], which is exactly
     // what toggleActiveGroup recomputes — and going through that one helper is what keeps the
-    // licence gate (and the change notification) identical to the tab popup's route.
+    // change notification identical to the tab popup's route.
     override fun setSelected(e: AnActionEvent, state: Boolean) {
         val group = selectedGroup() ?: return
         toggleActiveGroup(project, group, service)
@@ -867,14 +705,8 @@ internal fun removeFromGroupText(fileCount: Int, groupCount: Int): String = when
     else -> "Remove $fileCount Files from Their Groups"
 }
 
-/**
- * The single place hide/show is driven from — the toolbar action, the context menu and the
- * double-click shortcut all land here — so it carries the paid-feature gate itself rather than
- * relying on the locked panel simply not showing the tree. The one deliberate way past it is the
- * locked panel's own "reopen the tabs" escape hatch, which calls [TabGroupVisibility.show] direct.
- */
+/** The single place hide/show is driven from: the toolbar action, the context menu and the double-click shortcut. */
 private fun toggleVisibility(project: Project, service: TabGroupService, group: TabGroup) {
-    if (!PrismTabsLicense.requirePaidFeature("Hiding and showing tab groups")) return
     if (TabGroupVisibility.isHidden(project, service, group)) {
         TabGroupVisibility.show(project, service, group)
     } else {

@@ -19,7 +19,7 @@ bullets are fully automated and need no manual pass.** Three verdicts:
 - **full** — a test drives the real behaviour and asserts every claim in the bullet. Struck through.
 - **partial** — some of the bullet is asserted; the note says which part is left for a human eye.
 - **not automated** — nothing asserts it, usually because the claim is a visual judgement
-  (legibility, crispness) or needs a real IDE restart or a real JetBrains licence.
+  (legibility, crispness) or needs a real IDE restart.
 
 History: a first pass on 2026-09-14 over-credited several bullets (bold member rows, Rename and
 Recolour from the tool window, the free tier's rename/recolour/delete, the registration dialog
@@ -37,12 +37,6 @@ coverage lives in the test suite named inline throughout this doc.
 Two suite-wide checks back every automated bullet: a UI test fails if PrismTabs logs a `SEVERE`
 to `idea.log` while it runs (`RemoteRobotExtension`), and `WindowsManualVerificationUiTest`, which
 performs real restarts, stays opt-in and is **not** counted as coverage here.
-
-**Before you start:** `plugin.xml` ships the `<product-descriptor … optional="true"/>`, so this is
-a paid build and a fresh `runIde` sandbox starts **unlicensed** — the tool window (§2), hide/show,
-the active group, and palette editing are locked until a trial is started from the registration
-dialog (§3). To click through those sections without a trial, comment the descriptor out for the
-session and revert it afterwards.
 
 ---
 
@@ -63,7 +57,7 @@ Right-click any editor tab → **Tab Group…** opens the popup for every case b
 - [ ] Repeat the whole flow for **every one of the 8 presets** at least once — each should look
       distinct and legible, both selected and unselected.
       *Automated: partial — every preset starts a group with its own colours and paints them
-      (`PaywallUiTest` "every preset still colours a new group while the licence is lapsed"); no two
+      (`TabGroupPopupUiTest` "every preset starts a group and colours the tab"); no two
       presets share a colour in either theme (`TabGroupPaletteTest`). Left for a human: legibility.*
 - [ ] Repeat with the IDE in **Light theme** as well as **Dark** — all 8 presets stay legible in
       both.
@@ -80,89 +74,28 @@ Open it via its right-hand stripe button (or **View | Tool Windows | PrismTabs**
       *Automated: not automated — a visual judgement (`PrismTabsIconsTest` only checks the SVGs exist
       with the right stroke colour per theme).*
 
-## 3. Licensing / paywall
-
-This build is paid (see "Before you start"), so every case here runs against the real gate. If you
-commented the `<product-descriptor>` out to click through the earlier sections, **revert it and
-restart the sandbox before starting here** — without the tag `PrismTabsLicense.isPaidBuild()` is
-`false`, so `paidFeaturesEnabled()` returns `true` whatever the facade says and the console snippets
-below appear to do nothing. The tag is read once at plugin load, so it takes a restart, not a
-reload: a plugin with a product code cannot load or unload dynamically (see §4).
-
-- [ ] From that dialog, **start the 14-day trial** — confirm paid features (tool window listing,
-      hide/show, active-group auto-join, palette editing in Settings) all unlock.
-      *Automated: partial — every paid feature unlocking once the gate reads licensed is covered in
-      `PaywallUiTest`. Left for a human: starting a real trial, which needs a JetBrains Account.*
-- [ ] **Lapse across a restart.** What is under test is the *transition*, not the locked state: a
-      freshly built paid build with no licence boots locked already, so unlock it first or you will
-      only ever see a gate that was shut the whole time. Four steps, in this order, using the
-      console recipe below:
-
-  1. **Unlock**, simulating a subscription.
-  2. **Set up while unlocked:** mark a group active, hide another group, and rename a palette
-     preset in Settings.
-  3. **Lapse**, then confirm paid features lock again (tool window, active-group auto-join,
-     palette editing) with **no restart prompt** — tab colouring itself is free forever and
-     keeps working throughout: losing the licence is not the same as disabling the plugin (see
-     §4), the gate is just re-read the next time the affected code runs. This live re-lock is
-     the point of the case; step 4 cannot show it, since a restart drops the fake facade and
-     comes up unlicensed regardless.
-  4. **Restart the IDE** yourself, only to confirm the lapsed state and your other changes
-     persisted across it.
-
-  A real trial or licence cannot be removed and restored mid-session, so fake the licence facade
-  instead, live, in the same `runIde` sandbox: **Find Action → "IDE Scripting Console"** (action id
-  `IdeScriptingConsole`), not the Groovy plugin's own "Groovy Console" — that one runs your
-  script in a separate JVM with no platform `Application`, so
-  `LicensingFacade.setInstance` NPEs on `getMessageBus()`. Pick **Groovy** when it asks for a
-  language, then paste a snippet as a single line and run it with Ctrl+Enter, which executes the
-  current line or selection. Both use fully qualified names, so no `import` line is needed:
-  - **Step 1, unlock**, simulating a subscription: `com.intellij.ui.LicensingFacade.setInstance(null)`.
-  - **Step 3, lapse**, simulating expiry, no restart needed: `def f = new com.intellij.ui.LicensingFacade();
-    f.confirmationStamps = new java.util.HashMap(); com.intellij.ui.LicensingFacade.setInstance(f)`.
-
-  Neither snippet pushes a change out — nothing broadcasts a licence change, so each surface
-  keeps showing whatever it last rendered until something makes it redraw. After running either
-  snippet, nudge each surface you're checking rather than expecting it to update on its own: hide
-  and re-show the tool window (its gate is read in `toolWindowShown`/on the next group change, not
-  on a timer), and close and reopen Settings' Palette page. If a hide/show of the tool window still
-  shows the upsell panel afterwards, that's a real bug, not this lazy-refresh behaviour.
-
-  This only simulates entitlement the same way `IdeaFrame.simulateEntitled`/`simulateUnlicensed`
-  do for the uiTest suite (the "facade hasn't answered yet" row of `PrismTabsLicense.decide`) —
-  it cannot prove a real, JetBrains-signed stamp verifies. That's what the trial/real-key bullet
-  above is for.
-  *Automated: partial — the lapse and the restart are each automated (`PersistenceUiTest`,
-  `PaywallUiTest`). Left for a human: restarting the IDE to confirm what survives.*
-
-## 4. Disabling and re-enabling the plugin (optional, advanced)
+## 3. Disabling and re-enabling the plugin (optional, advanced)
 
 Only worth doing if you're validating a release candidate, not part of routine feature testing.
-The platform never unloads a paid plugin in place, so on this build both steps ask for a restart;
-the in-place unload is only possible on a build without the product descriptor, where
-`PluginUnloadUiTest` covers it (it skips itself on the paid build).
 
 - [ ] With at least one assigned group and an open tab showing it, go to **Settings | Plugins**,
-      find PrismTabs, and **Disable** it. Confirm no error dialog appears and the IDE offers
-      **Restart IDE**; after the restart the plugin is off and tabs carry no PrismTabs colour.
-      If the IDE disables it without offering a restart, your build has no `<product-descriptor>`,
-      so check `plugin.xml`.
-      *Automated: partial — that the platform requires a restart for the paid build
-      (`PluginUnloadUiTest` "the platform requires a restart to disable the paid build"). Left for a
-      human: the Plugins page and the restart.*
-- [ ] **Re-enable** it from the same page and restart. Confirm groups, colours and tool window all
-      come back correctly. Checking the tool window needs the paywall unlocked, so use the same
-      descriptor-commented-out build as above rather than starting a real trial (see "Before you
-      start").
-      *Automated: partial — that everything is read back from disk is covered by `PersistenceUiTest`
-      and `TabGroupServiceTest`; on a build without the product descriptor, `PluginUnloadUiTest`
-      also covers the in-place round trip (a group created just before the disable survives it, and
-      the tabs left open get their colour back). Left for a human: the re-enable and the restart.*
+      find PrismTabs, and **Disable** it. Confirm no error dialog appears, the IDE does not ask
+      for a restart, and the tab loses its PrismTabs colour straight away.
+      *Automated: partial — `PluginUnloadUiTest` disables the plugin in place, asserts its class
+      loader is released and the tab colours clear, and asserts the platform needs no restart
+      ("the platform can disable the plugin without a restart"). Left for a human: the Plugins
+      page itself.*
+- [ ] **Re-enable** it from the same page. Confirm groups, colours and the tool window all come
+      back correctly, again without a restart.
+      *Automated: partial — `PluginUnloadUiTest` covers the in-place round trip (a group created
+      just before the disable survives it, and the tabs left open get their colour back). Left for
+      a human: the Plugins page itself.*
 - [ ] Watch `idea.log` (Help | Show Log) during both steps for any `io.prismtabs` `SEVERE`
       entries — there should be none.
-      *Automated: not automated — both steps need a restart, which the suite does not perform.*
+      *Automated: partial — `RemoteRobotExtension` fails `PluginUnloadUiTest` on any PrismTabs
+      `SEVERE` logged while it runs. Left for a human: the same check on the Plugins page route.*
 
-## 5. General polish (apply throughout, not a separate pass)
+## 4. General polish (apply throughout, not a separate pass)
 
 Per CLAUDE.md's UI standard — check these opportunistically while working through every section
 above, not as a final once-over:

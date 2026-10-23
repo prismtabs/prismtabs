@@ -10,7 +10,7 @@ against the build that will be tagged. Linux is covered by day-to-day developmen
 2. The by-eye checks in the checklist below, in `./gradlew runIde` — **not** `runIdeForUiTests`,
    whose flags turn off native macOS behaviour a real user gets.
 3. One real restart (item 8).
-4. The licence checks (item 9).
+4. One disable and re-enable from Settings | Plugins (item 10).
 5. Append a sign-off entry to your own tracking copy of this file (see "Sign-off log" below).
 
 CI can't do this pass: hosted Windows runners fail the tool-window tests (`ui-tests.yml` is kept as
@@ -18,7 +18,8 @@ a debugging aid only), and hosted macOS can't grant the TCC permissions `remote-
 
 ## Checklist
 
-The numbering is referenced by the sign-off log kept in your tracking copy; don't renumber.
+The numbering is referenced by the sign-off log kept in your tracking copy; don't renumber, and
+don't reuse a retired number.
 
 | # | Area | Automated by | Still by hand |
 |---|---|---|---|
@@ -30,17 +31,7 @@ The numbering is referenced by the sign-off log kept in your tracking copy; don'
 | 6 | Tool window (incl. ⌘/Ctrl multi-select) | `TabGroupsToolWindowUiTest` | Stripe icon and dots crisp at OS scaling |
 | 7 | Settings page, ⌘, on macOS | `TabGroupPaletteConfigurableUiTest`, `MacSettingsShortcutUiTest` | — |
 | 8 | Restart persistence | `PersistenceUiTest` (save and reload, no restart) | One real restart: groups, colours, palette survive; **Show Group** reopens the last-open set |
-| 9 | Licence | `PaywallUiTest` (simulated entitlement) | See below |
-
-**Item 9, by hand** — a real licence can't be forged in a test, and the suite can't restart:
-
-- **Unlicensed start:** plugin stays enabled (not in `config/disabled_plugins.txt`), tool window
-  shows the upsell panel, free features work.
-- **Trial, then a real key:** start the 14-day trial from the register dialog; paid features
-  unlock (the tool window updates on next show or group change, by design). Repeat with a real key.
-- **Lapse across a restart:** while licensed, mark a group active, hide another, rename a preset.
-  Remove the licence, restart. The plugin loads in the free tier, all state survived, new files
-  don't auto-join, and the locked tool window offers **Reopen the tabs of N hidden groups**.
+| 10 | Disable and re-enable in place | `PluginUnloadUiTest` | From Settings \| Plugins: no restart prompt either way, colours clear on disable and return on re-enable |
 
 ## Running the suite on macOS
 

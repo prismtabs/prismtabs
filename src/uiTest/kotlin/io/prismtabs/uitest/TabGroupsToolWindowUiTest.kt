@@ -528,7 +528,7 @@ class TabGroupsToolWindowUiTest {
     /**
      * The gap this closes: marking a group active used to be reachable only from a tab's
      * right-click menu, two levels down (Tab Group… → Manage Groups… → the group), even though the
-     * tool window is where a subscriber otherwise manages groups. Driven the way a user would —
+     * tool window is where groups are otherwise managed. Driven the way a user would —
      * right-click the row, click the toggle — and asserted on the behaviour it buys (a newly opened
      * file joins the group), not just on the service field, so a toggle wired to the wrong row
      * would fail here.

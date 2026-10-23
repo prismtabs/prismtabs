@@ -5,7 +5,7 @@ name: UI Tests
 #
 # This is a DEBUGGING AID, NOT A RELEASE GATE. Tried end to end on 2026-09-08: the suite does not
 # pass on a GitHub-hosted `windows-latest` runner — two back-to-back runs failed identically, 12 of
-# 43, with the tool-window-tree assertions in TabGroupsToolWindowUiTest and PaywallUiTest timing
+# 43, with the tool-window-tree assertions in TabGroupsToolWindowUiTest and the since-removed PaywallUiTest timing
 # out. The likely cause is that the hosted runner's session is not the real interactive desktop
 # remote-robot's java.awt.Robot needs (RemoteRobotExtension's frame de-iconify/raise workaround is
 # calibrated to a real local session and does not carry over), but that has not been confirmed from

@@ -39,9 +39,8 @@ import javax.xml.parsers.DocumentBuilderFactory
  * The tab-colour half of an unload is here too, for the same reason: forgetting it costs nobody a
  * stack trace, it just leaves the strip painted by a plugin that is gone.
  *
- * The `plugin.xml` assertions read `src/main/resources`' own copy off the test classpath, like [
- * io.prismtabs.license.ProductDescriptorTest], so it asserts on the file a developer edits rather
- * than on `patchPluginXml`'s output.
+ * The `plugin.xml` assertions read `src/main/resources`' own copy off the test classpath, so they
+ * assert on the file a developer edits rather than on `patchPluginXml`'s output.
  */
 class PrismTabsDynamicPluginListenerTest {
 

@@ -223,17 +223,15 @@ tinting is invisible (§2.4).
   `VirtualFileListener`) — see `TabGroupVfsListener` and `TabGroupService.remapUrl`.
 - README documenting the four constraints from §2 — set expectations before anyone files an issue asking
   for the chip.
-- ~~JetBrains Marketplace paid-plugin publishing.~~ Done — published as Freemium with a
-  subscription; see the README's [Licensing and pricing](../README.md#licensing-and-pricing) and
-  [releasing](releasing.md).
+- ~~JetBrains Marketplace publishing.~~ Done — published as a free plugin; see the README's
+  [Licensing](../README.md#licensing) and [releasing](releasing.md).
 
 ### Phase 6 — Group membership visibility
 
 **The gap.** A group's members are *files*, but nothing in the UI ever lists them. `membersOf` is
 called in exactly two places — to decide emptiness, and to render a count — so the only way to learn
 what is in a group is to look at which tabs are currently tinted. Close a tab and its membership
-becomes unknowable. It lands hardest on the free tier, which can create and fill groups but has no
-tool window: a free user can colour a file, close it, and have no route back to where it went.
+becomes unknowable.
 
 Two smaller gaps in the same family, fixed here because they are the same question asked from
 somewhere else:
@@ -246,7 +244,7 @@ somewhere else:
   is in. Right-clicking a tab should say which group it belongs to — a captioned separator or a step
   title, decided against a live sandbox.
 
-**6a. The tool window becomes a tree** (paid, like the rest of that window). A container with
+**6a. The tool window becomes a tree.** A container with
 children is a tree you expand — Bookmarks, Changes, Favourites, Project view all do exactly this, so
 it is the platform's own idiom for this question rather than an invention.
 
@@ -320,7 +318,7 @@ separator below it so reading is visually separated from mutating.
   missing row asks "Remove from Group" / "Keep" and routes an emptied group back through
   `promptToDeleteEmptied`. See the README's "Group membership".
 
-**6c. `Remove from Group` on a member row** (in the paid tool window, but a free *operation*).
+**6c. `Remove from Group` on a member row.**
 6a and 6b made a group's membership visible; 6c makes the newly visible thing actionable from the
 only surface that can see it. Unassigning already existed on the tab's own right-click menu, which
 requires the file to be *open* — precisely the case the tree exists to cover, so a closed member had
@@ -375,25 +373,12 @@ to be opened and then closed again just to be dropped.
   are removed together, and the item states the count`, and `a selection spanning two groups still
   removes, greys the group actions, and asks once`.
 
-  **On the free/paid line.** Removal is *not* gated, and must not be: unassigning is a by-hand
-  assignment change, which the split above keeps free forever. It is reachable only by subscribers
-  and trial users in practice, because the surface it lives on — the tool window — is paid; free
-  users keep the same operation on a tab's own right-click menu. The distinction matters if the
-  window ever grows a free mode: the action stays as it is, no `requirePaidFeature` around it.
-
-**Why 6b is free and 6a is paid.** Membership visibility is a *correctness* feature — the same
-argument the README already makes for rename/move remapping, which stays free because your
-assignments surviving a rename is not a premium. A free tier that can fill groups whose contents are
-unknowable is precisely the "too limited" outcome the feature-based split exists to avoid. The tool
-window's paid value is unaffected: it is hide/show, active-group auto-join, and being always-on and
-browsable — not the membership data itself.
-
-One line to hold: opening a *single* member from the free popup stays free, but do **not** add "Open
-All Files in Group" there. That is `expand` under another name, and expand is paid.
+One line to hold: the popup's file list opens a *single* member, and must not grow "Open All Files
+in Group". That is the tool window's Show Group under another name.
 
 - **Acceptance: passed.** Assign three files to "Auth", close all three tabs, restart the IDE.
   Right-click any tab → `Tab Group…` → `Manage Groups…` → Auth → `Files…` lists all three by name
-  with their directories; Enter on one opens it. Subscribed, the tool window lists Auth as
+  with their directories; Enter on one opens it. The tool window lists Auth as
   `3 files`, expands to the same three, opens one on double-click, and still hides the group on
   double-clicking its own row. Verified live in `runIdeForUiTests` — `TabGroupPopupUiTest`'s three
   6b cases and `TabGroupsToolWindowUiTest`'s `a group row expands to its files, which stay listed
@@ -484,7 +469,7 @@ hidden at all.
 
 - **Drop the flag.** A group is hidden when it *has members and none of them is open*, derived from
   `FileEditorManager` by `TabGroupVisibility.isHidden`. Every surface reads that one predicate: the
-  tool window's suffix, the Hide/Show toggle, the delete warning, the paywall escape hatch. The tree
+  tool window's suffix, the Hide/Show toggle, the delete warning. The tree
   takes it from the member rows it has just built, so the group row cannot contradict the bold rows
   beneath it.
 - **Keep the memory, maintain it on opens.** `rememberedTabUrls` (was `collapsedFileUrls`) is

@@ -31,7 +31,6 @@ Open `src/main/resources/META-INF/plugin.xml` alongside this section.
 |---------------------------------|----------------------------------------------------------------------------------------|
 | `<id>`, `<name>`, `<vendor>`    | Identity. The ID is permanent once published.                                          |
 | `<description>`                 | HTML shown on the Marketplace and in **Settings \| Plugins**                           |
-| `<product-descriptor>`          | Marks the plugin as paid. See [Licensing](#licensing).                                 |
 | `<depends>`                     | Required modules or plugins. `com.intellij.modules.platform` makes it work in every IntelliJ-based IDE. |
 | `<extensions defaultExtensionNs="com.intellij">` | Contributions to the platform's extension points                      |
 | `<applicationListeners>`, `<projectListeners>` | Message bus subscriptions, created lazily by the platform              |
@@ -158,8 +157,8 @@ internal class AssignTabGroupAction : AnAction(), DumbAware {
 - Actions can also be created in code and shown in a toolbar or context menu without `plugin.xml`,
   as `TabGroupsPanel` does with `ActionManager.createActionToolbar` and `createActionPopupMenu`.
 - `ToggleAction` renders as a checked menu item or a pressed button (`ToggleActiveAction`).
-- To run another action programmatically, use `ActionUtil`, never `actionPerformed` directly
-  (`PrismTabsLicense.showRegisterDialog`).
+- To run another action programmatically, use `ActionUtil`, never `actionPerformed` directly:
+  `actionPerformed` is `@ApiStatus.OverrideOnly`, and `verifyPlugin` fails the build on a call to it.
 
 Read: <https://plugins.jetbrains.com/docs/intellij/basic-action-system.html>
 
@@ -394,20 +393,6 @@ PrismTabs supports it through:
 This is the most advanced part of the codebase. `PluginUnloadUiTest` checks it end to end.
 
 Read: <https://plugins.jetbrains.com/docs/intellij/dynamic-plugins.html>
-
-## Licensing
-
-A paid plugin declares `<product-descriptor>` in `plugin.xml` and asks
-`LicensingFacade.getInstance()` for a signed confirmation stamp at runtime. PrismTabs wraps this in
-`license/PrismTabsLicense.kt`:
-
-- `paidFeaturesEnabled()` is the silent check.
-- `requirePaidFeature("Hiding and showing tab groups")` checks and, if unlicensed, opens the
-  registration dialog.
-- `LicenseSignatureVerification` verifies the stamp's signature against JetBrains' certificates.
-
-Only individual features are gated; the plugin never stops working. README §"Licensing and pricing"
-has the free/paid split.
 
 ## Build and run
 

@@ -10,8 +10,7 @@ import org.junit.jupiter.api.Test
  * Plain JUnit 5, no platform harness — which is the whole reason `deleteConfirmationMessage` is a
  * function of its own rather than a string built inline in [confirmAndDelete] (that one needs a
  * live `Project` and a modal dialog, so it belongs to `uiTest`). It is also why `hidden` is a
- * parameter: deriving it needs a `FileEditorManager`. Same split as
- * [io.prismtabs.license.PrismTabsLicense.decide] and its test.
+ * parameter: deriving it needs a `FileEditorManager`.
  *
  * The hidden-group line is what these cases are here for: it is the last warning a user gets before
  * deleting a group takes its remembered tabs with it (see the function's own doc), so its condition

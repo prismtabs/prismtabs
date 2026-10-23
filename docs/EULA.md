@@ -8,7 +8,7 @@
 
 # PrismTabs End-User Licence Agreement
 
-**Last updated: 25 September 2026**
+**Last updated: 23 October 2026**
 
 This End-User Licence Agreement ("Agreement") is a legal agreement between you (either an
 individual or a single entity, "you" or "Licensee") and Andrzej Piontek, an individual trader
@@ -20,58 +20,11 @@ Agreement. If you do not agree to these terms, do not install or use the Softwar
 
 ## 1. Grant of Licence
 
-### 1.1 Free features
-The Software is distributed under a Freemium model. A core set of features is provided free of
-charge, without a subscription, for as long as you use the Software.
-
-### 1.2 Paid features
-Additional ("paid") features are made available only while you hold an active subscription, an
-active free licence granted through a JetBrains Marketplace community programme such as its
-open-source programme (a "community licence"), or an active free trial, purchased or activated
-through the JetBrains Marketplace. Subscriptions may be billed yearly or monthly. Subject to your
-compliance with this Agreement, the Licensor grants you a non-exclusive, non-transferable,
-non-sublicensable, revocable licence to install and use the paid features for the duration of your
-active subscription, community licence, or trial, on the following basis:
-
-- Under an individual subscription, one named individual may use the paid features on any number of
-  devices that individual personally uses.
-- Under an organisation subscription, the paid features are licensed per user: each subscription
-  entitles one named individual to use the paid features on any number of devices that individual
-  personally uses, and the organisation must hold a separate subscription for every individual who
-  uses the paid features. A subscription may be reassigned to a different individual when the
-  original user no longer needs it, but not on a rotating basis to serve more individuals than the
-  number of subscriptions held.
-- Under a community licence, one named individual may use the paid features on any number of
-  devices that individual personally uses, only for the purposes and for the period that the
-  community programme's terms permit.
-
-### 1.3 No fallback licence
-This subscription does not include a fallback licence. When your subscription, community licence,
-or trial lapses, expires, or is cancelled and not renewed, access to the paid features ends
-automatically and immediately. The free features described in §1.1 continue to work without
-interruption. No previously-generated data or settings are deleted as a result of a lapsed
-subscription.
-
-### 1.4 Trial
-A free trial period, as configured on the JetBrains Marketplace listing at the time of your
-activation, may be offered for the paid features. The Licensor may change or withdraw trial terms
-for future users at any time; this does not affect a trial you have already activated.
-
-### 1.5 Fees and Renewal
-Paid features are sold and billed through the JetBrains Marketplace, which acts as the seller of
-record. The price is the one shown on the Marketplace listing at the time you purchase or renew,
-and it applies for the whole of the billing period it covers; it does not change during that
-period.
-
-The Licensor may change the price of the paid features for future billing periods, both for new
-subscribers on first purchase and for existing subscribers on renewal. If you do not wish to renew
-at the new price, you may cancel before your renewal date. Cancelling does not end your current
-subscription early — the paid features remain available until the end of the period you have
-already paid for, after which the Software reverts to the free features described in §1.1.
-
-Billing, renewal, cancellation, and refunds are handled by JetBrains under its own terms and
-refund policy, which apply in addition to this Agreement. Nothing in this section affects your
-statutory rights as a consumer.
+The Software is provided free of charge. Subject to your compliance with this Agreement, the
+Licensor grants you a non-exclusive, non-transferable, non-sublicensable, revocable licence to
+install and use the Software, for personal and commercial purposes, on any number of devices. Where
+you are an organisation, your employees and contractors may use the Software on your behalf under
+this licence, and you are responsible for their compliance with this Agreement.
 
 ## 2. Restrictions
 
@@ -85,8 +38,7 @@ You must not, and must not permit any third party to:
   1988), and then only after you have first requested the necessary interoperability information
   from the Licensor and such information has not been made available within a reasonable time;
 - remove, obscure, or alter any proprietary notices on or in the Software;
-- use the Software to build a competing product;
-- circumvent or attempt to circumvent the licensing/subscription checks described in §1.
+- use the Software to build a competing product.
 
 ## 3. Ownership
 
@@ -97,8 +49,7 @@ Agreement does not grant you any rights to trademarks or service marks of the Li
 ## 4. Data and Privacy
 
 The Software does not transmit your source code, file contents, or project data to the Licensor or
-any third party, and does not collect telemetry. Licence/subscription status is validated locally
-via the JetBrains Platform's licensing facilities. If this changes in a future version, the
+any third party, and does not collect telemetry. If this changes in a future version, the
 Licensor will update this section and the Marketplace listing accordingly before the change ships.
 
 ## 5. Updates
@@ -116,37 +67,36 @@ ERROR-FREE. NOTHING IN THIS AGREEMENT EXCLUDES OR LIMITS LIABILITY FOR DEATH OR 
 CAUSED BY NEGLIGENCE, FOR FRAUD, OR FOR ANY OTHER LIABILITY WHICH CANNOT BE EXCLUDED OR LIMITED BY
 APPLICABLE LAW.
 
+Nothing in this Agreement affects your statutory rights as a consumer.
+
 ## 7. Limitation of Liability
 
 TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY
-INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS,
-REVENUE, DATA, OR BUSINESS OPPORTUNITY, ARISING OUT OF OR IN CONNECTION WITH THIS AGREEMENT OR THE
-USE OF, OR INABILITY TO USE, THE SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. THE
-LICENSOR'S TOTAL AGGREGATE LIABILITY ARISING OUT OF OR RELATING TO THIS AGREEMENT SHALL NOT EXCEED
-THE AMOUNT YOU PAID FOR THE SOFTWARE IN THE TWELVE (12) MONTHS PRECEDING THE EVENT GIVING RISE TO
-THE CLAIM.
+INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS, REVENUE,
+DATA, OR BUSINESS OPPORTUNITY, ARISING OUT OF OR IN CONNECTION WITH THIS AGREEMENT OR THE USE OF, OR
+INABILITY TO USE, THE SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. THE LICENSOR'S
+TOTAL AGGREGATE LIABILITY ARISING OUT OF OR RELATING TO THIS AGREEMENT SHALL NOT EXCEED ONE HUNDRED
+POUNDS STERLING (£100).
 
 ## 8. Term and Termination
 
 This Agreement is effective until terminated. Your rights under this Agreement terminate
 automatically, without notice, if you fail to comply with any of its terms. Upon termination, you
-must cease all use of the paid features and, if requested by the Licensor, uninstall the Software.
-Sections 3, 4, 6, 7, 9, and 10 survive termination.
+must cease all use of the Software and uninstall it. Sections 3, 4, 6, 7, 9, and 10 survive
+termination.
 
 ## 9. Governing Law
 
-This Agreement, and any dispute or claim arising out of or in connection with it, is governed by
-and construed in accordance with the law of Scotland. The Scottish courts shall have exclusive
-jurisdiction, save that if you are a consumer resident elsewhere in the United Kingdom, mandatory
-local consumer-protection law may also apply and you may bring proceedings in your place of
-residence.
+This Agreement, and any dispute or claim arising out of or in connection with it, is governed by and
+construed in accordance with the law of Scotland. The Scottish courts shall have exclusive
+jurisdiction, save that if you are a consumer, you also benefit from any mandatory provisions of the
+law of the country where you live, and you may bring proceedings in the courts there.
 
 ## 10. Miscellaneous
 
 This Agreement constitutes the entire agreement between you and the Licensor regarding the
 Software and supersedes any prior agreements regarding the Software. The Licensor may update this
-Agreement from time to time; material changes will be reflected in a new "Last updated" date and,
-where required by JetBrains Marketplace policy, notified to active subscribers in advance. If any
+Agreement from time to time; material changes will be reflected in a new "Last updated" date. If any
 provision of this Agreement is held unenforceable, the remaining provisions remain in full force.
 
 ## Contact
