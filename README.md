@@ -90,5 +90,4 @@ Maintainers apply these labels when triaging:
 
 ## Licence
 
-[MIT](LICENSE). The same text is published at <https://prismtabs.com/licence>; keep
-`prismtabs-website/licence.html` identical to `LICENSE`.
+[MIT](LICENSE)
