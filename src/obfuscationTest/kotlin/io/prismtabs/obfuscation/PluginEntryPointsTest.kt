@@ -28,7 +28,7 @@ class PluginEntryPointsTest {
     @Test
     fun `classes plugin xml does not name are renamed`() {
         assertThrows(ClassNotFoundException::class.java) {
-            Class.forName("io.prismtabs.license.PrismTabsLicense", false, javaClass.classLoader)
+            Class.forName("io.prismtabs.service.TabGroupVisibility", false, javaClass.classLoader)
         }
     }
 

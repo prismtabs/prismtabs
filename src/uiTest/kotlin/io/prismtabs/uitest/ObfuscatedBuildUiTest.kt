@@ -15,8 +15,7 @@ import java.time.Duration.ofSeconds
 
 /**
  * The obfuscated jar Marketplace ships, driven in a real IDE: the main paths through the code the
- * obfuscator renamed — the tab popup, saving, the tool window and its licence gate, and the palette
- * settings page. Runs only against `runIdeForUiTestsObfuscated` (see [RunsOnObfuscatedBuild]).
+ * obfuscator renamed — the tab popup, saving, the tool window, and the palette settings page. Runs only against `runIdeForUiTestsObfuscated` (see [RunsOnObfuscatedBuild]).
  *
  * Each test works on a file and group of its own, named per run, and removes them through the UI.
  * The resets the other classes start from call the plugin's services by name, which this build no
@@ -33,8 +32,8 @@ class ObfuscatedBuildUiTest {
     @Test
     fun `the sandbox runs the obfuscated jar`(remoteRobot: RemoteRobot) {
         assertEquals(
-            mapOf("io.prismtabs.provider.TabGroupColorProvider" to true, "io.prismtabs.license.PrismTabsLicense" to false),
-            remoteRobot.pluginClassesPresent("io.prismtabs.provider.TabGroupColorProvider", "io.prismtabs.license.PrismTabsLicense"),
+            mapOf("io.prismtabs.provider.TabGroupColorProvider" to true, "io.prismtabs.service.TabGroupVisibility" to false),
+            remoteRobot.pluginClassesPresent("io.prismtabs.provider.TabGroupColorProvider", "io.prismtabs.service.TabGroupVisibility"),
             "plugin.xml's classes keep their names and the rest are renamed",
         )
     }
@@ -64,7 +63,7 @@ class ObfuscatedBuildUiTest {
     }
 
     @Test
-    fun `the tool window lists the group for a subscriber and shows the upsell once the licence lapses`(remoteRobot: RemoteRobot) {
+    fun `the tool window lists the group`(remoteRobot: RemoteRobot) {
         remoteRobot.idea {
             withOwnFileAndGroupName(remoteRobot) { file, group ->
                 createGroupFromPopup(remoteRobot, file, "Purple", group)
@@ -73,17 +72,7 @@ class ObfuscatedBuildUiTest {
                     waitFor(ofSeconds(10), errorMessage = "the tool window never listed $group: ${remoteRobot.toolWindowGroupRows()}") {
                         remoteRobot.toolWindowGroupRows().any { it.startsWith("$group ") }
                     }
-
-                    simulateUnlicensed()
-                    // Hidden, then shown: the panel reads the licence when it is shown, as
-                    // PaywallUiTest spells out.
-                    hideTabGroupsToolWindow()
-                    showTabGroupsToolWindow()
-                    waitFor(ofSeconds(10), errorMessage = "the lapsed tool window never showed the upsell: ${toolWindowEmptyText()}") {
-                        toolWindowEmptyText().contains("The PrismTabs tool window is a paid feature")
-                    }
                 } finally {
-                    simulateEntitled()
                     hideTabGroupsToolWindow()
                 }
                 deleteGroupFromPopup(remoteRobot, file, group)

@@ -54,10 +54,6 @@ internal object TabGroupVisibility {
      * [io.prismtabs.listener.TabGroupFileListener]. The empty case is skipped rather than written
      * for the same reason: a group with no open tabs is exactly a hidden group, and overwriting the
      * memory there would erase the only record of what to bring back.
-     *
-     * Deliberately **not** licence-gated: this is bookkeeping, and a lapsed subscriber whose memory
-     * silently stopped updating would find the locked tool window's "reopen the tabs" escape hatch
-     * restoring a stale set of files.
      */
     fun rememberOpenTabs(project: Project, service: TabGroupService, groupId: String) {
         val openUrls = openMemberUrls(project, service, groupId)

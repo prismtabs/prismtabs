@@ -4,8 +4,8 @@ import com.intellij.remoterobot.RemoteRobot
 import com.intellij.remoterobot.utils.waitFor
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import java.time.Duration.ofSeconds
@@ -33,18 +33,6 @@ import java.time.Duration.ofSeconds
  *
  * The plugin is put back in a `finally`. This test unloads the very plugin the rest of the suite
  * exercises, and a sandbox IDE is shared across the whole run.
- *
- * **It runs only on a build with no `<product-descriptor>`**, and skips itself otherwise. That is
- * not a convenience: `DynamicPlugins.checkCanUnloadWithoutRestart` returns "Plugin io.prismtabs is a
- * paid plugin" for any descriptor with a product code that is neither bundled nor JetBrains' own
- * (read out of `DynamicPlugins` with `javap` on 2024.2 — `getProductCode() != null &&
- * !isBundled && !isDevelopedByJetBrains`), so on a paid build the platform refuses *both* halves of
- * this test and the reload in the `finally` cannot put the plugin back either — which then fails
- * every test that runs after it. Comment the tag out in `plugin.xml` to exercise this scenario, as
- * the reported one was: the report came from a locally built, descriptor-less 1.4.14.
- *
- * The gate is inside the frame block, not on the method, because answering it means asking the
- * running IDE.
  */
 @ExtendWith(RemoteRobotExtension::class)
 class PluginUnloadUiTest {
@@ -55,10 +43,6 @@ class PluginUnloadUiTest {
     @Test
     fun `disabling the plugin releases its class loader and clears the tab colours`(remoteRobot: RemoteRobot) {
         remoteRobot.idea {
-            assumeTrue(
-                !isPaidBuild(),
-                "the platform refuses to load or unload a paid plugin dynamically — see this class's doc",
-            )
             var unloaded = false
             try {
                 resetTabGroups()
@@ -173,19 +157,14 @@ class PluginUnloadUiTest {
     }
 
     /**
-     * The paid build's side of the same question: disabling it cannot happen without a restart, and
-     * the platform says so up front rather than attempting an unload — which is what makes Settings |
-     * Plugins offer "Restart IDE" instead of unloading in place.
+     * The platform's own verdict, asked up front: it is what makes Settings | Plugins install,
+     * update, disable and uninstall PrismTabs in place rather than offering "Restart IDE". A
+     * `<product-descriptor>` is one thing that turns it into a refusal ("is a paid plugin").
      */
     @Test
-    fun `the platform requires a restart to disable the paid build`(remoteRobot: RemoteRobot) {
+    fun `the platform can disable the plugin without a restart`(remoteRobot: RemoteRobot) {
         remoteRobot.idea {
-            assumeTrue(isPaidBuild(), "only a paid build is refused a dynamic unload — see this class's doc")
-            val refusal = unloadWithoutRestartRefusal()
-            assertTrue(
-                refusal != null && refusal.contains("paid plugin"),
-                "expected the platform to refuse unloading a paid plugin without a restart, got: $refusal",
-            )
+            assertNull(unloadWithoutRestartRefusal(), "the platform refuses to unload PrismTabs without a restart")
         }
     }
 }

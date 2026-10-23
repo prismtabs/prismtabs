@@ -23,7 +23,6 @@ import com.intellij.ui.popup.list.ListPopupImpl
 import com.intellij.ui.popup.list.PopupListElementRenderer
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
-import io.prismtabs.license.PrismTabsLicense
 import io.prismtabs.model.PresetColor
 import io.prismtabs.model.TabGroup
 import io.prismtabs.service.TabGroupNotifier
@@ -693,15 +692,9 @@ internal fun missingFileMessage(path: String, groupName: String): String =
 
 /**
  * Marks [group] as the active ("sticky") group, or clears it if it already is — the single choke
- * point for Phase 3's inheritance toggle, mirroring `toggleCollapse` in
- * [io.prismtabs.ui.TabGroupsToolWindowFactory]'s file.
+ * point for Phase 3's inheritance toggle, called by both the tab popup and the tool window.
  *
- * *Marking* is the paid auto-join feature (see the README's free/paid split); *clearing* is not — a
- * lapsed subscriber must always be able to switch off a sticky group they set while subscribed,
- * even though [io.prismtabs.listener.TabGroupFileListener] already ignores it.
- *
- * `internal`, not `private`: the paywall uiTest drives this directly, for the same reason
- * [expandAllCollapsedGroups] is internal.
+ * `internal`, not `private`: the uiTests drive this directly rather than mouse-driving a popup.
  *
  * [TabGroupNotifier.notifyChanged] because the tool window's row renderer marks the active group
  * and its list is long-lived: without this, marking a group active from a tab's popup would leave
@@ -710,10 +703,8 @@ internal fun missingFileMessage(path: String, groupName: String): String =
  */
 internal fun toggleActiveGroup(project: Project, group: TabGroup, service: TabGroupService) {
     val clearing = service.activeGroupId() == group.id
-    if (clearing || PrismTabsLicense.requirePaidFeature("Marking a tab group active")) {
-        service.setActiveGroup(if (clearing) null else group.id)
-        TabGroupNotifier.notifyChanged(project)
-    }
+    service.setActiveGroup(if (clearing) null else group.id)
+    TabGroupNotifier.notifyChanged(project)
 }
 
 /** `internal`, not `private`: reused directly by the tool window's own "Rename…" action. */
@@ -732,8 +723,7 @@ internal fun promptForRenameAndApply(project: Project, group: TabGroup, service:
  * action needs an unambiguous label, not a bare affirmative.
  *
  * The message itself is [deleteConfirmationMessage], split out so the hidden-group warning it
- * carries is unit-testable without a platform harness — the same trade
- * [io.prismtabs.license.PrismTabsLicense.decide] makes for the licence gate.
+ * carries is unit-testable without a platform harness.
  *
  * `internal`, not `private`: reused directly by the tool window's own "Delete Group" action.
  */
@@ -760,10 +750,7 @@ internal fun confirmAndDelete(project: Project, group: TabGroup, service: TabGro
  * A hidden group gets a second line, because deleting one destroys more than the first sentence
  * admits: [TabGroupService.delete] drops the whole group, and with it the
  * [TabGroup.rememberedTabUrls] record of what its tabs were — so nothing is left to reopen them
- * from. This path is reachable without a subscription ("Manage Groups…" is free, and
- * [ManageGroupsStep] lists hidden groups like any other), which is what earns the line its space: it
- * is the one way a lapsed user can lose the locked tool window's "reopen the tabs" escape hatch
- * ([showAllHiddenGroups]), and this dialog is the last point where they could still say no.
+ * from, and this dialog is the last point where the user could still say no.
  *
  * Both conditions are checked, not [hidden] alone: a group hidden with nothing remembered — one
  * whose files have simply never been opened — has no tabs to lose, and a warning about zero tabs

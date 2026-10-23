@@ -3,8 +3,8 @@ package io.prismtabs.uitest
 import com.intellij.remoterobot.RemoteRobot
 
 /**
- * The sandbox IDE's process-wide state that the tests read or temporarily change: how the plugin
- * came up, what the platform wrote to disk, the theme, the log, and the registration action.
+ * The sandbox IDE's process-wide state that the tests read or temporarily change: whether the plugin
+ * can unload in place, what the platform wrote to disk, the theme and the log.
  */
 
 private val PLUGIN_PRELUDE = """
@@ -29,25 +29,6 @@ private val PLUGIN_PRELUDE = """
 """
 
 /**
- * How PrismTabs came up in this IDE process: `enabled` (not disabled by the platform), `loaded`, and
- * `listedAsDisabled` (named in the config directory's `disabled_plugins.txt`, which is where a
- * platform-side disable is recorded and what keeps a plugin off across restarts).
- */
-fun IdeaFrame.prismTabsPluginState(): Map<String, Boolean> = callJs<String>(
-    """
-    $PLUGIN_PRELUDE
-    var id = PluginId.getId('io.prismtabs')
-    var disabledFile = java.nio.file.Paths.get(PathManager.getConfigPath(), 'disabled_plugins.txt')
-    var listed = java.nio.file.Files.exists(disabledFile) &&
-        java.nio.file.Files.readAllLines(disabledFile).contains('io.prismtabs')
-    'enabled=' + !PluginManagerCore.isDisabled(id) +
-        '|loaded=' + PluginManagerCore.getLoadedPlugins().contains(PluginManagerCore.getPlugin(id)) +
-        '|listedAsDisabled=' + listed
-    """,
-    true,
-).split('|').associate { it.substringBefore('=') to it.substringAfter('=').toBoolean() }
-
-/**
  * What the platform answers when asked whether PrismTabs can be unloaded without a restart — `null` if it can.
  *
  * The reason moved between platform versions (read with `javap` from both): 2024.2's
@@ -68,69 +49,6 @@ fun IdeaFrame.unloadWithoutRestartRefusal(): String? = callJs<String>(
     """,
     true,
 ).ifEmpty { null }
-
-/**
- * Stands a recording action in for the IDE's registration dialog ("RegisterPlugins", or "Register"
- * in commercial builds) until [removeRegisterProbe], so a test can assert the paywall *raised* the
- * dialog — and with which message — without a modal ever opening on the sandbox.
- *
- * The genuine actions are stashed exactly as [IdeaFrame.suppressRegisterDialog] stashes them, and the
- * probe is registered under "RegisterPlugins", the id `PrismTabsLicense.showRegisterDialog` looks up
- * first. What it records is the `register.message` data the plugin hands the dialog.
- */
-fun IdeaFrame.installRegisterProbe() {
-    suppressRegisterDialog()
-    runJs(
-        """
-        importClass(com.intellij.openapi.actionSystem.ActionManager)
-        importClass(com.intellij.openapi.application.ApplicationManager)
-        importClass(com.intellij.openapi.util.Key)
-        importClass(com.intellij.openapi.project.DumbAwareAction)
-
-        var keyName = 'prismtabs.uitest.registerProbeMessages'
-        var key = Key.findKeyByName(keyName)
-        if (key == null) key = Key.create(keyName)
-        var messages = java.util.Collections.synchronizedList(new java.util.ArrayList())
-        ApplicationManager.getApplication().putUserData(key, messages)
-
-        var probe = DumbAwareAction.create(new com.intellij.util.Consumer({
-            consume: function(event) { messages.add('' + event.getDataContext().getData('register.message')) }
-        }))
-        ActionManager.getInstance().registerAction('RegisterPlugins', probe)
-        """,
-        true,
-    )
-}
-
-/** Every message the registration probe has been invoked with, oldest first. */
-fun IdeaFrame.registerProbeMessages(): List<String> = callJs<String>(
-    """
-    importClass(com.intellij.openapi.application.ApplicationManager)
-    importClass(com.intellij.openapi.util.Key)
-    var key = Key.findKeyByName('prismtabs.uitest.registerProbeMessages')
-    var messages = key == null ? null : ApplicationManager.getApplication().getUserData(key)
-    messages == null ? '' : '' + java.lang.String.join('\n', messages)
-    """,
-    true,
-).lines().filter { it.isNotEmpty() }
-
-/** Unregisters the probe and puts the genuine registration actions back. Must run in a `finally`. */
-fun IdeaFrame.removeRegisterProbe() {
-    runJs(
-        """
-        importClass(com.intellij.openapi.actionSystem.ActionManager)
-        importClass(com.intellij.openapi.application.ApplicationManager)
-        importClass(com.intellij.openapi.util.Key)
-        var manager = ActionManager.getInstance()
-        var action = manager.getAction('RegisterPlugins')
-        if (action != null && action.getClass().getName().indexOf('DumbAwareAction') >= 0) manager.unregisterAction('RegisterPlugins')
-        var key = Key.findKeyByName('prismtabs.uitest.registerProbeMessages')
-        if (key != null) ApplicationManager.getApplication().putUserData(key, null)
-        """,
-        true,
-    )
-    restoreRegisterDialog()
-}
 
 /**
  * What a restarted IDE would load for this project's tab groups: `.idea/tabGroups.xml` as the
@@ -197,8 +115,7 @@ fun IdeaFrame.paletteAsRestartedFromDisk(): List<String> = callJs<String>(
 
 /**
  * Overrides preset [index] in the running palette service with [label] and both colours — the state
- * a subscriber's palette edit leaves behind. See [IdeaFrame.renamePalettePreset] for the rename-only
- * variant.
+ * a palette edit leaves behind.
  */
 fun IdeaFrame.editPalettePreset(index: Int, label: String, lightRgb: Int, darkRgb: Int) {
     runJs(

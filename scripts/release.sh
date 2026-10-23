@@ -3,11 +3,11 @@
 # pushes dev, fast-forwards master to it, waits for Build to pass, then pushes the v<version> tag,
 # which starts Publish. See docs/releasing.md.
 #
-# Usage: scripts/release.sh [patch|minor|X.Y.Z] [--dry-run]
-#   patch    third component +1 (default); release-version and release-date stay as they are
-#   minor    second component +1, third reset; sets release-version and release-date, which resets
-#            every user's trial
-#   X.Y.Z    an explicit patch version, for example 1.4.20
+# Usage: scripts/release.sh [patch|minor|major|X.Y.Z] [--dry-run]
+#   patch    third component +1 (default)
+#   minor    second component +1, third reset
+#   major    first component +1, second and third reset
+#   X.Y.Z    an explicit version, for example 1.4.20
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
@@ -17,7 +17,7 @@ dry_run=false
 for arg in "$@"; do
   case "$arg" in
     --dry-run) dry_run=true ;;
-    patch | minor) kind=$arg ;;
+    patch | minor | major) kind=$arg ;;
     [0-9]*.[0-9]*.[0-9]*) kind=explicit; explicit=$arg ;;
     *) echo "release: unknown argument '$arg'" >&2; exit 1 ;;
   esac
@@ -31,23 +31,14 @@ IFS=. read -r major minor patch <<<"$current"
 
 case "$kind" in
   patch) version="$major.$minor.$((patch + 1))" ;;
-  minor)
-    if [ "$minor" -ge 9 ]; then major=$((major + 1)); minor=0; else minor=$((minor + 1)); fi
-    version="$major.$minor.0"
-    ;;
+  minor) version="$major.$((minor + 1)).0" ;;
+  major) version="$((major + 1)).0.0" ;;
   explicit) version=$explicit ;;
 esac
 tag="v$version"
 
-# The Marketplace's release-version is the first two components without the dot: 1.5 -> 15.
-release_version="${version%%.*}$(echo "$version" | cut -d. -f2)"
-release_date=$(date +%Y%m%d)
-
 echo "Current version: $current"
 echo "Release:         $version ($kind)"
-if [ "$kind" = minor ]; then
-  echo "release-version: $release_version, release-date: $release_date (resets every user's trial)"
-fi
 $dry_run && exit 0
 
 [ "$(git branch --show-current)" = dev ] || fail "not on dev"
@@ -65,16 +56,11 @@ read -r -p "Release $tag from $(git rev-parse --short dev)? [y/N] " answer
 [ "$answer" = y ] || fail "cancelled"
 
 sed -i "s/^pluginVersion *=.*/pluginVersion = $version/" gradle.properties
-if [ "$kind" = minor ]; then
-  sed -i -E "s/(<product-descriptor [^>]*)release-date=\"[0-9]+\"/\1release-date=\"$release_date\"/; \
-             s/(<product-descriptor [^>]*)release-version=\"[0-9]+\"/\1release-version=\"$release_version\"/" \
-    src/main/resources/META-INF/plugin.xml
-fi
 
 ./gradlew patchChangelog
 ./gradlew verifyPlugin
 
-git add gradle.properties CHANGELOG.md src/main/resources/META-INF/plugin.xml
+git add gradle.properties CHANGELOG.md
 git commit -q -m "chore(release): release version $version" -m "Releases version $version."
 git push origin dev
 

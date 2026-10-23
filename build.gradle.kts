@@ -192,8 +192,7 @@ intellijPlatform {
             // This does NOT change what we compile against — dependencies{} above still pins to
             // intellijIdeaCommunity(platformVersion). Verifying against the wider IU matrix is
             // safe and strictly more coverage: IU is a superset of IC, so a plugin compiled
-            // against Community runs on both, and Marketplace licensing is per-plugin and
-            // independent of IDE edition. Switching the *compile* baseline to Ultimate would be
+            // against Community runs on both. Switching the *compile* baseline to Ultimate would be
             // a different, unwanted trade-off (risks silently compiling against an Ultimate-only
             // API with no error to catch it) — this only widens what gets verified.
             //
@@ -227,9 +226,8 @@ intellijPlatform {
         // failed nothing and so was never read.
         //
         // MISSING_DEPENDENCIES because a `<depends>` the IDE cannot resolve stops the plugin
-        // loading there at all, and without this level the Verifier only prints it: adding the
-        // com.intellij.marketplace dependency against the old 242 floor reported "1 missing
-        // mandatory dependency" on 2024.2 and 2024.3 and still built green.
+        // loading there at all, and without this level the Verifier only prints it ("1 missing
+        // mandatory dependency") and still builds green.
         failureLevel = listOf(
             VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
             VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES,
