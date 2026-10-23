@@ -26,7 +26,7 @@ using this codebase and traces each feature through the code.
 
 1. IntelliJ IDEA → **Open** → select this folder. It imports as a Gradle project.
 2. Set the Gradle JVM to **JDK 21** (Settings → Build Tools → Gradle → Gradle JVM).
-   This is required by the 2025.1 platform baseline.
+   This is required by the 2024.2 platform baseline.
 3. First sync downloads the IntelliJ Platform artifacts (a few hundred MB). Be patient.
 
 If Gradle sync fails on the wrapper, run `gradle wrapper --gradle-version=9.3.0` once with a
@@ -45,7 +45,7 @@ See [UI testing](#ui-testing) for `./gradlew uiTest` — the `remote-robot` suit
 ### Noisy but harmless log output from `buildPlugin` / `runIde`
 
 `buildPlugin` runs a `buildSearchableOptions` subtask that boots a real headless sandbox IDE
-(the 2025.1 baseline from `platformVersion`) and walks *every* Settings panel — including stock
+(the 2024.2 baseline from `platformVersion`) and walks *every* Settings panel — including stock
 JetBrains ones PrismTabs never touches — to index search terms. None of the following indicate a
 problem with PrismTabs itself, and the plugin zip is still produced correctly:
 
@@ -1014,7 +1014,7 @@ every other sandbox runs everything but it (see [Obfuscation](#obfuscation)).
 
 ### The newest platform: `runIdeForUiTestsLatest`
 
-`runIdeForUiTests` runs the 2025.1 compile baseline. `runIdeForUiTestsLatest` is the same sandbox on
+`runIdeForUiTests` runs the 2024.2 compile baseline. `runIdeForUiTestsLatest` is the same sandbox on
 an *installed* IDE of 2026.2 or later, started the same way and driven by the same `./gradlew
 uiTest`. Only one of the two can run at a time, because both listen on :8082. It exists because the
 platform changes underneath the plugin: `PluginUnloadUiTest`'s Hide Group scenario only reproduces
@@ -1264,7 +1264,7 @@ Read these before designing anything. They are platform limits, not TODOs.
 
 ## Compatibility policy
 
-Compile against the **oldest** supported platform and run forward. `sinceBuild = 251`,
+Compile against the **oldest** supported platform and run forward. `sinceBuild = 242`,
 `untilBuild` deliberately unset, correctness guarded by the Plugin Verifier rather than a
 hard ceiling. Raising `platformVersion` in `gradle.properties` drops older IDEs — don't do it
 casually.

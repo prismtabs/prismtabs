@@ -16,8 +16,8 @@ not to exist as described, stop and report rather than substituting something pl
 |---|---|---|
 | Language | Kotlin | SDK-idiomatic; all modern platform samples and the official plugin template are Kotlin |
 | Build | Gradle KTS + `org.jetbrains.intellij.platform` **2.19.0** | Current release of IPGP 2.x |
-| Compile baseline | **IntelliJ IDEA 2025.1** (`sinceBuild = 251`) | Was 2024.2; see §0.1 |
-| JDK | **21** | Required for platform 2024.2+ (so for the 2025.1 floor too); 2026.2+ requires Java 25 to *build against*, but Java 21 bytecode runs fine on the newer JBR |
+| Compile baseline | **IntelliJ IDEA 2024.2** (`sinceBuild = 242`) | See §0.1 |
+| JDK | **21** | Required for platform 2024.2+; 2026.2+ requires Java 25 to *build against*, but Java 21 bytecode runs fine on the newer JBR |
 | `untilBuild` | **unset (open-ended)** | Widest range; guarded by Plugin Verifier instead |
 | Tests | **JUnit 5** | Spock is not viable here — see §7 |
 | Scope | Full Chrome UX incl. rename / recolour / collapse | With the collapse caveat in §5 |
@@ -35,11 +35,6 @@ standard IntelliJ compatibility model. The realistic floor options:
 Every API this plugin needs (`EditorTabColorProvider`, `JBPopupFactory`, `PersistentStateComponent`,
 `EditorTabPopupMenu`, Kotlin UI DSL v2) predates 2023, so the floor is a policy choice, not a technical one.
 Start at 242; dropping to 231 later is a one-line change plus a verifier run.
-
-**Update, 2026-09-28: the floor is now 2025.1 (build 251).** Licensing, not API, forced it: the
-`com.intellij.marketplace` dependency that stops the paid-feature gate failing open in Android Studio
-cannot resolve on the paid 2024.2-2024.3 IDEs. See README §"Compatibility policy". The reasoning
-above is kept as the original decision.
 
 **Do not set `untilBuild`.** Use `pluginVerification { ides { ... } }` to check 2024.2, 2024.3, 2025.1,
 2025.2, 2025.3, 2026.1, 2026.2 in CI.

@@ -409,9 +409,9 @@ The build uses the IntelliJ Platform Gradle Plugin (`org.jetbrains.intellij.plat
 
 Compatibility settings live in `gradle.properties`:
 
-- `platformVersion = 2025.1` is the IDE compiled against, deliberately the **oldest** supported
+- `platformVersion = 2024.2` is the IDE compiled against, deliberately the **oldest** supported
   release.
-- `pluginSinceBuild = 251` is the lowest IDE build that may install the plugin. There is no upper
+- `pluginSinceBuild = 242` is the lowest IDE build that may install the plugin. There is no upper
   bound; `verifyPlugin` checks newer releases instead.
 
 Read: <https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html> and
