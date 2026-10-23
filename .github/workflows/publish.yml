@@ -25,7 +25,7 @@ jobs:
     # runner is correct here — no matrix needed, unlike build.yml's cross-platform `build` job.
     #
     # No environment-based approval gate: required reviewers on GitHub Environments need
-    # Team/Enterprise for private repos, and this is a private repo on the free plan. The gate is
+    # Team/Enterprise for private repos, and this repo is on the free plan. The gate is
     # the tag push itself — only push a `v*` tag once the Windows/Mac cross-platform pass is done,
     # and keep tag pushes out of any scripted/automated flow.
     steps:

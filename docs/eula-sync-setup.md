@@ -1,7 +1,7 @@
 # Setting up the EULA sync check on a new machine (macOS / Windows)
 
 This guide configures the local `pre-commit` hook in a **`prismtabs-website`**
-checkout. It lives in this (private) repository because the hook needs a
+checkout. It lives in this repository because the hook needs a
 checkout of `docs/EULA.md` from here to compare against — the steps themselves
 are all run in the `prismtabs-website` clone.
 
