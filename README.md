@@ -11,7 +11,7 @@ open tabs and records them, and showing reopens them in order; see
 [Phase 4 result](#phase-4-result).
 
 The phase sections below record the design decisions and platform findings behind each part of
-the plugin. [Licensing](#licensing) covers the terms it ships under,
+the plugin. [Licensing](#licensing) covers the licence it ships under,
 [docs/releasing.md](docs/releasing.md) how to ship a release, and the
 [cross-platform verification pass](docs/cross-platform-manual-verification.md) what to check by
 hand before each one. Everything is covered end-to-end by real UI tests (`./gradlew uiTest`, see
@@ -703,10 +703,9 @@ how the check was driven, not evidence of a problem in the plugin being checked.
 
 ## Licensing
 
-PrismTabs is free on JetBrains Marketplace, with every feature available to every user. It is
-proprietary, distributed under the [End-User Licence Agreement](docs/EULA.md). That file mirrors
-<https://prismtabs.com/eula>, the canonical copy in `prismtabs-website`; the `EULA sync` workflow
-fails when the two differ.
+PrismTabs is free on JetBrains Marketplace, with every feature available to every user. It is open
+source under the [MIT licence](LICENSE), also published at <https://prismtabs.com/licence>. Keep
+the text of `prismtabs-website/licence.html` identical to `LICENSE`.
 
 `plugin.xml` has no `<product-descriptor>`. With one, the platform treats the plugin as paid and
 refuses to load, unload or update it without an IDE restart, which `PluginUnloadUiTest` asserts
