@@ -26,7 +26,7 @@ import io.prismtabs.model.TabGroup
 ```kotlin
 val service = project.service<TabGroupService>()   // read-only reference, type inferred
 var hidden: Boolean = false                          // mutable, type written out
-const val PRODUCT_CODE = "PPRISMTABS"                // compile-time constant
+const val GROUP_TREE_NAME = "PrismTabs.GroupTree"    // compile-time constant
 ```
 
 - `val` is Java's `final`. Prefer it; the codebase uses `var` only where a value must change.
@@ -384,27 +384,31 @@ the class object, write `TabGroupsChangedListener::class.java`.
 ## Property delegates and late initialisation
 
 ```kotlin
-val sandboxRunsObfuscatedBuild: Boolean by lazy { … }
+lateinit var dialogPanel: DialogPanel
+val uiTestImplementation by configurations.getting
 ```
 
-`by lazy` computes the value on first read and caches it (`RemoteRobotExtension`, in the UI tests). `lateinit var dialogPanel: DialogPanel`
-in `TabGroupPaletteConfigurable` promises the compiler that a non-null `var` is assigned before its
-first read, which that code needs because the panel's own lambdas refer to it.
+`lateinit var dialogPanel` in `TabGroupPaletteConfigurable` promises the compiler that a non-null
+`var` is assigned before its first read, which that code needs because the panel's own lambdas
+refer to it.
 
-`val uiTestImplementation by configurations.getting` in `build.gradle.kts` is the same `by`
-mechanism, provided by Gradle.
+`by` hands a property's reads and writes to another object. `val uiTestImplementation by
+configurations.getting` in `build.gradle.kts` is a delegate Gradle provides; the standard library's
+`by lazy { … }` computes a value on first read and caches it.
 
 ## Exceptions
 
 Kotlin has no checked exceptions: nothing forces a `try` or a `throws` clause. `try` is an
-expression, and `runCatching { }` wraps a block's result or exception in a `Result`:
+expression, and `runCatching { }` wraps a block's result or exception in a `Result`. `TabStrip`
+catches by type, rethrowing cancellation so a closing project can stop its loop:
 
 ```kotlin
-private fun declaresOwnProductDescriptor(): Boolean = runCatching {
-    // …
-}.getOrElse {
-    thisLogger().warn("Could not read $PLUGIN_DESCRIPTOR; treating this as a build that is not sold", it)
-    false
+try {
+    // open or close the files
+} catch (e: CancellationException) {
+    throw e
+} catch (e: Throwable) {
+    thisLogger().warn("Could not ${if (request is Open) "open" else "close"} a tab group's files", e)
 }
 ```
 
