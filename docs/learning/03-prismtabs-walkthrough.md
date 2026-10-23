@@ -81,7 +81,7 @@ Facts to hold on to when reading the rest of the code:
 3. `colorOf(group)` returns `JBColor(Color(lightRgb), Color(darkRgb))`, or `null` for an unassigned
    file. `JBColor` picks light or dark at paint time.
 4. The platform blends the colour into the tab background. Unselected tabs show it at about half
-   strength, which is why the presets are saturated (README §"Measured constraint").
+   strength, which is why the presets are saturated (engineering notes §"Measured constraint").
 
 The platform caches the result. Nothing is recomputed until something calls
 `FileEditorManager.updateFilePresentation(file)`, which is all `TabRepaint.request` does.
@@ -142,7 +142,7 @@ would lose the arrangement **Show Group** needs.
 
 ## Trace: hide and show a group
 
-Hiding is *close and remember*: IntelliJ has no collapsible group chip in the tab strip (README
+Hiding is *close and remember*: IntelliJ has no collapsible group chip in the tab strip (engineering notes
 §"Constraints that are not going away").
 
 1. The user double-clicks a group in the tool window, or presses the eye button
@@ -223,5 +223,5 @@ plugins.
    hide a group, open one member by hand, and close it again. Check the prediction in `runIde`.
 4. Find every caller of `TabGroupNotifier.notifyChanged`. For one of them, remove the call locally,
    run `runIde`, and describe what goes stale in the tool window. Revert the change.
-5. Pick one `README.md` section referenced from a KDoc comment and read it in full alongside the
+5. Pick one `docs/engineering-notes.md` section referenced from a KDoc comment and read it in full alongside the
    class.

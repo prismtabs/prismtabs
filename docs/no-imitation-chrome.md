@@ -41,16 +41,16 @@ resize.
 ## Why PrismTabs does not do it
 
 Two platform limits make it a bad idea. They are documented under **"Constraints
-that are not going away"** in the plugin `README.md`; the short version:
+that are not going away"** in the plugin `docs/engineering-notes.md`; the short version:
 
 1. **There is no public API for an in-strip group chip.** The browser-style
    collapsible label spanning several tabs has no supported entry point.
    Reproducing it means custom-painting `JBEditorTabs`, which is internal,
-   unstable, and free to change shape between IDE builds. (`README.md`,
+   unstable, and free to change shape between IDE builds. (`docs/engineering-notes.md`,
    constraint 3.)
 2. **Tab text colour is not ours to set.** `getEditorTabForegroundColor` is
    experimental and tied to file status, so even the colouring we *do* ship is
-   background-only. (`README.md`, constraint 2.)
+   background-only. (`docs/engineering-notes.md`, constraint 2.)
 
 Custom-painted chrome built on internal classes is exactly the kind of fragile,
 version-brittle hack that breaks silently on the next IDE update and across the

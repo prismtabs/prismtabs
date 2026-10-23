@@ -9,7 +9,7 @@ input differences. Run this doc first on whatever machine is convenient; run tha
 release pass on Windows and macOS (Linux is covered by day-to-day development).
 
 Automated coverage exists for most of what is below (`./gradlew test` for pure logic,
-`./gradlew uiTest` for the `remote-robot` suite — see README "UI testing"). Note the OS, IDE build,
+`./gradlew uiTest` for the `remote-robot` suite — see engineering notes "UI testing"). Note the OS, IDE build,
 and theme (dark/light) you test with, and be picky — anything that looks off is worth flagging even
 if it's not what you set out to test (see CLAUDE.md's UI standards).
 
@@ -49,7 +49,7 @@ Right-click any editor tab → **Tab Group…** opens the popup for every case b
       (`TabGroupPopupUiTest` "the swatch row offers all eight presets, each dot in its own colour").
       Left for a human: legibility.*
 - [ ] Click away to another tab — the now-unselected, tinted tab is still legible, at roughly half
-      the strength of the selected reading (the platform's ~50% blend — see README "Measured
+      the strength of the selected reading (the platform's ~50% blend — see engineering notes "Measured
       constraint").
       *Automated: partial — the half-strength blend is asserted on the painted tab (same test as
       above). Left for a human: legibility.*
@@ -103,14 +103,14 @@ above, not as a final once-over:
       crisply at your display's scaling, in both themes.
       *Automated: not automated — a visual judgement.*
 - [ ] No menu item, dialog title, or button label is truncated, misaligned, or uses the wrong
-      punctuation convention (an ellipsis only where further input follows — see README "Checked
+      punctuation convention (an ellipsis only where further input follows — see engineering notes "Checked
       against the JetBrains UI Guidelines").
       *Automated: partial — the exact wording of every label the tests touch is asserted, and the "…"
       of the strings with unit tests (`AddToActiveGroupLabelTest`, `CurrentGroupCaptionTest`,
       `MemberFileRowsTest`). Left for a human: truncation and alignment.*
 - [ ] No stray `SEVERE` log entries attributable to `io.prismtabs` appear in `idea.log`
       during any of the above (some non-PrismTabs sandbox noise is expected and documented in
-      README "Noisy but harmless log output" — don't confuse the two).
+      engineering notes "Noisy but harmless log output" — don't confuse the two).
       *Automated: partial — every UI test fails on a PrismTabs `SEVERE` logged while it runs
       (`RemoteRobotExtension`, matching rules pinned in `PrismTabsErrorsTest`). Left for a human: the
       log during the manual cases above.*

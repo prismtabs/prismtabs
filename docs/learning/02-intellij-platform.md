@@ -450,7 +450,7 @@ class. `TabGroupService` has no `FileEditorManager` access; `TabGroupVisibility`
 do. Pure wording functions such as `deleteConfirmationMessage` are split out of UI code so they can
 be tested.
 
-README §"UI testing" explains how to run the UI suite, including the X11 requirement on Linux.
+Engineering notes §"UI testing" explains how to run the UI suite, including the X11 requirement on Linux.
 
 Read: <https://plugins.jetbrains.com/docs/intellij/testing-plugins.html>
 

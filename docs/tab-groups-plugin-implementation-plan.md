@@ -53,7 +53,7 @@ Start at 242; dropping to 231 later is a one-line change plus a verifier run.
 
 ## 2. What the platform does NOT give you (hard constraints — design around these)
 
-These are not pessimism, they are the actual boundaries. Encode them in the README so future-you
+These are not pessimism, they are the actual boundaries. Encode them in the engineering notes so future-you
 doesn't relitigate them.
 
 1. **Colour is keyed to a *file*, not a *tab instance*.** The same file open in two split windows gets
@@ -125,7 +125,7 @@ Goal: prove that a hard-coded colour actually appears on a tab **in Andrzej's ID
 5. Also confirm here: **[VERIFY]** what call forces the tab strip to repaint after a colour change.
    Candidates to inspect in the SDK sources: `FileEditorManagerEx.getInstanceEx(project)` and its
    presentation-refresh methods, and `EditorTabPresentationUtil`. Find the one that exists in 2024.2 *and*
-   is still present in 2026.2 (check the "Incompatible Changes" list). Write the answer into the README.
+   is still present in 2026.2 (check the "Incompatible Changes" list). Write the answer into the engineering notes.
 
 **Do not proceed to Phase 1 until Phase 0 passes.**
 
@@ -154,7 +154,7 @@ Goal: prove that a hard-coded colour actually appears on a tab **in Andrzej's ID
 
   **Superseded:** this section originally had the swatch row assign immediately *and* a separate
   `New group…` → nested colour step → name prompt. Both shipped, then merged into the single path
-  above — see the README's "Two design choices not spelled out in the plan". The list here is still
+  above — see the engineering notes' "Two design choices not spelled out in the plan". The list here is still
   the *Phase 2* tree; Phase 3 adds a fifth top-level entry, `Manage Groups…`, shown once at least
   one group exists.
 - Wire it to a single `AssignTabGroupAction` on `EditorTabPopupMenu`.
@@ -203,8 +203,8 @@ tinting is invisible (§2.4).
 - ~~`<idea-plugin>` must be dynamic-plugin-safe: services + listeners only, **no** `<component>`
   entries. Run with `-Didea.is.internal=true` and use *Analyze Plugin Dynamic Loading*.~~ Done — no
   `<component>` entries exist, and `DynamicPlugins.checkCanUnloadWithoutRestart` plus a live
-  unload/reload round trip both confirm it in `runIdeForUiTests`. See the README's
-  [Phase 5 result](../README.md#phase-5-result).
+  unload/reload round trip both confirm it in `runIdeForUiTests`. See the engineering notes'
+  [Phase 5 result](engineering-notes.md#phase-5-result).
 - ~~Plugin Verifier across the 2024.2 → 2026.2 matrix in GitHub Actions.~~ Done — the `verify-plugin`
   job in `.github/workflows/build.yml` runs `./gradlew verifyPlugin`, which targets
   `IntelliJPlatformType.IntellijIdea` (open-ended, not capped at 2026.2) per `build.gradle.kts`.
@@ -212,14 +212,14 @@ tinting is invisible (§2.4).
   `applicationConfigurable` (parentId `tools`), `TabGroupPaletteConfigurable` (Kotlin UI DSL v2,
   `BoundSearchableConfigurable`), backed by `TabGroupPaletteService`. See `TabGroupPopup`'s
   `effectivePresets()` for how the popup now reads the customised palette instead of the hard-coded
-  `TabGroupPalette.PRESETS` constant, and the README's Palette section for the design.
+  `TabGroupPalette.PRESETS` constant, and the engineering notes' Palette section for the design.
 - ~~`VirtualFileListener` to remap assignments on rename/move (the Phase 1 TODO).~~ Done ahead of
   the rest of Phase 5, via `BulkFileListener` on `VFS_CHANGES` (not the deprecated
   `VirtualFileListener`) — see `TabGroupVfsListener` and `TabGroupService.remapUrl`.
-- README documenting the four constraints from §2 — set expectations before anyone files an issue asking
+- Engineering notes documenting the four constraints from §2 — set expectations before anyone files an issue asking
   for the chip.
-- ~~JetBrains Marketplace publishing.~~ Done — published as a free plugin; see the README's
-  [Licensing](../README.md#licensing) and [releasing](releasing.md).
+- ~~JetBrains Marketplace publishing.~~ Done — published as a free plugin; see the
+  [README](../README.md#licence) and [releasing](releasing.md).
 
 ### Phase 6 — Group membership visibility
 
@@ -284,7 +284,7 @@ it is the platform's own idiom for this question rather than an invention.
   context menu is the tree form of `installRowSelectingPopupMenu`, keeping the same trade for the
   same reason — `getPathForLocation` returning null off-row replaces the list version's manual
   bounds check. `TreeSpeedSearch.installOn(tree, canExpand = true, …)` searches into collapsed
-  groups, which is where the file you are looking for is. See the README's "The same answer in the
+  groups, which is where the file you are looking for is. See the engineering notes' "The same answer in the
   tool window, as a tree".
 
 **6b. `Files…` in the tab popup** (free). `GroupActionsStep` gains it as the first item, with a bare
@@ -311,7 +311,7 @@ separator below it so reading is visually separated from mutating.
   (`memberFileRows`, `shortenedDirectory`, `missingFileMessage`), unit-tested in
   `MemberFileRowsTest`; the chooser itself is driven end-to-end in `TabGroupPopupUiTest`. Choosing a
   missing row asks "Remove from Group" / "Keep" and routes an emptied group back through
-  `promptToDeleteEmptied`. See the README's "Group membership".
+  `promptToDeleteEmptied`. See the engineering notes' "Group membership".
 
 **6c. `Remove from Group` on a member row.**
 6a and 6b made a group's membership visible; 6c makes the newly visible thing actionable from the
@@ -525,6 +525,6 @@ toolchain, for no benefit. Recommendation:
   **Overtaken by events.** There is now a permanent `uiTest` source set driving both surfaces
   end-to-end against a live sandbox through `remote-robot` — every popup step, the tool window
   tree, and the settings page. It earned its cost several times over: the findings it caught are
-  listed in the README ("Two UI-testing findings", "Three more…", "A fourth…"), none of which a
-  manual pass had noticed. See the README's "UI testing" for how to run it and why `remote-robot`
+  listed in the engineering notes ("Two UI-testing findings", "Three more…", "A fourth…"), none of which a
+  manual pass had noticed. See the engineering notes' "UI testing" for how to run it and why `remote-robot`
   rather than IDE Starter.

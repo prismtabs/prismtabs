@@ -2,7 +2,7 @@
 
 Read `docs/tab-groups-plugin-implementation-plan.md` before making design decisions. Items marked
 **[VERIFY]** must be checked against the platform bytecode (recipe below) before writing code against
-them — never guess a signature. The constraints in README §"Constraints that are not going away" are
+them — never guess a signature. The constraints in `docs/engineering-notes.md` §"Constraints that are not going away" are
 platform limits, not TODOs; do not design around them.
 
 ## Verifying a platform API
@@ -46,7 +46,7 @@ plus a `DefaultConstructorMarker`) whose descriptor changes whenever the platfor
 so it links fine against the compile baseline and throws `NoSuchMethodError` on the user's newer IDE.
 Pass every argument explicitly, or build the value in Java, where the zero-argument constructor
 Kotlin generates but refuses to call is reachable. `PlatformDefaultArgumentCallsTest` fails on a new
-one; README §"Never omit a default argument on a platform Kotlin API" has the full account.
+one; `docs/engineering-notes.md` §"Never omit a default argument on a platform Kotlin API" has the full account.
 
 ## Internal API
 
@@ -56,7 +56,7 @@ way. Two things enforce it: `INTERNAL_API_USAGES` is in `verifyPlugin`'s `failur
 `verifyInternalApiAllowlist` finalizes `verifyPlugin`, names any offender, and also fails if that
 level is ever dropped again.
 
-Getting a build green by adding an entry is the wrong move. Read README §"Internal API: what the
+Getting a build green by adding an entry is the wrong move. Read `docs/engineering-notes.md` §"Internal API: what the
 Marketplace asked for" first — it records how each of 1.4.14's three refused calls was replaced.
 
 **Before concluding the platform has no public equivalent, dump the whole type and read all of it.**
@@ -74,4 +74,4 @@ compiler) is off-limits whatever the Verifier says.
 default `java` is 25, which is fine — Gradle picks 21 from `~/.jdks` itself.
 
 Persisted state classes keep their class and property names: renaming one loses users' saved groups
-or palette (README §"Saved state format"); `SavedStateTest` fails on a rename.
+or palette (`docs/engineering-notes.md` §"Saved state format"); `SavedStateTest` fails on a rename.

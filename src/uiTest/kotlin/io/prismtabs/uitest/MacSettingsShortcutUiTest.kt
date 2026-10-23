@@ -24,7 +24,7 @@ import java.time.Duration.ofSeconds
  * calls `ShowSettingsUtil` directly, so it would still pass if the shortcut were unbound.
  *
  * Searching for the page rather than clicking down the Tools tree is also deliberate —
- * `remote-robot` handles tree navigation poorly (README "Why remote-robot, not IDE Starter +
+ * `remote-robot` handles tree navigation poorly (engineering notes "Why remote-robot, not IDE Starter +
  * Driver"), and the Settings search field takes focus on open, so no extra click is needed.
  */
 @ExtendWith(RemoteRobotExtension::class)

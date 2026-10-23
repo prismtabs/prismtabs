@@ -16,7 +16,7 @@ import java.time.Duration.ofSeconds
 
 /**
  * End-to-end coverage of [io.prismtabs.ui.TabGroupPopup] against a real, running sandbox IDE —
- * see README "UI testing" for how to launch `runIdeForUiTests` first. Assertions go through
+ * see engineering notes "UI testing" for how to launch `runIdeForUiTests` first. Assertions go through
  * [IdeaFrame.groupNameFor] (a `TabGroupService.groupFor` call over the wire) rather than reading
  * Swing pixel colours: it's what this popup actually owns, and it sidesteps `TabLabel`'s
  * paint-timing and protected-member-access issues entirely.

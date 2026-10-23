@@ -12,7 +12,7 @@ jobs:
     # code with no native or OS-specific paths, so this is what actually proves the plugin's logic
     # behaves the same on macOS and Windows, not just Linux. It deliberately does NOT cover
     # `uiTest` (the remote-robot suite) — that drives a real java.awt.Robot against a real desktop
-    # session, which none of these runners provide identically (see README "UI testing" and "These
+    # session, which none of these runners provide identically (see engineering notes "UI testing" and "These
     # tests need an X11 display" for what that actually takes even on Linux). Windows has a manual-
     # trigger-only workflow for that instead (`ui-tests.yml`); macOS remains a manual pass on real
     # hardware — see docs/cross-platform-manual-verification.md for why.

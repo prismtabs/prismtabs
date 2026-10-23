@@ -493,7 +493,7 @@ JUnit 5 (`org.junit.jupiter.api`). Run one class with:
 - **Pass every argument to a `com.intellij` Kotlin function.** Omitting a defaulted one compiles to a
   call to a generated `foo$default` method whose signature changes when the platform adds a
   parameter, which crashes with `NoSuchMethodError` on a newer IDE.
-  `PlatformDefaultArgumentCallsTest` fails the build on a new one. README §"Never omit a default
+  `PlatformDefaultArgumentCallsTest` fails the build on a new one. Engineering notes §"Never omit a default
   argument on a platform Kotlin API" has the full account.
 - **Kotlin language and API version are pinned to 2.1** in `build.gradle.kts`, the version bundled
   with the oldest supported IDE. A newer standard library function will not compile; that is the

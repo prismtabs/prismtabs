@@ -19,7 +19,7 @@ It serves two kinds of reader:
 
 ## Set up before reading
 
-1. Open the repository in IntelliJ IDEA (see README §"Opening the project"). The IDE resolves every
+1. Open the repository in IntelliJ IDEA (see the README's "Build and run"). The IDE resolves every
    platform class, so Ctrl+click (Cmd+click on macOS) on any name in a snippet takes you to it.
 2. Run the unit tests once to confirm the toolchain works:
 
@@ -43,7 +43,7 @@ runs any top-level code with the green arrow, which is the fastest way to test a
 | Source                                         | Use it for                                                                |
 |------------------------------------------------|---------------------------------------------------------------------------|
 | KDoc comments on each class                    | Why the class is shaped the way it is. They are long and deliberate.     |
-| `README.md`                                    | Platform findings, constraints, and the reasoning behind each feature     |
+| `docs/engineering-notes.md`                     | Platform findings, constraints, and the reasoning behind each feature     |
 | `docs/tab-groups-plugin-implementation-plan.md` | The design plan and the phase breakdown the KDoc refers to               |
 | `docs/naming-and-terminology.md`               | User-facing wording rules                                                 |
 | `CLAUDE.md`                                    | How to verify a platform API with `javap`, and the rules that follow from it |
