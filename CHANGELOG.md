@@ -9,6 +9,8 @@
 - PrismTabs now supports IntelliJ Platform 2024.2 or newer (previously 2025.1).
 - PrismTabs no longer depends on the JetBrains Marketplace Licensing plugin.
 - Installing, updating, disabling and uninstalling PrismTabs no longer need an IDE restart.
+- PrismTabs is open source under the MIT licence, replacing the End-User Licence Agreement.
+- Bugs and feature requests are now tracked in the [PrismTabs repository](https://github.com/prismtabs/prismtabs/issues) instead of the separate feedback repository.
 
 ## [1.4.18] - 2026-10-07
 
