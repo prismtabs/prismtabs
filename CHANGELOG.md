@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.4.19] - 2026-10-24
+
 ### Changed
 
 - PrismTabs is now free. The tool window, hiding and showing groups, active groups and palette
@@ -70,7 +72,8 @@
 - PrismTabs can be disabled or uninstalled without restarting the IDE, and tab colours clear the
   moment it is.
 
-[Unreleased]: https://github.com/prismtabs/prismtabs/compare/v1.4.18...HEAD
+[Unreleased]: https://github.com/prismtabs/prismtabs/compare/v1.4.19...HEAD
+[1.4.19]: https://github.com/prismtabs/prismtabs/compare/v1.4.18...v1.4.19
 [1.4.18]: https://github.com/prismtabs/prismtabs/compare/v1.4.17...v1.4.18
 [1.4.17]: https://github.com/prismtabs/prismtabs/compare/v1.4.16...v1.4.17
 [1.4.16]: https://github.com/prismtabs/prismtabs/compare/v1.4.15...v1.4.16
