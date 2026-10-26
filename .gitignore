@@ -6,3 +6,4 @@ out/
 .kotlin/
 .intellijPlatform/
 .DS_Store
+/docs/
