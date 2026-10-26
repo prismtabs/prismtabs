@@ -16,14 +16,14 @@ import java.io.File
 import java.time.Duration.ofSeconds
 
 /**
- * One-off, driven pass through docs/cross-platform-manual-verification.md's checklist on a real
+ * One-off, driven pass through the manual cross-platform verification checklist on a real
  * Windows (or macOS) desktop, in place of a human clicking through it — reuses the same fixtures the
  * permanent `uiTest` suite already relies on rather than inventing new low-level driving code. Not
  * part of the regular suite and not meant to run unattended: it exists to produce screenshots and a
- * written log for a human to review and sign off, matching the doc's own stance that this pass runs
+ * written log for a human to review and sign off, matching the checklist's own stance that this pass runs
  * on real hardware, not in CI, and its pixel assertions need a real desktop's screen-capture
- * pipeline (see engineering notes "These tests need an X11 display" for why that pipeline lies on this
- * project's own Linux dev box).
+ * pipeline, which a Wayland session such as this
+ * project's own Linux dev box cannot provide.
  *
  * Both `@Test`s skip unless launched with `-Dprismtabs.manualVerification=true` — matching
  * [MacSettingsShortcutUiTest]'s `assumeTrue` self-gating pattern, but opt-in rather than OS-keyed,
@@ -217,7 +217,7 @@ class WindowsManualVerificationUiTest {
 
                 // --- 5. Remove from Group ----------------------------------------------------
                 // Sample.kt is "Blue"'s only member, so this removal empties the group and raises
-                // the "delete the group?" prompt (engineering notes "Empty groups"). Answering it is not
+                // the "delete the group?" prompt. Answering it is not
                 // optional housekeeping: the prompt is **modal**, and leaving it up wedges every
                 // later step — item 6's tool-window click was the first casualty when this
                 // walkthrough was first re-run against that feature.
@@ -239,7 +239,7 @@ class WindowsManualVerificationUiTest {
                     "expected TeamWindows listed with 2 members, got ${remoteRobot.toolWindowGroupRows()}",
                 )
                 // The other half of "Keep": a declined group stays, and the tool window is where a
-                // user is told it is now empty rather than gone. engineering notes "Empty groups" promises
+                // user is told it is now empty rather than gone. The empty-group design promises
                 // exactly this row, and nothing else in the suite reads it.
                 assertTrue(
                     remoteRobot.toolWindowGroupRows().any { it.contains("Blue") && it.contains("0 files") },

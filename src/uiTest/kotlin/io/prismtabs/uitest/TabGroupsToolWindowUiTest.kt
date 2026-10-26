@@ -16,8 +16,8 @@ import java.awt.event.KeyEvent
 import java.time.Duration.ofSeconds
 
 /**
- * Phases 4, 6a and 7, end-to-end against a real sandbox IDE — see engineering notes "UI testing" for how to
- * launch `runIdeForUiTests` first. Covers each phase's stated acceptance criteria verbatim: hide a
+ * Phases 4, 6a and 7, end-to-end against a real sandbox IDE — launch
+ * `runIdeForUiTests` first. Covers each phase's stated acceptance criteria verbatim: hide a
  * group, see its tabs leave the strip while the group stays listed in the tool window, then show it
  * and see the tabs return in order; expand a group *row* to the files it holds, with every tab
  * closed, and open one from there; and watch the `hidden` suffix follow the tab strip as members are

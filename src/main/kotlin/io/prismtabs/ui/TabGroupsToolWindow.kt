@@ -48,8 +48,8 @@ import javax.swing.tree.TreePath
 import javax.swing.tree.TreeSelectionModel
 
 /**
- * Phase 4b: the stable, public-API substitute for Chrome's in-strip group chip (see engineering notes
- * "Constraints that are not going away" §3) — every group, live-synced to [TabGroupService] via
+ * Phase 4b: the stable, public-API substitute for Chrome's in-strip group chip (the platform
+ * offers no public way to draw one in the tab strip) — every group, live-synced to [TabGroupService] via
  * [TabGroupsChangedListener] rather than only refreshing on its own actions, so a group created
  * from [TabGroupPopup] while this panel is already visible still shows up. `DumbAware`: nothing
  * here reads the index.
@@ -694,7 +694,7 @@ private class RemoveFromGroupAction(
  * wrong, and it needs no platform to check.
  *
  * One file keeps the tab popup's exact words, since it is the same operation seen from the other
- * surface — see [naming and terminology](../../../../../../docs/naming-and-terminology.md) §3. A
+ * surface. A
  * multi-selection states the count, which is what the platform's own multi-row actions do
  * ("Delete 3 Files"), and pluralises the *group* half honestly: unassigning four files that came
  * from three different groups is not "from Group".

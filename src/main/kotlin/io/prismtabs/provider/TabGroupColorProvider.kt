@@ -13,8 +13,7 @@ import java.awt.Color
 /**
  * `order="first"` (in plugin.xml) and `DumbAware` are load-bearing, not cosmetic — without
  * `order="first"` the platform's own File Colors scopes win first and this provider is never
- * consulted; without `DumbAware` this is silently skipped during indexing. See engineering notes §"What gets
- * deleted in Phase 1" for the Phase 0 finding this carries forward.
+ * consulted; without `DumbAware` this is silently skipped during indexing.
  *
  * The `JBColor(light, dark)` is built here, not cached — this is the one place in the plugin that
  * is safe to touch `JBColor`'s theme-detection machinery (it always runs inside a live IDE with an

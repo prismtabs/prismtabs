@@ -29,8 +29,7 @@ import java.util.concurrent.Executor;
  * {@code FileEditorManagerEx.openFile(file, FileEditorOpenOptions, Continuation)}, whose whole EDT
  * half is wrapped in {@code withContext(Dispatchers.EDT)} and so also leaves the caller's frames
  * behind. Both that overload and {@code FileEditorOpenOptions} itself are
- * {@code @ApiStatus.Internal}, which JetBrains Marketplace rejects — see engineering notes
- * §"Internal API: what the Marketplace asked for". {@code FileEditorManager.openFile(file,
+ * {@code @ApiStatus.Internal}, which JetBrains Marketplace rejects. {@code FileEditorManager.openFile(file,
  * focusEditor)} is the public, unannotated equivalent on every IDE in the {@code verifyPlugin}
  * matrix, and it is an equivalent in the literal sense: its bytecode builds
  * {@code FileEditorOpenOptions} with {@code requestFocus = focusEditor} and every other field

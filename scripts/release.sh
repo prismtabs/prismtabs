@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Cuts a release from dev: bumps the version, stamps the changelog, verifies the plugin, commits and
 # pushes dev, fast-forwards master to it, waits for Build to pass, then pushes the v<version> tag,
-# which starts Publish. See docs/releasing.md.
+# which starts Publish.
 #
 # Usage: scripts/release.sh [patch|minor|major|X.Y.Z] [--dry-run]
 #   patch    third component +1 (default)
