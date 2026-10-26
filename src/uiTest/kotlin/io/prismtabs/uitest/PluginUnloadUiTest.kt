@@ -28,7 +28,7 @@ import java.time.Duration.ofSeconds
  * that do the damage. It broke a second time on 2026-09-16, from the other direction: Hide Group
  * closing a selected Markdown tab, with the group left hidden up to the Disable. That half only
  * reproduces on 2026.2 and later, so run this against `runIdeForUiTestsLatest` as well as the
- * baseline sandbox — see the scenario's own comment, and engineering notes "The newest platform" for setting that
+ * baseline sandbox — see the scenario's own comment, and `build.gradle.kts` for setting that
  * task up.
  *
  * The plugin is put back in a `finally`. This test unloads the very plugin the rest of the suite

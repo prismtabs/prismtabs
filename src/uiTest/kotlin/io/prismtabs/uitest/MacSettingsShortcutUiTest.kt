@@ -10,7 +10,7 @@ import java.awt.event.KeyEvent
 import java.time.Duration.ofSeconds
 
 /**
- * Checklist item 7's macOS clause from docs/cross-platform-manual-verification.md: **Settings |
+ * The macOS clause of the manual cross-platform checklist: **Settings |
  * Tools | PrismTabs** must be reachable via **⌘,**, not only through the Settings menu item.
  *
  * Runs against the regular `runIdeForUiTests` sandbox like everything else — no special variant.
@@ -24,8 +24,7 @@ import java.time.Duration.ofSeconds
  * calls `ShowSettingsUtil` directly, so it would still pass if the shortcut were unbound.
  *
  * Searching for the page rather than clicking down the Tools tree is also deliberate —
- * `remote-robot` handles tree navigation poorly (engineering notes "Why remote-robot, not IDE Starter +
- * Driver"), and the Settings search field takes focus on open, so no extra click is needed.
+ * `remote-robot` handles tree navigation poorly, and the Settings search field takes focus on open, so no extra click is needed.
  */
 @ExtendWith(RemoteRobotExtension::class)
 class MacSettingsShortcutUiTest {

@@ -49,8 +49,7 @@ fun RemoteRobot.saveScreenshot(name: String) {
         }
 
         // Not named `robot` — robot-server's own Rhino scope already binds that name (same
-        // "redeclaration" family of quirk as the `log` collision documented in engineering notes' UI-testing
-        // findings), confirmed live ("TypeError: redeclaration of var robot"). Fully-qualified
+        // "redeclaration" family of quirk as the `log` collision), confirmed live ("TypeError: redeclaration of var robot"). Fully-qualified
         // `java.awt.Robot` rather than `importClass`/`importPackage(java.awt)`, also confirmed live:
         // robot-server already has `org.assertj.swing.core.Robot` in scope, and a bare `Robot`
         // reference is "Ambiguous import" between the two.

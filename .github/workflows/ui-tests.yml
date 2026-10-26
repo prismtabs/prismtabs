@@ -11,7 +11,7 @@ name: UI Tests
 # calibrated to a real local session and does not carry over), but that has not been confirmed from
 # the sandbox log yet — which is what the artifact paths below now capture. It has never passed on a
 # hosted runner. The Windows verification that actually counts is a local `./gradlew uiTest` on real
-# hardware plus docs/cross-platform-manual-verification.md. See engineering notes "UI testing".
+# hardware, plus a manual walkthrough of the feature checklist.
 on:
   workflow_dispatch:
 
@@ -22,7 +22,7 @@ jobs:
     # enabled and no supported way to pre-grant that non-interactively. Direct TCC.db writes are
     # SIP-blocked; the one documented community workaround needed SIP disabled, true only for the
     # now-retired macOS 13 image (actions/runner-images#9529, actions/runner-images#7792). macOS UI
-    # verification stays a manual pass on real hardware — see docs/cross-platform-manual-verification.md.
+    # verification stays a manual pass on real hardware.
     #
     # Re-check date: this finding is image-specific, evaluated 2026-08-10 against macOS 14/15
     # hosted runners. Before trusting it again, re-verify GitHub's hosted-macOS TCC/SIP posture
@@ -44,7 +44,7 @@ jobs:
           # DISTRIBUTION.md in gradle/actions).
           cache-provider: basic
 
-      # Same pattern as local dev (engineering notes "UI testing"): a long-lived IDE process backgrounded in
+      # Same pattern as local dev: a long-lived IDE process backgrounded in
       # its own step, polled for readiness in the next one, then driven from the one after that.
       - name: Start sandbox IDE (runIdeForUiTests)
         run: ./gradlew runIdeForUiTests &
@@ -67,7 +67,7 @@ jobs:
         # No --tests include list needed: every uiTest class that shouldn't run unattended
         # self-gates with a JUnit `assumeTrue` instead — MacSettingsShortcutUiTest to macOS,
         # WindowsManualVerificationUiTest to an explicit -Dprismtabs.manualVerification=true this
-        # workflow never passes (see both classes' doc comments and engineering notes "UI testing"). A bare
+        # workflow never passes (see both classes' doc comments). A bare
         # `uiTest` run therefore always executes exactly the automated classes and needs no upkeep
         # when a new one is added.
         run: ./gradlew uiTest
@@ -86,8 +86,7 @@ jobs:
           #                              they were generated and thrown away.
           #   - .intellijPlatform/sandbox/**/log*/idea.log — the sandbox IDE's own log; grep it for
           #                              an `io.prismtabs` frame to tell a real plugin failure from
-          #                              the expected GradleJvmSupportMatrix noise (engineering notes "UI
-          #                              testing" → "Expected sandbox noise").
+          #                              the expected GradleJvmSupportMatrix noise.
           path: |
             build/reports/tests/uiTest
             build/reports/manual

@@ -11,7 +11,7 @@ import org.opentest4j.TestAbortedException
 import java.io.File
 
 /**
- * Resolves a [RemoteRobot] test parameter pointed at `runIdeForUiTests` (see engineering notes "UI testing")
+ * Resolves a [RemoteRobot] test parameter pointed at `runIdeForUiTests`
  * and, on failure — but not on a skip, see [afterTestExecution] — saves a screenshot to
  * `build/reports`, the only debugging aid available once the IDE under test has already moved on.
  *
@@ -19,8 +19,7 @@ import java.io.File
  * `idea.log` while it ran — see [failOnPrismTabsErrors].
  *
  * [beforeTestExecution] de-iconifies and raises the sandbox IDE's frame before every test: this
- * machine's sandbox IDE renders on the live desktop, not an isolated virtual display (see engineering notes
- * "UI testing"), and something on it — a previous run's aborted client, the window manager, no
+ * machine's sandbox IDE renders on the live desktop, not an isolated virtual display, and something on it — a previous run's aborted client, the window manager, no
  * confirmed single cause — can leave the frame minimised between test runs. `remote-robot` drives a
  * real `java.awt.Robot` at real screen coordinates, so a minimised (or merely background) frame
  * makes every click land on whatever window is actually on top instead, which fails with the exact
@@ -64,8 +63,7 @@ class RemoteRobotExtension : BeforeTestExecutionCallback, AfterTestExecutionCall
                 // the IdeFrameImpl test never matched and this whole de-iconify/raise block was a
                 // silent no-op for as long as it has existed. `var` (or indexing inline) is rebound
                 // correctly every iteration. Note this was a genuine bug but is *not* the cause of
-                // the Wayland right-click failures documented in engineering notes "These tests need an X11
-                // display" — there the injected input never reaches the IDE at all.
+                // the Wayland right-click failures — there the injected input never reaches the IDE at all.
                 var f = frames[i]
                 if (f.getClass().getName().indexOf('IdeFrameImpl') === -1) continue
                 f.setExtendedState(Frame.NORMAL)
@@ -172,7 +170,7 @@ class RemoteRobotExtension : BeforeTestExecutionCallback, AfterTestExecutionCall
      * the "no stray errors" check a manual pass makes by watching the log, made for every automated
      * flow instead. Only this test's slice of the log is read, from where [beforeTestExecution] noted
      * its length, and only entries that name the plugin count: the sandbox has errors of its own that
-     * are documented in engineering notes "Expected sandbox noise".
+     * are not this plugin's doing.
      *
      * Skipped for a test that already failed, whose own failure is the more useful report.
      */

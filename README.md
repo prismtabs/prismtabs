@@ -5,7 +5,7 @@ Colour-coded tab groups for editor tabs in JetBrains IDEs. Free and open source.
 [Install from JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34416-prismtabs) ·
 [Manual](https://prismtabs.com/docs) · [Website](https://prismtabs.com)
 
-![A swatch popup on a tab's context menu, and coloured tabs](docs/marketplace/01-swatch-popup-and-tabs-dark.png)
+![A swatch popup on a tab's context menu, and coloured tabs](assets/screenshot.png)
 
 ## Features
 
@@ -40,7 +40,7 @@ against a sandbox IDE. Start the IDE, then run the tests:
 ./gradlew uiTest
 ```
 
-On Linux it needs an X11 display; see [UI testing](docs/engineering-notes.md#ui-testing).
+On Linux it needs an X11 display.
 
 ## Project layout
 
@@ -49,21 +49,7 @@ On Linux it needs an X11 display; see [UI testing](docs/engineering-notes.md#ui-
 | `src/main/kotlin/io/prismtabs/` | `model` (groups, palette, persisted state), `service`, `provider` (tab colours), `ui` (popup, tool window, settings), `action`, `listener` |
 | `src/test/` | Unit tests |
 | `src/uiTest/` | `remote-robot` UI tests |
-| `docs/` | Documentation, listed below |
 | `scripts/release.sh` | Cuts a release |
-
-## Documentation
-
-| Document | Covers |
-| --- | --- |
-| [Engineering notes](docs/engineering-notes.md) | Platform findings, design decisions, platform limits, Internal API policy, UI-test setup |
-| [Implementation plan](docs/tab-groups-plugin-implementation-plan.md) | Design and platform API checks |
-| [Issue labels](docs/issue-labels.md) | What each triage label means |
-| [Releasing](docs/releasing.md) | Versioning and the release workflow |
-| [CI/CD pipeline](docs/ci-cd-pipeline.html) | The GitHub Actions workflows |
-| [Marketplace listing](docs/marketplace-listing.md) | Listing fields and where each comes from |
-| [Manual test cases](docs/manual-test-cases.md) · [Cross-platform pass](docs/cross-platform-manual-verification.md) | Checks to run by hand before a release |
-| [Learning manual](docs/learning/README.md) | Kotlin and the IntelliJ Platform, taught with this codebase |
 
 ## Issues
 

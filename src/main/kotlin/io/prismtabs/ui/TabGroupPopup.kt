@@ -791,8 +791,7 @@ internal fun currentGroupCaption(groupName: String): String = "In group: " + sho
  * double-click reaches `FileNavigator` without passing through the action system at all), so
  * auto-joining on selection would sweep in every tab the *platform* selects — the neighbour that
  * takes focus when a tab is closed, most of all. This row is the honest half of that: the same
- * assignment auto-join would have made, asked for explicitly. See engineering notes §"Joining the active
- * group by hand".
+ * assignment auto-join would have made, asked for explicitly.
  *
  * Named to match the "Add to Group…" row it sits directly above — same verb, one naming the
  * destination outright and one opening the list to choose from. This popup is reached from a menu

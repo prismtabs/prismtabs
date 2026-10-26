@@ -18,7 +18,7 @@ val pluginVersion = providers.gradleProperty("pluginVersion").get()
 version = pluginVersion
 
 // Pin client (uiTestImplementation) and server (robotServerPlugin) to the same version —
-// see "UI testing" in engineering notes for why a mismatch here is a real, silent-failure risk.
+// a mismatch between the two is a real, silent-failure risk.
 val remoteRobotVersion = "0.11.23"
 
 // The IDE releases the Plugin Verifier checks against. pluginVerification.ides.select{} and
@@ -173,7 +173,7 @@ intellijPlatform {
         // The Verifier's own default, restored in full — INTERNAL_API_USAGES included. It was
         // dropped for as long as TabRepaint called FileEditorManagerImpl.queueUpdateFile, since
         // the category is one switch and cannot accept that one call while refusing the next.
-        // That call is gone (engineering notes "Internal API: what the Marketplace asked for"), the plugin
+        // That call is gone; the plugin
         // uses no internal API at all, and Marketplace refuses an upload over this category — so
         // the level that matches the plugin's actual position is the strict one.
         //
@@ -196,7 +196,7 @@ intellijPlatform {
 
     // Read from environment variables only — never from Gradle properties, so there's no risk of
     // a value ending up in gradle.properties and getting committed. .github/workflows/publish.yml
-    // supplies them from repository secrets; docs/releasing.md says where the originals live.
+    // supplies them from repository secrets; the originals are kept outside this repository.
     signing {
         certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
         privateKey = providers.environmentVariable("PRIVATE_KEY")
@@ -229,7 +229,7 @@ tasks {
         }
     }
 
-    // See engineering notes "UI testing": run this in the background, THEN `./gradlew uiTest` against it —
+    // Run `runIdeForUiTests` in the background, THEN `./gradlew uiTest` against it —
     // it's a long-lived IDE process, not something a normal task dependency can wait on.
     register<Test>("uiTest") {
         description = "Runs remote-robot UI tests against a `runIdeForUiTests` IDE started separately."
@@ -250,7 +250,7 @@ tasks {
 
 // Internal platform APIs this plugin is allowed to call — deliberately **empty**, and the intent
 // is that it stays that way. Every call the Marketplace refused in 1.4.14 now has a public
-// equivalent; engineering notes "Internal API: what the Marketplace asked for" records what each one became.
+// equivalent.
 //
 // An entry here is a decision to ship an API the Marketplace may refuse, so it belongs in a
 // review with the reasoning written down, not in a red build someone wants green. Entries are
@@ -353,8 +353,7 @@ val verifyInternalApiAllowlist = tasks.register("verifyInternalApiAllowlist") {
                     offenders.forEach { (finding, ides) -> appendLine("  $finding  [${ides.joinToString(", ")}]") }
                     appendLine()
                     appendLine("JetBrains Marketplace refuses an upload over these — it is what got 1.4.14 refused.")
-                    appendLine("Replace the call with public API; engineering notes \"Internal API: what the Marketplace asked for\"")
-                    appendLine("records the public alternatives already checked and rejected for the repaint.")
+                    appendLine("Replace the call with public API; read the whole type before concluding none exists.")
                     appendLine("If it genuinely has no public equivalent, that is a deliberate decision to review, and")
                     append("it goes in acceptedInternalApiUsages in build.gradle.kts with the reasoning written down.")
                 },
@@ -377,7 +376,7 @@ tasks.named("verifyPlugin") {
 intellijPlatformTesting {
     runIde {
         // Opens the throwaway fixture project on startup so there's always exactly one editor tab
-        // to right-click — see engineering notes for why exactly one, not "the plugin's own project".
+        // to right-click, so the tests never have to tell tabs apart by filename.
         val fixtureProject =
             layout.projectDirectory.dir("src/uiTest/resources/fixture-project").asFile.absolutePath
 
@@ -420,7 +419,7 @@ intellijPlatformTesting {
             "-Dide.mac.message.dialogs.as.sheets=false",
         )
 
-        // See engineering notes "UI testing": run this in the background, THEN `./gradlew uiTest` against it.
+        // Run this in the background, THEN `./gradlew uiTest` against it.
         register("runIdeForUiTests") {
             task {
                 args(fixtureProject)
@@ -448,7 +447,7 @@ intellijPlatformTesting {
         // install is on.
         //
         // The path is machine-specific, so it is read from `uiTestLatestIdePath` in the user-level
-        // ~/.gradle/gradle.properties, never this repository's (see engineering notes "The newest platform").
+        // ~/.gradle/gradle.properties, never this repository's.
         // The check is deferred to when the task's own IDE is resolved, so configuring the build —
         // CI's included — never needs it.
         register("runIdeForUiTestsLatest") {

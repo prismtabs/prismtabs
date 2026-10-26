@@ -6,3 +6,5 @@ out/
 .kotlin/
 .intellijPlatform/
 .DS_Store
+/docs/
+/CLAUDE.local.md
